@@ -1,4 +1,32 @@
 {
   "name": "wildguard-lk-mobile",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@react-navigation/native": "^7.4.1",
+    "@react-navigation/native-stack": "^7.19.2",
+    "axios": "^1.20.0",
+    "expo": "~57.0.25",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0"
+  },
+  "devDependencies": {
+    "@testing-library/react-native": "^13.3.3",
+    "babel-preset-expo": "~57.0.0",
+    "jest": "^29.7.0",
+    "jest-expo": "~57.0.5",
+    "react-test-renderer": "19.2.3"
+  },
+  "version": "1.0.0",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage --runInBand",
+    "check:expo": "expo install --check"
+  },
+  "main": "index.js"
 }
