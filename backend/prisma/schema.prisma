@@ -1,0 +1,424 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ======================================================
+// ENUMS
+// ======================================================
+
+enum UserRole {
+  RANGER
+  PARK_MANAGER
+  COMMUNITY_LIAISON
+  RESEARCHER
+  COMMUNITY_USER
+}
+
+enum PatrolStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum IncidentStatus {
+  PENDING
+  UNDER_REVIEW
+  RESPONDING
+  RESOLVED
+}
+
+enum CommunityReportStatus {
+  PENDING
+  UNDER_REVIEW
+  RESPONSE_IN_PROGRESS
+  RESOLVED
+  REJECTED
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+// ======================================================
+// USERS & PARKS
+// ======================================================
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  phone        String?
+  role         UserRole
+  isActive     Boolean  @default(true)
+
+  parkId String?
+  park   Park?   @relation(fields: [parkId], references: [id])
+
+  assignedPatrols Patrol[] @relation("AssignedRanger")
+  createdPatrols  Patrol[] @relation("CreatedByManager")
+
+  incidents        Incident[]
+  communityReports CommunityReport[]
+
+  alertAcknowledgements AlertAcknowledgement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parkId])
+  @@index([role])
+}
+
+model Park {
+  id          String  @id @default(cuid())
+  name        String
+  location    String?
+  description String?
+
+  users       User[]
+  patrols     Patrol[]
+  incidents   Incident[]
+  riskZones   RiskZone[]
+  cameraTraps CameraTrap[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ======================================================
+// RANGER & PATROL MANAGEMENT
+// ======================================================
+
+model Patrol {
+  id            String       @id @default(cuid())
+  routeName     String
+  description   String?
+  scheduledDate DateTime?
+  startTime     DateTime?
+  endTime       DateTime?
+  status        PatrolStatus @default(SCHEDULED)
+
+  parkId String
+  park   Park   @relation(fields: [parkId], references: [id])
+
+  rangerId String
+  ranger   User   @relation("AssignedRanger", fields: [rangerId], references: [id])
+
+  createdById String
+  createdBy   User             @relation("CreatedByManager", fields: [createdById], references: [id])
+  locations   PatrolLocation[]
+  waypoints   PatrolWaypoint[]
+  incidents   Incident[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parkId])
+  @@index([rangerId])
+  @@index([status])
+}
+
+model PatrolLocation {
+  id         String   @id @default(cuid())
+  latitude   Float
+  longitude  Float
+  recordedAt DateTime @default(now())
+
+  patrolId String
+  patrol   Patrol @relation(fields: [patrolId], references: [id], onDelete: Cascade)
+
+  @@index([patrolId])
+}
+
+model PatrolWaypoint {
+  id         String   @id @default(cuid())
+  latitude   Float
+  longitude  Float
+  note       String?
+  recordedAt DateTime @default(now())
+
+  patrolId String
+  patrol   Patrol @relation(fields: [patrolId], references: [id], onDelete: Cascade)
+
+  @@index([patrolId])
+}
+
+// ======================================================
+// REPORT FIELD INCIDENT
+// ======================================================
+
+model Incident {
+  id           String @id @default(cuid())
+  incidentType String
+  description  String
+
+  latitude       Float?
+  longitude      Float?
+  manualLocation String?
+
+  status     IncidentStatus @default(PENDING)
+  syncStatus SyncStatus     @default(SYNCED)
+
+  occurredAt DateTime?
+  reportedAt DateTime  @default(now())
+
+  reporterId String
+  reporter   User   @relation(fields: [reporterId], references: [id])
+
+  parkId String
+  park   Park   @relation(fields: [parkId], references: [id])
+
+  patrolId String?
+  patrol   Patrol? @relation(fields: [patrolId], references: [id])
+
+  evidence IncidentEvidence[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([reporterId])
+  @@index([parkId])
+  @@index([patrolId])
+  @@index([incidentType])
+  @@index([status])
+}
+
+model IncidentEvidence {
+  id       String  @id @default(cuid())
+  fileUrl  String
+  fileType String
+  caption  String?
+
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([incidentId])
+}
+
+// ======================================================
+// COMMUNITY REPORTING
+// ======================================================
+
+model CommunityReport {
+  id          String  @id @default(cuid())
+  reportType  String
+  species     String?
+  description String
+
+  latitude       Float?
+  longitude      Float?
+  manualLocation String?
+
+  status CommunityReportStatus @default(PENDING)
+
+  reporterName  String?
+  reporterPhone String?
+
+  // Optional registered community user
+  reporterId String?
+  reporter   User?   @relation(fields: [reporterId], references: [id])
+
+  submittedAt DateTime @default(now())
+
+  evidence CommunityReportEvidence[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([reporterId])
+}
+
+model CommunityReportEvidence {
+  id       String @id @default(cuid())
+  fileUrl  String
+  fileType String
+
+  reportId String
+  report   CommunityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([reportId])
+}
+
+// ======================================================
+// WILDLIFE TRACKING / MOCK COLLAR DATA
+// ======================================================
+
+model Animal {
+  id         String  @id @default(cuid())
+  animalCode String  @unique
+  species    String
+  name       String?
+  sex        String?
+  notes      String?
+
+  collar    TrackingCollar?
+  locations AnimalLocation[]
+  alerts    Alert[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TrackingCollar {
+  id         String  @id @default(cuid())
+  collarCode String  @unique
+  isActive   Boolean @default(true)
+
+  animalId String @unique
+  animal   Animal @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AnimalLocation {
+  id         String   @id @default(cuid())
+  latitude   Float
+  longitude  Float
+  recordedAt DateTime @default(now())
+
+  // MOCK means this can be simulated IoT collar data
+  source String @default("MOCK_COLLAR")
+
+  animalId String
+  animal   Animal @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  @@index([animalId])
+  @@index([recordedAt])
+}
+
+// ======================================================
+// RISK ZONES & ALERT MANAGEMENT
+// ======================================================
+
+model RiskZone {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  riskLevel   RiskLevel
+  isActive    Boolean   @default(true)
+
+  // For prototype: simple centre + radius representation
+  centerLatitude  Float
+  centerLongitude Float
+  radiusMeters    Float
+
+  parkId String
+  park   Park   @relation(fields: [parkId], references: [id])
+
+  alerts Alert[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parkId])
+  @@index([riskLevel])
+}
+
+model Alert {
+  id        String      @id @default(cuid())
+  riskLevel RiskLevel
+  message   String
+  status    AlertStatus @default(ACTIVE)
+
+  generatedAt DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  animalId String
+  animal   Animal @relation(fields: [animalId], references: [id])
+
+  riskZoneId String
+  riskZone   RiskZone @relation(fields: [riskZoneId], references: [id])
+
+  acknowledgements AlertAcknowledgement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([animalId])
+  @@index([riskZoneId])
+  @@index([status])
+}
+
+model AlertAcknowledgement {
+  id             String   @id @default(cuid())
+  acknowledgedAt DateTime @default(now())
+
+  alertId String
+  alert   Alert  @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([alertId, userId])
+  @@index([userId])
+}
+
+// ======================================================
+// CAMERA TRAPS - MOCK/SIMULATED
+// ======================================================
+
+model CameraTrap {
+  id         String  @id @default(cuid())
+  cameraCode String  @unique
+  name       String?
+  latitude   Float
+  longitude  Float
+  isActive   Boolean @default(true)
+
+  parkId String
+  park   Park   @relation(fields: [parkId], references: [id])
+
+  images CameraTrapImage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parkId])
+}
+
+model CameraTrapImage {
+  id           String   @id @default(cuid())
+  imageUrl     String
+  capturedAt   DateTime
+  species      String?
+  reviewStatus String   @default("PENDING")
+  notes        String?
+
+  // Simulated camera-trap upload
+  source String @default("MOCK_CAMERA_TRAP")
+
+  cameraTrapId String
+  cameraTrap   CameraTrap @relation(fields: [cameraTrapId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([cameraTrapId])
+  @@index([reviewStatus])
+}
