@@ -1,3 +1,4 @@
+import Register from "../pages/Register/Register";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { useDemoAuth } from "../hooks/useDemoAuth";
 import OperationsLayout from "../layouts/OperationsLayout";
@@ -14,6 +15,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/register" element={<Register />} />
       <Route path="/login" element={<Login />} />
       <Route
         path="/forgot-password"

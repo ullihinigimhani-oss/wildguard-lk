@@ -1,3 +1,4 @@
+import RegisterScreen from "../screens/auth/RegisterScreen";
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import WelcomeScreen from "../screens/auth/WelcomeScreen";
@@ -22,6 +23,7 @@ export default function AuthNavigator() {
         component={LoginScreen}
         options={{ title: "Ranger login" }}
       />
+      <Stack.Screen name="Register" component={RegisterScreen} options={{ title: "Join the community" }} />
     </Stack.Navigator>
   );
 }

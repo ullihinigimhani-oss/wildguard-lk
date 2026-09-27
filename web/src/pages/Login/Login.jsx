@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import Brand from "../../components/common/Brand";
 import { useDemoAuth } from "../../hooks/useDemoAuth";
 export default function Login() {
+  const location = useLocation();
   const { user, enterDemo } = useDemoAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -59,6 +60,7 @@ export default function Login() {
         <div className="login-form">
           <span className="eyebrow">CONSERVATION OPERATIONS</span>
           <h2>Welcome back</h2>
+          {location.state?.registered && <p role="status" className="demo-notice">Account created successfully. Sign-in is coming soon; your community account has been saved.</p>}
           <p className="muted">
             Your workspace for a more connected wilderness.
           </p>
@@ -124,6 +126,7 @@ export default function Login() {
               {message}
             </p>
           </form>
+          <p>New to the community? <Link to="/register">Create an account</Link></p>
           <div className="demo-divider">EXPLORE THE PROTOTYPE</div>
           <button
             className="button secondary full-width"
