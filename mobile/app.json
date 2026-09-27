@@ -1,1 +1,12 @@
-{}
+{
+  "expo": {
+    "name": "WildGuard LK",
+    "slug": "wildguard-lk",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "light",
+    "scheme": "wildguard-lk",
+    "ios": { "supportsTablet": true },
+    "android": { "package": "lk.wildguard.prototype" }
+  }
+}
