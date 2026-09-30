@@ -4,7 +4,7 @@ import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
 import { styles } from "../../constants/theme";
 import { useDemoAuth } from "../../hooks/useDemoAuth";
-export default function LoginScreen() {
+export default function LoginScreen({ navigation, route }) {
   const { enterDemo } = useDemoAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,6 +30,7 @@ export default function LoginScreen() {
   }
   return (
     <Screen>
+      {route?.params?.registered && <Text accessibilityLiveRegion="polite" style={styles.notice}>Account created successfully. Sign-in is coming soon; your community account has been saved.</Text>}
       <Text style={styles.eyebrow}>WILDGUARD LK / RANGER WORKSPACE</Text>
       <Text accessibilityRole="header" style={styles.title}>
         Ready for the field?
@@ -109,6 +110,7 @@ export default function LoginScreen() {
           enterDemo();
         }}
       />
+      <Button title="Create a community account" secondary onPress={() => navigation.navigate("Register")} />
       <Text style={styles.muted}>
         Staff accounts are provisioned by authorized personnel. No public staff
         registration is available.

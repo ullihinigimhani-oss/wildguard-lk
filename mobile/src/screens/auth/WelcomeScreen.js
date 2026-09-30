@@ -43,10 +43,11 @@ export default function WelcomeScreen({ navigation }) {
         </Text>
         <View style={styles.notice}>
           <Text style={styles.muted}>
-            University prototype · Demo navigation only. Field actions are not
+            University prototype · Community registration is available. Field actions are not
             available yet.
           </Text>
         </View>
+        <Button title="Join the community" onPress={() => navigation.navigate("Register")} />
         <Button
           title="Continue to ranger login"
           onPress={() => navigation.navigate("Login")}

@@ -1115,3 +1115,14 @@ td small {
     scroll-behavior: auto !important;
   }
 }
+
+.registration-field { margin: 18px 0; }
+.registration-field > label { display:block; font-size:13px; font-weight:600; margin-bottom:8px; }
+.registration-field .small { margin:8px 0; }
+.registration-consent { display:flex !important; align-items:center; gap:10px; min-height:48px; }
+.registration-consent input { width:18px; height:18px; accent-color:var(--green); }
+.registration-policy { font-size:12px; line-height:1.7; color:var(--muted); margin-top:16px; }
+.registration-policy summary { cursor:pointer; color:var(--green); padding:8px 0; }
+.registration-policy summary:focus-visible { outline:3px solid #ae7c20; }
+.registration-signin { text-align:center; margin-top:22px; }
+.register-page .login-form { max-width:440px; }
