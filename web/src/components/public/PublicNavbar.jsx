@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Brand from "../common/Brand";
 import { publicLinks } from "../../constants/publicContent";
-import { useDemoAuth } from "../../hooks/useDemoAuth";
+import { useAuth } from "../../hooks/useAuth";
 
 export default function PublicNavbar() {
   const [open, setOpen] = useState(false);
   const toggle = useRef(null);
   const menu = useRef(null);
-  const { user, isAuthenticated = false } = useDemoAuth();
+  const { user, isAuthenticated = false } = useAuth();
   useEffect(() => {
     if (!open) return;
     menu.current?.querySelector("a")?.focus();

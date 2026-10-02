@@ -1,6 +1,6 @@
 import Register from "../pages/Register/Register";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { useDemoAuth } from "../hooks/useDemoAuth";
+import { useAuth } from "../hooks/useAuth";
 import OperationsLayout from "../layouts/OperationsLayout";
 import Login from "../pages/Login/Login";
 import Dashboard from "../pages/Dashboard/Dashboard";
@@ -11,7 +11,8 @@ import { modules } from "../constants/navigation";
 import Landing from "../pages/Landing/Landing";
 import ProtectedRoute from "./ProtectedRoute";
 function RegistrationEntry() {
-  const { user, isAuthenticated = false } = useDemoAuth();
+  const { user, isAuthenticated = false, isLoading } = useAuth();
+  if (isLoading) return <p role="status">Restoring your session…</p>;
   return user && isAuthenticated ? (
     <Navigate to="/dashboard" replace />
   ) : (
@@ -28,7 +29,7 @@ export default function AppRoutes() {
         path="/forgot-password"
         element={<Placeholder title="Password recovery" publicPage />}
       />
-      <Route element={<ProtectedRoute allowDemoPreview />}>
+      <Route element={<ProtectedRoute />}>
         <Route element={<OperationsLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />

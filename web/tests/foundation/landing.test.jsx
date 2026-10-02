@@ -10,7 +10,7 @@ const session = vi.hoisted(() => ({
   enterDemo: vi.fn(),
   leaveDemo: vi.fn(),
 }));
-vi.mock("../../src/hooks/useDemoAuth", () => ({ useDemoAuth: () => session }));
+vi.mock("../../src/hooks/useAuth", () => ({ useAuth: () => session }));
 vi.mock("../../src/services/api", () => ({
   api: { post: vi.fn() },
   getHealth: vi
@@ -91,11 +91,11 @@ test("public mobile menu supports opening and Escape focus restoration", async (
   ).toHaveFocus();
 });
 test.each(["/dashboard", "/patrols", "/incidents", "/wildlife", "/analytics"])(
-  "unauthenticated %s redirects to registration",
+  "unauthenticated %s redirects to login",
   (path) => {
     mount(path);
     expect(
-      screen.getByRole("heading", { name: "Create your account" }),
+      screen.getByRole("heading", { name: "Welcome back" }),
     ).toBeVisible();
   },
 );
@@ -103,7 +103,7 @@ test("a demo session is not authorization for operations", () => {
   session.user = demoUser;
   mount("/patrols");
   expect(
-    screen.getByRole("heading", { name: "Create your account" }),
+    screen.getByRole("heading", { name: "Welcome back" }),
   ).toBeVisible();
 });
 test("authenticated users keep the existing protected navigation", () => {
@@ -120,14 +120,14 @@ test("authenticated Get Started opens the dashboard without registering again", 
   session.isAuthenticated = true;
   const user = mount();
   await user.click(screen.getByRole("link", { name: /Get Started/ }));
-  expect(await screen.findByText(/API connected/)).toBeVisible();
+  expect(await screen.findByText(/Welcome back,/)).toBeVisible();
   expect(
-    screen.getByRole("heading", { name: "Recent incidents" }),
+    screen.getByRole("heading", { name: "Recent Field Activity" }),
   ).toBeVisible();
 });
 test("authenticated registration route returns to dashboard", async () => {
   session.user = demoUser;
   session.isAuthenticated = true;
   mount("/register");
-  expect(await screen.findByText(/API connected/)).toBeVisible();
+  expect(await screen.findByText(/Welcome back,/)).toBeVisible();
 });

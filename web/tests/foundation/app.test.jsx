@@ -1,79 +1,19 @@
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
-import App from "../../src/App";
-vi.mock("../../src/services/api", () => ({
-  getHealth: vi
-    .fn()
-    .mockResolvedValue({ success: true, database: "connected" }),
-}));
-function mount(path = "/login") {
-  return render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-    </MemoryRouter>,
-  );
-}
-test("login is labeled and validates required fields", async () => {
-  mount();
-  const user = userEvent.setup();
-  expect(screen.getByLabelText("Email address")).toBeInTheDocument();
-  expect(screen.getByLabelText("Password", { exact: true })).toHaveAttribute(
-    "type",
-    "password",
-  );
-  await user.click(screen.getByRole("button", { name: "Log in" }));
-  expect(screen.getByText("Enter a valid email address.")).toBeVisible();
-  expect(screen.getByText("Enter your password.")).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "Show password" }));
-  expect(screen.getByLabelText("Password", { exact: true })).toHaveAttribute(
-    "type",
-    "text",
-  );
-});
-test("login never creates a session from supplied credentials", async () => {
-  mount("/login");
-  const user = userEvent.setup();
-  await user.type(
-    screen.getByLabelText("Email address"),
-    "person@example.test",
-  );
-  await user.type(
-    screen.getByLabelText("Password", { exact: true }),
-    "sample-only",
-  );
-  await user.click(screen.getByRole("button", { name: "Log in" }));
-  expect(
-    await screen.findByText(/Staff sign-in is not available yet/),
-  ).toBeVisible();
-  expect(screen.getByLabelText("Password", { exact: true })).toHaveValue("");
-});
-test("explicit demo entry supports the read-only dashboard, profile and logout", async () => {
-  mount();
-  const user = userEvent.setup();
-  await user.click(
-    screen.getByRole("button", { name: /Explore demo workspace/ }),
-  );
-  expect(
-    await screen.findByText("API connected", { exact: false }),
-  ).toBeVisible();
-  expect(
-    screen.getByRole("heading", { name: "Recent incidents" }),
-  ).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "Toggle navigation" }));
-  expect(screen.getByRole("button", { name: "Close menu ×" })).toHaveFocus();
-  await user.keyboard("{Escape}");
-  expect(
-    screen.getByRole("button", { name: "Toggle navigation" }),
-  ).toHaveFocus();
-  await user.click(screen.getByRole("link", { name: /Nimali Perera/ }));
-  expect(screen.getByText("manager@example.test")).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "Exit demo" }));
-  expect(
-    screen.getByRole("heading", { name: "Create your account" }),
-  ).toBeVisible();
-});
-test("unknown paths render 404", () => {
-  mount("/missing");
-  expect(screen.getByRole("heading", { name: "Page not found" })).toBeVisible();
-});
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import App from '../../src/App';
+import { api } from '../../src/services/api';
+vi.mock('../../src/services/api',()=>({api:{post:vi.fn(),get:vi.fn(),defaults:{headers:{common:{}}},interceptors:{response:{use:vi.fn(),eject:vi.fn()}}}}));
+const profile={id:'1',name:'Test Ranger',email:'test@example.test',role:'RANGER'};
+beforeEach(()=>{sessionStorage.clear();vi.clearAllMocks();api.get.mockResolvedValue({data:{success:true,user:profile}});api.post.mockResolvedValue({data:{success:true,user:profile,token:'session-token'}});});
+function mount(path='/login'){render(<MemoryRouter initialEntries={[path]}><App/></MemoryRouter>);return userEvent.setup();}
+async function submit(user){await user.type(screen.getByLabelText('Email address'),'test@example.test');await user.type(screen.getByLabelText('Password',{exact:true}),'Testing123!');await user.click(screen.getByRole('button',{name:'Log in'}));}
+test('login validates required fields and toggles password visibility',async()=>{const user=mount();await user.click(screen.getByRole('button',{name:'Log in'}));expect(screen.getByText('Enter your password.')).toBeVisible();expect(api.post).not.toHaveBeenCalled();await user.click(screen.getByRole('button',{name:'Show password'}));expect(screen.getByLabelText('Password',{exact:true})).toHaveAttribute('type','text');});
+test('invalid credentials remain on login',async()=>{api.post.mockRejectedValue({response:{status:401}});const user=mount();await submit(user);expect(await screen.findByText('Invalid email or password.')).toBeVisible();expect(sessionStorage.length).toBe(0);});
+test('network failure is recoverable',async()=>{api.post.mockRejectedValue(new Error('network'));const user=mount();await submit(user);expect(await screen.findByText(/check your connection/)).toBeVisible();expect(screen.getByRole('button',{name:'Log in'})).toBeEnabled();});
+test('successful login opens personalized dashboard, profile and logout',async()=>{const user=mount();await submit(user);expect(await screen.findByText('Welcome back, Test Ranger')).toBeVisible();expect(sessionStorage.getItem('wildguard.session')).toBe('session-token');await user.click(screen.getByRole('link',{name:'Profile: Test Ranger'}));expect(screen.getByText(profile.email, { selector: 'dd' })).toBeVisible();await user.click(screen.getByRole('button',{name:'Logout'}));expect(await screen.findByRole('heading',{name:'Welcome back'})).toBeVisible();expect(sessionStorage.length).toBe(0);expect(api.defaults.headers.common.Authorization).toBeUndefined();});
+test.each(['/dashboard','/patrols','/incidents','/profile','/map'])('protects %s',async path=>{mount(path);expect(await screen.findByRole('heading',{name:'Welcome back'})).toBeVisible();});
+test('refresh waits for server session verification',async()=>{sessionStorage.setItem('wildguard.session','saved-token');let resolve;api.get.mockReturnValue(new Promise(r=>resolve=r));mount('/dashboard');expect(screen.getByText('Restoring your session…')).toBeVisible();expect(screen.queryByText('Welcome back, Test Ranger')).toBeNull();resolve({data:{user:profile}});expect(await screen.findByText('Welcome back, Test Ranger')).toBeVisible();expect(api.get).toHaveBeenCalledWith('/auth/me');});
+test('invalid saved session returns to login',async()=>{sessionStorage.setItem('wildguard.session','expired');api.get.mockRejectedValue({response:{status:401}});mount('/dashboard');expect(await screen.findByRole('heading',{name:'Welcome back'})).toBeVisible();expect(sessionStorage.length).toBe(0);});
+test('submitting disables duplicate submissions',async()=>{let resolve;api.post.mockReturnValue(new Promise(r=>resolve=r));const user=mount();await submit(user);expect(screen.getByRole('button',{name:'Logging in...'})).toBeDisabled();expect(api.post).toHaveBeenCalledTimes(1);resolve({data:{success:true,user:profile,token:'session-token'}});await screen.findByText('Welcome back, Test Ranger');});
+test('unknown page remains a 404',()=>{mount('/missing');expect(screen.getByRole('heading',{name:'Page not found'})).toBeVisible();});

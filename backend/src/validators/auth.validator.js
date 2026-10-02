@@ -12,4 +12,12 @@ function validateRegistration(body) {
   if (Object.keys(fields).length) throw Object.assign(new Error('Please check your details.'), { status: 400, registrationError: true, fields });
   return { name, email, password, phone: phone || null };
 }
-module.exports = { validateRegistration };
+function validateLogin(body) {
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const password = body?.password;
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== 'string' || !password || Buffer.byteLength(password, 'utf8') > 72) {
+    throw Object.assign(new Error('Enter a valid email address and password.'), { status: 400, authError: true });
+  }
+  return { email, password };
+}
+module.exports = { validateRegistration, validateLogin };

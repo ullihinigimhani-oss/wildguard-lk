@@ -1,6 +1,7 @@
 export const modules = [
   ["patrols", "Patrol Management", "↗"],
   ["incidents", "Incidents", "◇"],
+  ["map", "Field Map", "⌖"],
   ["community-reports", "Community Reports", "◎"],
   ["wildlife", "Wildlife Monitoring", "♧"],
   ["alerts", "Alerts", "△"],

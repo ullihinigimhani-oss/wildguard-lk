@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import Brand from "../../components/common/Brand";
-import { useDemoAuth } from "../../hooks/useDemoAuth";
+import { useAuth } from "../../hooks/useAuth";
 export default function Login() {
   const location = useLocation();
-  const { user, enterDemo } = useDemoAuth();
+  const { isAuthenticated, isLoading, login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (isLoading) return <p role="status">Restoring your session…</p>;
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
   async function submit(event) {
     event.preventDefault();
+    if (loading) return;
     const next = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
       next.email = "Enter a valid email address.";
@@ -22,12 +24,11 @@ export default function Login() {
     setMessage("");
     if (Object.keys(next).length) return;
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    setPassword("");
-    setLoading(false);
-    setMessage(
-      "Staff sign-in is not available yet. Use the separate demo preview below; no credentials are sent or saved.",
-    );
+    try { await login({ email, password }); }
+    catch (error) {
+      setMessage(error.response?.status === 401 ? 'Invalid email or password.' : 'Unable to log in. Please check your connection and try again.');
+      setPassword('');
+    } finally { setLoading(false); }
   }
   return (
     <div className="login-page">
@@ -64,17 +65,12 @@ export default function Login() {
           <h2>Welcome back</h2>
           {location.state?.registered && (
             <p role="status" className="demo-notice">
-              Account created successfully. Sign-in is coming soon; your
-              community account has been saved.
+              Account created successfully. Log in with your new account.
             </p>
           )}
           <p className="muted">
             Your workspace for a more connected wilderness.
           </p>
-          <div className="demo-notice">
-            Foundation preview · Staff authentication is coming soon. Please do
-            not enter real credentials.
-          </div>
           <form onSubmit={submit} noValidate>
             <label htmlFor="email">Email address</label>
             <input
@@ -120,14 +116,10 @@ export default function Login() {
               </p>
             )}
             <div className="form-options">
-              <label className="checkbox-label">
-                <input type="checkbox" disabled />
-                Remember me (coming soon)
-              </label>
               <Link to="/forgot-password">Forgot password?</Link>
             </div>
             <button className="button primary full-width" disabled={loading}>
-              {loading ? "Checking availability…" : "Log in"}
+              {loading ? "Logging in..." : "Log in"}
             </button>
             <p role="status" className="form-message">
               {message}
@@ -136,23 +128,10 @@ export default function Login() {
           <p>
             New to the community? <Link to="/register">Create an account</Link>
           </p>
-          <div className="demo-divider">EXPLORE THE PROTOTYPE</div>
-          <button
-            className="button secondary full-width"
-            onClick={() => {
-              setPassword("");
-              enterDemo();
-            }}
-          >
-            Explore demo workspace <span aria-hidden="true">→</span>
-          </button>
-          <p className="small muted">
-            Demo data only. Access resets when you refresh. Staff accounts will
-            be provisioned by authorized personnel.
-          </p>
+          <p className="small muted">Your session lasts up to one hour in this browser tab.</p>
         </div>
         <footer className="login-footer">
-          WildGuard LK · University conservation prototype
+          WildGuard LK · Conservation operations
         </footer>
       </main>
     </div>

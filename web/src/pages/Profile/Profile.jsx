@@ -1,10 +1,10 @@
-import { useDemoAuth } from "../../hooks/useDemoAuth";
+import { useAuth } from "../../hooks/useAuth";
 export default function Profile() {
-  const { user } = useDemoAuth();
+  const { user } = useAuth();
   return (
     <section className="panel profile-panel">
-      <span className="avatar large-avatar">NP</span>
-      <span className="eyebrow">DEMO STAFF PROFILE</span>
+      <span className="avatar large-avatar">{user.name.slice(0, 1)}</span>
+      <span className="eyebrow">MY PROFILE</span>
       <h2>{user.name}</h2>
       <p className="muted">Your conservation workspace identity.</p>
       <dl>
@@ -12,7 +12,7 @@ export default function Profile() {
           Name: user.name,
           Email: user.email,
           Role: user.role,
-          "Assigned park": user.park,
+          Phone: user.phone || 'Not provided',
         }).map(([label, value]) => (
           <div key={label}>
             <dt>{label}</dt>
@@ -21,8 +21,7 @@ export default function Profile() {
         ))}
       </dl>
       <div className="demo-notice">
-        Sample profile information. Account editing and staff provisioning will
-        be added with authentication.
+        Account editing is not available yet.
       </div>
     </section>
   );

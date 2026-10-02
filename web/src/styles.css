@@ -1135,3 +1135,20 @@ td small {
 .registration-policy summary:focus-visible { outline:3px solid #ae7c20; }
 .registration-signin { text-align:center; margin-top:22px; }
 .register-page .login-form { max-width:440px; }
+
+.quick-actions { margin: 24px 0; }
+.quick-action-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; }
+.quick-action-grid .button { flex-direction:column; text-align:center; white-space:normal; }
+.quick-action-grid small { font-weight:400; }
+.patrol-details { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin:24px 0; }
+.patrol-details dd { margin:6px 0; font-weight:600; }
+.dashboard-grid > .panel { padding:24px; }
+.topbar .user-link { min-width:0; overflow-wrap:anywhere; }
+.profile-panel dd { overflow-wrap:anywhere; }
+@media(max-width:1000px) { .quick-action-grid { grid-template-columns:1fr 1fr; } }
+@media(max-width:580px) { .quick-action-grid { grid-template-columns:1fr; } .topbar-actions { flex-wrap:wrap; } .dashboard-intro h2 { overflow-wrap:anywhere; } }
+.sidebar .brand small { font-size:6px; letter-spacing:.65px; }
+.quick-action-grid { padding:0 24px 24px; }
+.dashboard-intro .status-badge { display:inline-block; padding:6px 10px; border-radius:20px; background:#e5ecdc; color:#245743; font-size:12px; }
+.dashboard-grid .panel-heading { padding:0 0 16px; }
+.topbar .text-button { min-height:44px; padding:8px; }

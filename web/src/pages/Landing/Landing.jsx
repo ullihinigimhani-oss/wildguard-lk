@@ -4,11 +4,11 @@ import PublicFooter from "../../components/public/PublicFooter";
 import FeatureCard from "../../components/public/FeatureCard";
 import ConservationStory from "../../components/public/ConservationStory";
 import { conservationStories, heroImage } from "../../constants/publicContent";
-import { useDemoAuth } from "../../hooks/useDemoAuth";
+import { useAuth } from "../../hooks/useAuth";
 import "./landing.css";
 
 export default function Landing() {
-  const { user, isAuthenticated = false } = useDemoAuth();
+  const { user, isAuthenticated = false } = useAuth();
   const destination = isAuthenticated && user ? "/dashboard" : "/register";
   return (
     <div className="public-site" id="home">

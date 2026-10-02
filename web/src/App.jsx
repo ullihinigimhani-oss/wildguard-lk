@@ -1,9 +1,9 @@
-import { DemoAuthProvider } from "./hooks/useDemoAuth";
+import { AuthProvider } from "./hooks/useAuth";
 import AppRoutes from "./routes/AppRoutes";
 export default function App() {
   return (
-    <DemoAuthProvider>
+    <AuthProvider>
       <AppRoutes />
-    </DemoAuthProvider>
+    </AuthProvider>
   );
 }

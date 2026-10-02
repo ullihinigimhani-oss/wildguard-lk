@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { useDemoAuth } from "../../hooks/useDemoAuth";
+import { useAuth } from "../../hooks/useAuth";
 export default function Navbar({ title, open, onToggle }) {
-  const { user, leaveDemo } = useDemoAuth();
+  const { user, logout } = useAuth();
   return (
     <header className="topbar">
       <div className="topbar-heading">
@@ -25,21 +25,22 @@ export default function Navbar({ title, open, onToggle }) {
           to="/alerts"
           aria-label="Notifications"
         >
-          ♧<span className="notification-dot" />
+          ♧
         </Link>
         <Link
           to="/profile"
           className="user-link"
           aria-label={`Profile: ${user.name}`}
         >
-          <span className="avatar">NP</span>
+          <span className="avatar">{user.name.slice(0, 1)}</span>
           <span>
             {user.name}
-            <small>{user.role} · Demo</small>
+            <small>{user.role.replaceAll('_', ' ')}</small>
+            <small>{user.email}</small>
           </span>
         </Link>
-        <button className="text-button" onClick={leaveDemo}>
-          Exit demo
+        <button className="text-button" onClick={logout}>
+          Logout
         </button>
       </div>
     </header>

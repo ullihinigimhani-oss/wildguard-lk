@@ -1,13 +1,12 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { useDemoAuth } from "../hooks/useDemoAuth";
+import { useAuth } from "../hooks/useAuth";
 
-// Demo state is not authentication. Only the read-only demo dashboard/profile opt in.
-// Future real authentication must populate isAuthenticated after server verification.
-export default function ProtectedRoute({ allowDemoPreview = false }) {
-  const { user, isAuthenticated = false } = useDemoAuth();
+export default function ProtectedRoute() {
+  const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
-  if (user && (isAuthenticated || allowDemoPreview)) return <Outlet />;
+  if (isLoading) return <p role="status">Restoring your session…</p>;
+  if (isAuthenticated) return <Outlet />;
   return (
-    <Navigate to="/register" replace state={{ from: location.pathname }} />
+    <Navigate to="/login" replace state={{ from: location.pathname }} />
   );
 }
