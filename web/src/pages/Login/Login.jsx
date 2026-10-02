@@ -32,7 +32,9 @@ export default function Login() {
   return (
     <div className="login-page">
       <section className="login-story">
-        <Brand light />
+        <Link to="/" aria-label="Back to WildGuard LK home">
+          <Brand light />
+        </Link>
         <div className="story-content">
           <span className="eyebrow">
             SRI LANKA’S WILDLIFE. OUR SHARED FUTURE.
@@ -60,7 +62,12 @@ export default function Login() {
         <div className="login-form">
           <span className="eyebrow">CONSERVATION OPERATIONS</span>
           <h2>Welcome back</h2>
-          {location.state?.registered && <p role="status" className="demo-notice">Account created successfully. Sign-in is coming soon; your community account has been saved.</p>}
+          {location.state?.registered && (
+            <p role="status" className="demo-notice">
+              Account created successfully. Sign-in is coming soon; your
+              community account has been saved.
+            </p>
+          )}
           <p className="muted">
             Your workspace for a more connected wilderness.
           </p>
@@ -126,7 +133,9 @@ export default function Login() {
               {message}
             </p>
           </form>
-          <p>New to the community? <Link to="/register">Create an account</Link></p>
+          <p>
+            New to the community? <Link to="/register">Create an account</Link>
+          </p>
           <div className="demo-divider">EXPLORE THE PROTOTYPE</div>
           <button
             className="button secondary full-width"

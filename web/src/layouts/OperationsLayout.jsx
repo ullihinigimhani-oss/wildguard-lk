@@ -10,7 +10,6 @@ export default function OperationsLayout() {
     modules.find((item) => `/${item.path}` === pathname)?.title ||
     (pathname === "/profile" ? "My profile" : "Dashboard");
   useEffect(() => {
-    document.title = `${title} · WildGuard LK`;
     setOpen(false);
   }, [title, pathname]);
   useEffect(() => {

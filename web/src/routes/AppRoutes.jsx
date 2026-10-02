@@ -1,5 +1,5 @@
 import Register from "../pages/Register/Register";
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { useDemoAuth } from "../hooks/useDemoAuth";
 import OperationsLayout from "../layouts/OperationsLayout";
 import Login from "../pages/Login/Login";
@@ -8,30 +8,39 @@ import Profile from "../pages/Profile/Profile";
 import Placeholder from "../pages/Placeholder";
 import NotFound from "../pages/NotFound";
 import { modules } from "../constants/navigation";
-function DemoGate() {
-  return useDemoAuth().user ? <Outlet /> : <Navigate to="/login" replace />;
+import Landing from "../pages/Landing/Landing";
+import ProtectedRoute from "./ProtectedRoute";
+function RegistrationEntry() {
+  const { user, isAuthenticated = false } = useDemoAuth();
+  return user && isAuthenticated ? (
+    <Navigate to="/dashboard" replace />
+  ) : (
+    <Register />
+  );
 }
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/" element={<Landing />} />
+      <Route path="/register" element={<RegistrationEntry />} />
       <Route path="/login" element={<Login />} />
       <Route
         path="/forgot-password"
         element={<Placeholder title="Password recovery" publicPage />}
       />
-      <Route element={<DemoGate />}>
+      <Route element={<ProtectedRoute allowDemoPreview />}>
         <Route element={<OperationsLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
-          {modules.map((item) => (
-            <Route
-              key={item.path}
-              path={`/${item.path}`}
-              element={<Placeholder title={item.title} />}
-            />
-          ))}
+          <Route element={<ProtectedRoute />}>
+            {modules.map((item) => (
+              <Route
+                key={item.path}
+                path={`/${item.path}`}
+                element={<Placeholder title={item.title} />}
+              />
+            ))}
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<NotFound />} />
