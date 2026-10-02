@@ -7,7 +7,7 @@ vi.mock("../../src/services/api", () => ({
     .fn()
     .mockResolvedValue({ success: true, database: "connected" }),
 }));
-function mount(path = "/") {
+function mount(path = "/login") {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <App />
@@ -48,7 +48,7 @@ test("login never creates a session from supplied credentials", async () => {
   ).toBeVisible();
   expect(screen.getByLabelText("Password", { exact: true })).toHaveValue("");
 });
-test("explicit demo entry supports dashboard, placeholders, profile and logout", async () => {
+test("explicit demo entry supports the read-only dashboard, profile and logout", async () => {
   mount();
   const user = userEvent.setup();
   await user.click(
@@ -66,12 +66,12 @@ test("explicit demo entry supports dashboard, placeholders, profile and logout",
   expect(
     screen.getByRole("button", { name: "Toggle navigation" }),
   ).toHaveFocus();
-  await user.click(screen.getByRole("link", { name: "Patrol Management" }));
-  expect(screen.getByText("COMING SOON")).toBeVisible();
   await user.click(screen.getByRole("link", { name: /Nimali Perera/ }));
   expect(screen.getByText("manager@example.test")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Exit demo" }));
-  expect(screen.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Create your account" }),
+  ).toBeVisible();
 });
 test("unknown paths render 404", () => {
   mount("/missing");

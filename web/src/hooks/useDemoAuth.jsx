@@ -7,7 +7,9 @@ export function DemoAuthProvider({ children }) {
   const enterDemo = () => setUser(demoUser);
   const leaveDemo = () => setUser(null);
   return (
-    <Context.Provider value={{ user, enterDemo, leaveDemo }}>
+    <Context.Provider
+      value={{ user, isAuthenticated: false, enterDemo, leaveDemo }}
+    >
       {children}
     </Context.Provider>
   );

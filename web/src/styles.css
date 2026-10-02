@@ -101,16 +101,25 @@ small {
   letter-spacing: 1.4px;
   margin-top: 4px;
 }
-.brand-symbol {
-  font-size: 29px;
-  position: relative;
-  font-weight: 800;
+.brand-logo {
+  display: block;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
-.brand-symbol span {
-  font-size: 14px;
-  position: absolute;
-  right: -5px;
-  top: -4px;
+.brand-light .brand-logo {
+  background: #f7f6ef;
+  border-radius: 8px;
+  padding: 3px;
+}
+.sidebar .brand .brand-logo {
+  width: 40px;
+  height: 40px;
+}
+.sidebar .brand.brand-light {
+  font-size: 20px;
+  gap: 8px;
 }
 .brand-light {
   color: #f2f6ef;
