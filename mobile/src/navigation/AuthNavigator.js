@@ -28,7 +28,7 @@ export default function AuthNavigator() {
       <Stack.Screen
         name="Login"
         component={LoginScreen}
-        options={{ title: "Ranger login" }}
+        options={{ title: "Login" }}
       />
       <Stack.Screen name="Register" component={RegisterScreen} options={{ title: "Join the community" }} />
     </Stack.Navigator>

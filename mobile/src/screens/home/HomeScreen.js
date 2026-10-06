@@ -3,10 +3,10 @@ import { Pressable, Text, View } from "react-native";
 import Screen from "../../components/common/Screen";
 import { colors, styles } from "../../constants/theme";
 import { fieldActions } from "../../constants/demo";
-import { useDemoAuth } from "../../hooks/useDemoAuth";
+import { useAuth } from "../../hooks/useAuth";
 import useApiHealth from "../../hooks/useApiHealth";
 export default function HomeScreen({ navigation }) {
-  const { user } = useDemoAuth();
+  const { user, isDemo } = useAuth();
   const health = useApiHealth();
   return (
     <Screen>
@@ -17,13 +17,13 @@ export default function HomeScreen({ navigation }) {
       <Text style={styles.muted}>A clear view of the day ahead.</Text>
       <View style={{ ...styles.card, backgroundColor: colors.dark }}>
         <Text style={{ color: "#d4e2bb", fontSize: 12 }}>
-          ASSIGNED PARK · DEMO
+          {isDemo ? "ASSIGNED PARK · DEMO" : "RANGER WORKSPACE"}
         </Text>
         <Text style={{ color: "white", fontSize: 22, fontWeight: "700" }}>
-          {user.park}
+          {isDemo ? user.park : "Park assignment is not available yet"}
         </Text>
         <Text style={{ color: "#e3ecda", lineHeight: 23 }}>
-          Patrol status: Awaiting assignment (sample)
+          {isDemo ? "Patrol status: Awaiting assignment (sample)" : "Patrol data is not connected yet"}
         </Text>
         <Text
           accessibilityLiveRegion="polite"
@@ -34,8 +34,7 @@ export default function HomeScreen({ navigation }) {
       </View>
       <View style={styles.notice}>
         <Text style={styles.muted}>
-          Demo workspace · Patrol and sync states are simulated. No tracking or
-          reports are recorded.
+          {isDemo ? "Demo workspace · Patrol and sync states are simulated. No tracking or reports are recorded." : "Your account is authenticated. Field tools are still being prepared; sync previews are simulated."}
         </Text>
       </View>
       <Text style={styles.heading}>Field essentials</Text>

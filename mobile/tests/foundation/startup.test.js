@@ -48,7 +48,7 @@ test("welcome uses the existing community and ranger authentication routes", () 
     fireEvent.press(button);
     expect(navigation.navigate).toHaveBeenLastCalledWith("Register");
   });
-  const rangerButtons = screen.getAllByRole("button", { name: "Ranger Login" });
+  const rangerButtons = screen.getAllByRole("button", { name: "Login" });
   expect(rangerButtons).toHaveLength(3);
   rangerButtons.forEach(button => {
     fireEvent.press(button);

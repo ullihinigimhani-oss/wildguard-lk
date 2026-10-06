@@ -1,6 +1,7 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { useDemoAuth } from "../hooks/useDemoAuth";
+import { useAuth } from "../hooks/useAuth";
+import { authenticatedDestination } from "../constants/roles";
 import AuthNavigator from "./AuthNavigator";
 import HomeScreen from "../screens/home/HomeScreen";
 import ProfileScreen from "../screens/profile/ProfileScreen";
@@ -9,16 +10,21 @@ import SyncScreen from "../screens/placeholders/SyncScreen";
 import PlaceholderScreen from "../screens/placeholders/PlaceholderScreen";
 const Stack = createNativeStackNavigator();
 export default function AppNavigator() {
-  const { user } = useDemoAuth();
+  const { user, isDemo, isAuthenticated } = useAuth();
   if (!user) return <AuthNavigator />;
+  const destination = isAuthenticated ? authenticatedDestination(user) : null;
+  if (!isDemo && !destination) return <AuthNavigator />;
+  const rangerArea = isDemo || destination === "Home";
   return (
     <Stack.Navigator
+      key={isDemo ? "demo" : `${user.id}:${user.role}`}
+      initialRouteName={rangerArea ? "Home" : "Profile"}
       screenOptions={{ headerTintColor: "#245b44", headerShadowVisible: false }}
     >
-      <Stack.Screen
+      {rangerArea && <><Stack.Screen
         name="Home"
         component={HomeScreen}
-        options={{ title: "WildGuard LK · Demo" }}
+        options={{ title: isDemo ? "WildGuard LK · Demo" : "WildGuard LK" }}
       />
       <Stack.Screen name="Patrol" options={{ title: "My Patrol" }}>
         {(props) => <PlaceholderScreen {...props} title="Ranger patrol" />}
@@ -38,6 +44,7 @@ export default function AppNavigator() {
         component={SyncScreen}
         options={{ title: "Offline / Sync Status" }}
       />
+      </>}
       <Stack.Screen name="Profile" component={ProfileScreen} />
     </Stack.Navigator>
   );

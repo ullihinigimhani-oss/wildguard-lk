@@ -15,10 +15,10 @@ const features = [
   ["RESPOND", "Help the right teams receive information when action is needed."],
 ];
 
-function Action({ title, onPress, subtle = false }) {
+function Action({ title, onPress, subtle = false, hero = false }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress}
-    style={({ pressed }) => [subtle ? local.textAction : local.primaryAction, { opacity: pressed ? 0.7 : 1 }]}>
-    <Text style={subtle ? local.textActionLabel : local.primaryLabel}>{title}</Text>
+    style={({ pressed }) => [subtle ? local.textAction : local.primaryAction, hero && local.heroButton, hero && subtle && local.heroSecondary, { opacity: pressed ? 0.7 : 1 }]}>
+    <Text style={[subtle ? local.textActionLabel : local.primaryLabel, hero && local.heroButtonLabel]}>{title}</Text>
   </Pressable>;
 }
 
@@ -55,7 +55,7 @@ export default function WelcomeScreen({ navigation }) {
           <View style={local.logoBacking}><Image source={require("../../../assets/images/wildguard-logo.png")} resizeMode="contain" style={local.logo} accessibilityLabel="WildGuard logo" /></View>
           <Text style={local.brand}>WILDGUARD LK</Text>
         </View>}>
-        <View style={local.actions}><Action title="Join the Community" onPress={onJoin} /><Action title="Ranger Login" subtle onPress={onLogin} /></View>
+        <View style={[local.actions, local.heroActions]}><Action title="Join the Community" hero onPress={onJoin} /><Action title="Login" hero subtle onPress={onLogin} /></View>
       </PhotoSection>
       <View style={local.divider} />
       <PhotoSection source={mission} minHeight={photoHeight} label="OUR MISSION" title="Protect what cannot be replaced."
@@ -65,7 +65,7 @@ export default function WelcomeScreen({ navigation }) {
       <View style={local.divider} />
       <PhotoSection source={ranger} minHeight={photoHeight} label="FOR PARK RANGERS" title="Built for the field."
         description="Record patrol activity, report incidents, capture evidence and stay connected while protecting wildlife.">
-        <Action title="Ranger Login" subtle onPress={onLogin} />
+        <Action title="Login" subtle onPress={onLogin} />
       </PhotoSection>
       <View onLayout={event => { informationY.current = event.nativeEvent.layout.y; }} style={local.information}>
         <Text style={local.lightLabel}>HOW WILDGUARD WORKS</Text>
@@ -87,7 +87,7 @@ export default function WelcomeScreen({ navigation }) {
       </View>
       <PhotoSection source={wildlife} minHeight={photoHeight} stronger label="PROTECT • PRESERVE • RESPOND" title="Together for Sri Lanka's wildlife."
         description="Better information. Faster response. Stronger conservation.">
-        <View style={local.actions}><Action title="Get Started" onPress={onJoin} /><Action title="Ranger Login" subtle onPress={onLogin} /></View>
+        <View style={local.actions}><Action title="Get Started" onPress={onJoin} /><Action title="Login" subtle onPress={onLogin} /></View>
       </PhotoSection>
       <View style={local.footer}><Text style={local.footerBrand}>WildGuard LK</Text><Text style={local.footerText}>Wildlife Conservation & Anti-Poaching Monitoring System</Text><Text style={local.footerText}>University Prototype</Text></View>
     </ScrollView>
@@ -108,6 +108,10 @@ const local = StyleSheet.create({
   body: { color: "#edf2e7", fontSize: 16, lineHeight: 25 },
   tagline: { color: colors.white, fontSize: 19, lineHeight: 28, fontWeight: "500" },
   actions: { gap: 4, marginTop: 8 },
+  heroActions: { gap: 14 },
+  heroButton: { width: "100%", minHeight: 60, padding: 16, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  heroSecondary: { backgroundColor: "rgba(24,63,50,0.35)", borderColor: "#d4e2bb", borderWidth: 1.5 },
+  heroButtonLabel: { fontWeight: "700", textAlign: "center" },
   primaryAction: { backgroundColor: "#d4e2bb", borderRadius: 10, minHeight: 54, padding: 16, alignItems: "center", justifyContent: "center" },
   primaryLabel: { color: colors.dark, fontSize: 15, fontWeight: "700", textAlign: "center" },
   textAction: { minHeight: 48, paddingVertical: 12, justifyContent: "center" },
