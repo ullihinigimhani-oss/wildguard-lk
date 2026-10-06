@@ -39,8 +39,19 @@ test("Get Started clears onboarding history and opens Welcome", () => {
 
 test("welcome uses the existing community and ranger authentication routes", () => {
   show(WelcomeScreen);
-  fireEvent.press(screen.getByRole("button", { name: "Join the Community" }));
-  expect(navigation.navigate).toHaveBeenCalledWith("Register");
-  fireEvent.press(screen.getByRole("button", { name: "Continue to Ranger Login" }));
-  expect(navigation.navigate).toHaveBeenCalledWith("Login");
+  const communityButtons = [
+    ...screen.getAllByRole("button", { name: "Join the Community" }),
+    screen.getByRole("button", { name: "Get Started" }),
+  ];
+  expect(communityButtons).toHaveLength(3);
+  communityButtons.forEach(button => {
+    fireEvent.press(button);
+    expect(navigation.navigate).toHaveBeenLastCalledWith("Register");
+  });
+  const rangerButtons = screen.getAllByRole("button", { name: "Ranger Login" });
+  expect(rangerButtons).toHaveLength(3);
+  rangerButtons.forEach(button => {
+    fireEvent.press(button);
+    expect(navigation.navigate).toHaveBeenLastCalledWith("Login");
+  });
 });
