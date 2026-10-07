@@ -1,4 +1,4 @@
-import React from "react";
+import React, { forwardRef, useImperativeHandle, useRef } from "react";
 import { Linking } from "react-native";
 import { WebView } from "react-native-webview";
 const attributionUrls = [
@@ -6,7 +6,26 @@ const attributionUrls = [
   "https://leafletjs.com",
   "https://leafletjs.com/",
 ];
-export default function PatrolMapSurface({ html, onMessage, onError }) {
+export default forwardRef(function PatrolMapSurface(
+  { html, onMessage, onError },
+  ref,
+) {
+  const webview = useRef(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      updateNavigation(payload) {
+        const data = JSON.stringify(payload)
+          .replace(/</g, "\\u003c")
+          .replace(/\u2028/g, "\\u2028")
+          .replace(/\u2029/g, "\\u2029");
+        webview.current?.injectJavaScript(
+          `window.updatePatrolNavigation && window.updatePatrolNavigation(${data});true;`,
+        );
+      },
+    }),
+    [],
+  );
   function navigationAllowed(request) {
     if (
       request.url === "about:blank" ||
@@ -19,6 +38,7 @@ export default function PatrolMapSurface({ html, onMessage, onError }) {
   }
   return (
     <WebView
+      ref={webview}
       testID="planned-route-webview"
       accessibilityLabel="Planned patrol route map"
       style={{ flex: 1, backgroundColor: "#edf3ed" }}
@@ -49,4 +69,4 @@ export default function PatrolMapSurface({ html, onMessage, onError }) {
       onContentProcessDidTerminate={onError}
     />
   );
-}
+});

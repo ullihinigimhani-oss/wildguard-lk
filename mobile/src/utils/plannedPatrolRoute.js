@@ -52,6 +52,7 @@ export function readPlannedRoute(route) {
         ? `Checkpoint ${checkpoint}`
         : presentation.label;
     const item = {
+      ...(typeof point.id === "string" ? { waypointId: point.id } : {}),
       type: point.type,
       order: point.order,
       latitude: point.latitude,

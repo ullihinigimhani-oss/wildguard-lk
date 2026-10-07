@@ -106,7 +106,11 @@ test("authenticated users keep the existing protected navigation", () => {
   session.user = demoUser;
   session.isAuthenticated = true;
   mount("/map");
-  expect(screen.getByText("COMING SOON")).toBeVisible();
+  expect(
+    screen
+      .getAllByRole("heading", { name: "Field Map" })
+      .every((heading) => heading.textContent === "Field Map"),
+  ).toBe(true);
   expect(
     screen.queryByRole("heading", { name: "Choose Your Role" }),
   ).not.toBeInTheDocument();

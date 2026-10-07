@@ -102,7 +102,13 @@ exports.findRangerPatrol = (id, rangerId) =>
   db()
     .patrol.findFirst({
       where: { id, rangerId },
-      select: { ...rangerPatrolSelect, waypoints: routeSelect },
+      select: {
+        ...rangerPatrolSelect,
+        waypoints: {
+          ...routeSelect,
+          select: { ...routeSelect.select, id: true },
+        },
+      },
     })
     .then(withRoute);
 exports.transitionRangerPatrol = (id, rangerId, status, data) =>

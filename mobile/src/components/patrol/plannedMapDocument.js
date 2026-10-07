@@ -1,6 +1,6 @@
 // Leaflet runs inside an isolated map document, not directly in React Native.
 // Only validated presentation data enters this document. No session or ORS secret.
-export function buildPlannedMapDocument(points, segments) {
+export function buildPlannedMapDocument(points, segments, live = false) {
   const mapPoints = points.map(
     ({
       type,
@@ -58,13 +58,40 @@ export function buildPlannedMapDocument(points, segments) {
     if(!data.points.length){document.getElementById('status').textContent='No planned route points are available.';notify('map-error');return;}
     var map=L.map('map',{zoomControl:true,scrollWheelZoom:false});
     var plannedLayer=L.layerGroup().addTo(map);
-    // Future current location and actual GPS layers must remain separate.
+    map.createPane('riskAreas');map.getPane('riskAreas').style.zIndex=350;
+    var riskLayer=L.layerGroup().addTo(map),currentLayer=L.layerGroup().addTo(map),navigationLayer=L.layerGroup().addTo(map),actualLayer=L.layerGroup().addTo(map),currentPosition=null,riskSignature=null;
+    var live=${Boolean(live)};
+    function valid(p){return p && Number.isFinite(p.latitude)&&Math.abs(p.latitude)<=90&&Number.isFinite(p.longitude)&&Math.abs(p.longitude)<=180;}
+    window.updatePatrolNavigation=function(payload){
+      if(!live || !payload || typeof payload!=='object')return;
+      currentLayer.clearLayers();navigationLayer.clearLayers();actualLayer.clearLayers();currentPosition=null;
+      var nextRiskSignature=JSON.stringify(payload.riskZones||[]);
+      if(nextRiskSignature!==riskSignature){riskSignature=nextRiskSignature;riskLayer.clearLayers();
+      if(Array.isArray(payload.riskZones))payload.riskZones.forEach(function(zone){
+        var geometry=zone && zone.geometry,ring=geometry && geometry.coordinates && geometry.coordinates[0];
+        if(!geometry||geometry.type!=='Polygon'||!Array.isArray(ring)||ring.length<4||ring.length>33||!ring.every(function(p){return Array.isArray(p)&&p.length===2&&valid({longitude:p[0],latitude:p[1]});})||ring[0][0]!==ring[ring.length-1][0]||ring[0][1]!==ring[ring.length-1][1])return;
+        var popup=document.createElement('div');var title=document.createElement('div');title.className='popup-risk';title.textContent='Risk Zone';popup.appendChild(title);
+        [zone.name,zone.riskLevel,zone.description].forEach(function(value){if(typeof value==='string'&&value){var field=document.createElement('div');field.textContent=value;field.className='popup-note';popup.appendChild(field);}});
+        L.geoJSON(geometry,{pane:'riskAreas',style:{color:'#b42332',weight:2,fillColor:'#d83140',fillOpacity:0.22}}).bindPopup(popup).addTo(riskLayer);
+      });}
+      if(valid(payload.currentLocation)){
+        currentPosition=[payload.currentLocation.latitude,payload.currentLocation.longitude];
+        L.circleMarker(currentPosition,{radius:9,color:'white',weight:3,fillColor:'#1679dc',fillOpacity:1}).bindTooltip('Current Ranger GPS location').addTo(currentLayer);
+        if(Number.isFinite(payload.currentLocation.accuracy))L.circle(currentPosition,{radius:Math.min(100,payload.currentLocation.accuracy),color:'#1679dc',weight:1,fillOpacity:0.08}).addTo(currentLayer);
+      }
+      var geometry=payload.geometry;
+      if(geometry && geometry.type==='LineString' && Array.isArray(geometry.coordinates) && geometry.coordinates.length>1 && geometry.coordinates.every(function(p){return Array.isArray(p)&&valid({longitude:p[0],latitude:p[1]});}))L.polyline(geometry.coordinates.map(function(p){return[p[1],p[0]];}),{color:'#1679dc',weight:5}).bindTooltip('Navigation Route · foot-walking').addTo(navigationLayer);
+      if(Array.isArray(payload.trail)){var trail=payload.trail.filter(valid).map(function(p){return[p.latitude,p.longitude];});if(trail.length>1)L.polyline(trail,{color:'#c76b19',weight:3,dashArray:'3 5'}).bindTooltip('Recorded GPS trail').addTo(actualLayer);}
+      var recenter=document.getElementById('recenter');if(recenter)recenter.disabled=!currentPosition;
+    };
+    window.addEventListener('message',function(event){if(event.source!==window.parent)return;if(event.data && event.data.type==='navigation-update')window.updatePatrolNavigation(event.data.payload);});
+    if(live){var recenter=document.createElement('button');recenter.id='recenter';recenter.textContent='Re-centre';recenter.disabled=true;recenter.style.cssText='position:absolute;z-index:600;right:10px;top:58px;background:white;border:1px solid #bed0c3;border-radius:8px;padding:11px 14px;color:#245b44;font:600 13px system-ui';recenter.onclick=function(){if(currentPosition)map.setView(currentPosition,16);};document.body.appendChild(recenter);}
     var tiles=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'}).addTo(map);
     var failedTiles=false;
     tiles.on('loading',function(){failedTiles=false;});
     tiles.on('tileerror',function(){failedTiles=true;document.getElementById('status').hidden=false;document.getElementById('status').textContent='Map tiles are unavailable. Saved route points remain visible.';notify('tile-error');});
     tiles.on('load',function(){if(!failedTiles){document.getElementById('status').hidden=true;notify('tiles-ready');}});
-    data.segments.forEach(function(segment){if(segment.length>1)L.polyline(segment,{color:'#245b44',weight:4,dashArray:'8 6'}).addTo(plannedLayer);});
+    if(!live)data.segments.forEach(function(segment){if(segment.length>1)L.polyline(segment,{color:'#245b44',weight:4,dashArray:'8 6'}).addTo(plannedLayer);});
     data.points.forEach(function(point){
       var iconNode=document.createElement('span');iconNode.className='point-marker point-'+point.type.toLowerCase();iconNode.style.backgroundColor=point.color;iconNode.textContent=point.symbol;
       var marker=L.marker([point.latitude,point.longitude],{icon:L.divIcon({html:iconNode,className:'planned-marker',iconSize:[32,32],iconAnchor:[16,16]}),title:(point.order+1)+'. '+point.typeLabel+': '+point.label,keyboard:true}).addTo(plannedLayer);

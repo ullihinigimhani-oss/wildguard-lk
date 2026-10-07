@@ -1,7 +1,27 @@
-import React, { useEffect, useRef } from "react";
+import React, {
+  forwardRef,
+  useImperativeHandle,
+  useEffect,
+  useRef,
+} from "react";
 // Expo web preview uses the identical map document in an isolated iframe.
-export default function PatrolMapSurface({ html, onMessage, onError }) {
+export default forwardRef(function PatrolMapSurface(
+  { html, onMessage, onError },
+  ref,
+) {
   const frame = useRef(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      updateNavigation(payload) {
+        frame.current?.contentWindow.postMessage(
+          { type: "navigation-update", payload },
+          "*",
+        );
+      },
+    }),
+    [],
+  );
   useEffect(() => {
     const receive = (event) => {
       if (event.source === frame.current?.contentWindow) onMessage(event.data);
@@ -19,4 +39,4 @@ export default function PatrolMapSurface({ html, onMessage, onError }) {
       style={{ width: "100%", height: "100%", border: 0 }}
     />
   );
-}
+});

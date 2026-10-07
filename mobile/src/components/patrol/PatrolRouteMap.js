@@ -1,18 +1,35 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import Button from "../common/Button";
 import { colors, styles } from "../../constants/theme";
 import PatrolMapSurface from "./PatrolMapSurface";
 import { buildPlannedMapDocument } from "./plannedMapDocument";
 
-export default function PatrolRouteMap({ points, segments, onSelect }) {
+export default function PatrolRouteMap({
+  points,
+  segments,
+  onSelect,
+  live = false,
+  navigationData,
+}) {
+  const surface = useRef(null);
   const html = useMemo(
-    () => buildPlannedMapDocument(points, segments),
-    [points, segments],
+    () => buildPlannedMapDocument(points, segments, live),
+    [points, segments, live],
   );
   const [revision, setRevision] = useState(0);
   const [status, setStatus] = useState("loading");
   const [tilesUnavailable, setTilesUnavailable] = useState(false);
+  useEffect(() => {
+    if (status === "ready" && live)
+      surface.current?.updateNavigation(navigationData);
+  }, [status, live, navigationData]);
   useEffect(() => {
     setStatus("loading");
     setTilesUnavailable(false);
@@ -40,7 +57,7 @@ export default function PatrolRouteMap({ points, segments, onSelect }) {
     <View style={{ gap: 10 }}>
       <View
         style={{
-          height: 360,
+          height: live ? 440 : 360,
           borderRadius: 16,
           overflow: "hidden",
           borderWidth: 1,
@@ -49,6 +66,7 @@ export default function PatrolRouteMap({ points, segments, onSelect }) {
         }}
       >
         <PatrolMapSurface
+          ref={surface}
           key={revision}
           html={html}
           onMessage={onMessage}

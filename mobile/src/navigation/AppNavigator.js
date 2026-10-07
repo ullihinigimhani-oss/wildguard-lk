@@ -1,4 +1,5 @@
 import PatrolRouteScreen from "../screens/patrol/PatrolRouteScreen";
+import LivePatrolNavigationScreen from "../screens/patrol/LivePatrolNavigationScreen";
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../hooks/useAuth";
@@ -52,6 +53,16 @@ export default function AppNavigator() {
           options={{
             headerShown: true,
             title: "Patrol Details",
+            headerTintColor: "#245b44",
+            headerShadowVisible: false,
+          }}
+        />
+        <Stack.Screen
+          name="PatrolNavigation"
+          component={LivePatrolNavigationScreen}
+          options={{
+            headerShown: true,
+            title: "Patrol Navigation",
             headerTintColor: "#245b44",
             headerShadowVisible: false,
           }}
