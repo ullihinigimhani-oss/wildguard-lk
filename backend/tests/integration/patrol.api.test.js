@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 jest.mock("../../src/config/database", () => ({
   park: { findUnique: jest.fn() },
   user: { findUnique: jest.fn(), findMany: jest.fn() },
-  patrol: { create: jest.fn() },
+  patrol: { create: jest.fn(), findMany: jest.fn() },
 }));
 const db = require("../../src/config/database");
 const app = require("../../src/app");
@@ -68,6 +68,7 @@ beforeEach(() => {
   }));
 });
 test("unauthenticated requests are rejected", async () => {
+  await request(app).get("/api/patrols/mine").expect(401);
   await request(app).get("/api/patrols/rangers").expect(401);
   await request(app)
     .post("/api/patrols")
@@ -75,6 +76,20 @@ test("unauthenticated requests are rejected", async () => {
     .expect(401);
   expect(db.user.findMany).not.toHaveBeenCalled();
   expect(db.patrol.create).not.toHaveBeenCalled();
+});
+test("manager-created record is visible only to its assigned authenticated ranger", async () => {
+  accounts["ranger-2"] = { ...accounts["ranger-1"], id: "ranger-2" };
+  const created = await request(app).post("/api/patrols").set("Authorization", asManager()).send(payload()).expect(201);
+  db.patrol.findMany.mockImplementation(async ({ where }) => where.rangerId === created.body.patrol.rangerId ? [created.body.patrol] : []);
+  const a = await request(app).get("/api/patrols/mine?rangerId=ranger-2").set("Authorization", "Bearer " + token("ranger-1")).expect(200);
+  expect(a.body.patrols[0].id).toBe(created.body.patrol.id);
+  const b = await request(app).get("/api/patrols/mine?rangerId=ranger-1").set("Authorization", "Bearer " + token("ranger-2")).expect(200);
+  expect(b.body.patrols).toEqual([]);
+  expect(db.patrol.findMany.mock.calls.map(([query]) => query.where.rangerId)).toEqual(["ranger-1", "ranger-2"]);
+  expect(a.headers["cache-control"]).toBe("no-store");
+  await request(app).get("/api/patrols/mine").set("Authorization", asManager()).expect(403);
+  accounts["ranger-1"].approvalStatus = "PENDING";
+  await request(app).get("/api/patrols/mine").set("Authorization", "Bearer " + token("ranger-1")).expect(403);
 });
 test.each(["RANGER", "COMMUNITY_LIAISON", "RESEARCHER", "COMMUNITY_USER"])(
   "%s cannot manage patrols",

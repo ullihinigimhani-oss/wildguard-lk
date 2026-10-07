@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react-native";
 import { DemoAuthProvider, useDemoAuth } from "../../src/hooks/useDemoAuth";
 import LoginScreen from "../../src/screens/auth/LoginScreen";
-import HomeScreen from "../../src/screens/home/HomeScreen";
+import HomeScreen from "../../src/screens/home/DemoHomeScreen";
 import SyncScreen from "../../src/screens/placeholders/SyncScreen";
 jest.mock("../../src/services/authApi", () => ({
   loginAccount: jest.fn().mockRejectedValue({ response: { status: 401 } }),
