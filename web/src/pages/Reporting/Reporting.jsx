@@ -1,17 +1,4 @@
-import { useState } from "react";
-import DataTable from "../../components/DataTable/DataTable";
-
 export default function Reporting() {
-  const [reports, setReports] = useState([]);
-
-  const columns = [
-    { key: "id", header: "ID" },
-    { key: "title", header: "Report Title" },
-    { key: "type", header: "Type" },
-    { key: "date", header: "Date" },
-    { key: "status", header: "Status" },
-  ];
-
   return (
     <div className="page-container">
       <div className="page-header">
@@ -26,11 +13,7 @@ export default function Reporting() {
             <button className="button primary">Generate New Report</button>
           </div>
           <div className="card-body">
-            {reports.length === 0 ? (
-              <p className="empty-state">No reports generated yet</p>
-            ) : (
-              <DataTable columns={columns} data={reports} />
-            )}
+            <p className="empty-state">No reports generated yet</p>
           </div>
         </div>
       </div>
