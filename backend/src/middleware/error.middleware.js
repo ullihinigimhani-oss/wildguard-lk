@@ -23,6 +23,7 @@ function errorHandler(error, req, res, next) {
       .json({ success: false, message: error.message, errors: error.fields });
   }
   const status = error.status >= 400 && error.status < 500 ? error.status : 500;
+  if (status === 500) require("../utils/patrolErrorLogger")(error, req);
   const message =
     status === 400
       ? "Invalid request body"
