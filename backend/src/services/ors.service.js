@@ -26,10 +26,28 @@ exports.walkingRoute = async ({
   destination,
   currentLocation,
   riskZones = [],
+  waypoints,
 }) => {
+  const full = Array.isArray(waypoints);
+  if (
+    full &&
+    (waypoints.length < 2 ||
+      waypoints.length > 50 ||
+      waypoints.some((p) => !validCoordinate(p)))
+  )
+    throw routeError(
+      422,
+      "INVALID_PATROL_ROUTE",
+      "Full patrol navigation needs 2–50 valid required points. The saved waypoints remain visible.",
+    );
+  const cacheSlot = full ? "fullCached" : "cached";
   const now = Date.now();
   for (const [id, entry] of entries)
-    if (now - entry.lastUsed > 120000 && !entry.pending) entries.delete(id);
+    if (
+      now - entry.lastUsed > (entry.fullCached ? 600000 : 120000) &&
+      !entry.pending
+    )
+      entries.delete(id);
   let entry = entries.get(rangerId);
   if (!entry) {
     entry = { lastUsed: now, calls: [], startedAt: -Infinity };
@@ -40,27 +58,30 @@ exports.walkingRoute = async ({
     .update(
       JSON.stringify({
         destination: [destination.longitude, destination.latitude],
+        ...(full && { waypoints }),
         riskZones,
       }),
     )
     .digest("hex");
-  const key = patrolId + ":" + destination.id + ":" + fingerprint;
+  const key =
+    patrolId + ":" + (full ? "full:" : "") + destination.id + ":" + fingerprint;
+  const cached = entry[cacheSlot];
   if (
-    entry.cached?.key === key &&
-    now - entry.cached.at < CACHE_MS &&
-    distanceMeters(currentLocation, entry.cached.origin) <= 20 &&
+    cached?.key === key &&
+    now - cached.at < (full ? 600000 : CACHE_MS) &&
+    distanceMeters(currentLocation, cached.origin) <= 20 &&
     !routeIntersectsZones(
       {
         type: "LineString",
         coordinates: [
           [currentLocation.longitude, currentLocation.latitude],
-          ...entry.cached.route.geometry.coordinates,
+          ...cached.route.geometry.coordinates,
         ],
       },
       riskZones,
     )
   )
-    return entry.cached.route;
+    return cached.route;
   if (entry.pending) {
     if (
       entry.pendingKey === key &&
@@ -152,10 +173,12 @@ exports.walkingRoute = async ({
             Accept: "application/geo+json, application/json",
           },
           body: JSON.stringify({
-            coordinates: [
-              [currentLocation.longitude, currentLocation.latitude],
-              [destination.longitude, destination.latitude],
-            ],
+            coordinates: full
+              ? waypoints.map((p) => [p.longitude, p.latitude])
+              : [
+                  [currentLocation.longitude, currentLocation.latitude],
+                  [destination.longitude, destination.latitude],
+                ],
             instructions: false,
             ...(riskZones.length && {
               options: { avoid_polygons: combineZones(riskZones) },
@@ -185,6 +208,12 @@ exports.walkingRoute = async ({
       } catch {
         /* Never return upstream content. */
       }
+      if (full && providerCode === 2010)
+        throw routeError(
+          422,
+          "PATROL_POINT_UNMAPPED",
+          "A required patrol point has no mapped walking connection. Review the saved patrol points with the Park Manager.",
+        );
       if (
         [2000, 2001, 2002, 2003, 2004].includes(providerCode) ||
         response.status === 413
@@ -267,6 +296,71 @@ exports.walkingRoute = async ({
       },
       riskZones,
     };
+    if (full) {
+      const indices = feature.properties.way_points;
+      if (
+        !Array.isArray(indices) ||
+        indices.length !== waypoints.length ||
+        indices[0] !== 0 ||
+        indices.at(-1) !== route.geometry.coordinates.length - 1 ||
+        indices.some(
+          (index, i) =>
+            !Number.isInteger(index) ||
+            index < 0 ||
+            index >= route.geometry.coordinates.length ||
+            (i > 0 && index < indices[i - 1]) ||
+            distanceMeters(waypoints[i], {
+              longitude: route.geometry.coordinates[index][0],
+              latitude: route.geometry.coordinates[index][1],
+            }) > 350,
+        )
+      )
+        throw routeError(
+          502,
+          "INVALID_ROUTE",
+          "Full patrol routing returned an unusable waypoint sequence. The saved waypoints remain visible.",
+        );
+      // Check every required point's off-network connector, including intermediate stops.
+      if (
+        waypoints.some((point, i) =>
+          routeIntersectsZones(
+            {
+              type: "LineString",
+              coordinates: [
+                [point.longitude, point.latitude],
+                route.geometry.coordinates[indices[i]],
+              ],
+            },
+            riskZones,
+          ),
+        )
+      )
+        throw routeError(
+          422,
+          "NO_RISK_AVOIDING_ROUTE",
+          "No full patrol route avoiding the known risk areas could be verified.",
+        );
+      route.waypoints = waypoints.map(
+        ({ id, type, label, latitude, longitude }) => ({
+          waypointId: id,
+          type,
+          label,
+          latitude,
+          longitude,
+        }),
+      );
+      route.legs = waypoints.slice(1).map((point, i) => ({
+        fromWaypointId: waypoints[i].id,
+        destinationWaypointId: point.id,
+        geometry: {
+          type: "LineString",
+          coordinates: route.geometry.coordinates.slice(
+            indices[i],
+            indices[i + 1] + 1,
+          ),
+        },
+      }));
+    }
     // Include off-network start/end connectors in the conservative crossing check.
     if (
       routeIntersectsZones(
@@ -286,7 +380,7 @@ exports.walkingRoute = async ({
         "NO_RISK_AVOIDING_ROUTE",
         "No route avoiding the known high-risk area could be found. Review the planned patrol route and contact the Park Manager if needed.",
       );
-    entry.cached = {
+    entry[cacheSlot] = {
       key,
       at: Date.now(),
       origin: { ...currentLocation },

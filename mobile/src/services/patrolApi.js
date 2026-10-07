@@ -53,6 +53,15 @@ export async function getPatrolRiskZones(id, signal) {
     throw new Error("Risk-zone information unavailable.");
   return data.riskZones;
 }
+export async function getFullPatrolRoute(id, signal) {
+  const { data } = await api.get(
+    `/navigation/patrols/${encodeURIComponent(id)}/route`,
+    { signal },
+  );
+  if (!data.success || !data.route?.geometry || !Array.isArray(data.route.legs))
+    throw new Error("Full patrol route unavailable.");
+  return data.route;
+}
 export async function getPatrolLocations(id, signal) {
   const { data } = await api.get(
     `/patrols/mine/${encodeURIComponent(id)}/locations`,

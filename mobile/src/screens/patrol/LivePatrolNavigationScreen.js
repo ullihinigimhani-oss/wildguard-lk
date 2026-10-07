@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
@@ -14,6 +14,7 @@ import { destinationsFor } from "../../utils/liveNavigation";
 import useAssignedPatrol from "../../hooks/useAssignedPatrol";
 import useForegroundLocation from "../../hooks/useForegroundLocation";
 import useLiveNavigation from "../../hooks/useLiveNavigation";
+import useFullPatrolRoute from "../../hooks/useFullPatrolRoute";
 import { useAuth } from "../../hooks/useAuth";
 import { completeMyPatrol } from "../../services/patrolApi";
 import { styles } from "../../constants/theme";
@@ -46,6 +47,14 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
       usable,
   );
   const live = useLiveNavigation(patrol, data.points, user?.id, location);
+  const full = useFullPatrolRoute(
+    patrol,
+    data.points,
+    user?.id,
+    live,
+    location.active && usable && !accessLost,
+  );
+  const approaching = live.destination?.type === "START";
   React.useEffect(() => {
     if (live.accessLost) setAccessLost(true);
   }, [live.accessLost]);
@@ -72,10 +81,23 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
     () => ({
       currentLocation: location.position,
       geometry: live.route?.geometry || null,
+      destination: live.destination || null,
+      approaching,
+      fullRoute: full.route,
+      reachedWaypointIds: Array.from(live.reached),
       trail: live.trail,
       riskZones: live.riskZones || [],
     }),
-    [location.position, live.route, live.trail, live.riskZones],
+    [
+      location.position,
+      live.route,
+      live.destination,
+      live.trail,
+      live.riskZones,
+      approaching,
+      full.route,
+      live.reached,
+    ],
   );
   return (
     <Screen>
@@ -83,7 +105,8 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
       {patrol && (
         <>
           <View style={ui.card}>
-            <Text style={ui.section}>{patrol.routeName}</Text>
+            <Text style={ui.section}>Patrol Navigation</Text>
+            <Text style={styles.muted}>{patrol.routeName}</Text>
             <Text style={styles.text}>
               {live.complete
                 ? "Patrol route completed."
@@ -135,7 +158,22 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
                 </Text>
               )}
               {location.waiting && (
-                <Text style={styles.muted}>Waiting for device GPS…</Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                  accessibilityLiveRegion="polite"
+                >
+                  <ActivityIndicator accessibilityLabel="Acquiring current location" />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={ui.section}>Locating you...</Text>
+                    <Text style={styles.muted}>
+                      Getting your current position for patrol navigation.
+                    </Text>
+                  </View>
+                </View>
               )}
               {!live.riskReady && !live.riskError && (
                 <Text style={styles.muted}>Checking known risk areas…</Text>
@@ -163,11 +201,21 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
                   <Text accessibilityRole="alert" style={styles.error}>
                     {location.error}
                   </Text>
-                  <Button
-                    title="Retry device location"
-                    secondary
-                    onPress={location.retry}
-                  />
+                  <Button title="Retry" secondary onPress={location.retry} />
+                  {location.errorCode === "SERVICES_DISABLED" &&
+                    Platform.OS === "ios" && (
+                      <Text style={styles.muted}>
+                        In device Settings, open Privacy &amp; Security →
+                        Location Services and turn it on.
+                      </Text>
+                    )}
+                  {location.canOpenSettings && (
+                    <Button
+                      title="Open Settings"
+                      secondary
+                      onPress={location.openSettings}
+                    />
+                  )}
                 </>
               )}
               {live.offRoute && (
@@ -200,10 +248,34 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
                 navigationData={navigationData}
               />
               <Text style={styles.muted}>
-                Blue: current GPS and navigation route · Orange: recorded GPS
-                trail. Red areas: known risk zones · Red warning pins: manager
-                warning points.
+                Blue dot: Your Location · Blue line: Route to Patrol Start ·
+                Green line: Planned Patrol Navigation · Orange line: Recorded
+                GPS Trail · Red area: Known Risk Zone · Red warning pin:
+                HIGH_RISK warning
               </Text>
+              {full.loading && (
+                <Text style={styles.muted}>
+                  Loading full patrol navigation route…
+                </Text>
+              )}
+              {full.error && (
+                <>
+                  <Text accessibilityRole="alert" style={styles.error}>
+                    {full.error}
+                  </Text>
+                  <Button
+                    title="Retry full patrol route"
+                    secondary
+                    onPress={full.retry}
+                    disabled={
+                      full.loading ||
+                      live.routing ||
+                      !live.riskReady ||
+                      accessLost
+                    }
+                  />
+                </>
+              )}
               {live.riskZones?.length > 0 && (
                 <Text style={styles.muted}>
                   Avoidance uses known risk areas and mapped walking paths.

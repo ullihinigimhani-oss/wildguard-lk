@@ -1,12 +1,22 @@
 const service = require("../services/navigation.service");
-exports.riskContext = async (req, res, next) => {
+exports.fullPatrolRoute = async (req, res, next) => {
   try {
     res
       .set("Cache-Control", "no-store")
       .json({
         success: true,
-        riskZones: await service.riskContext(req.params.patrolId, req.user.id),
+        route: await service.fullPatrolRoute(req.params.patrolId, req.user.id),
       });
+  } catch (error) {
+    next(error);
+  }
+};
+exports.riskContext = async (req, res, next) => {
+  try {
+    res.set("Cache-Control", "no-store").json({
+      success: true,
+      riskZones: await service.riskContext(req.params.patrolId, req.user.id),
+    });
   } catch (error) {
     next(error);
   }

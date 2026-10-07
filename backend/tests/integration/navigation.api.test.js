@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 jest.mock("../../src/config/database", () => ({
   user: { findUnique: jest.fn() },
   patrol: { findFirst: jest.fn() },
-  patrolWaypoint: { findFirst: jest.fn() },
+  patrolWaypoint: { findFirst: jest.fn(), findMany: jest.fn() },
   riskZone: { findMany: jest.fn() },
   patrolLocation: {
     findMany: jest.fn(),
@@ -345,4 +345,82 @@ test("provider failures retain relevant zones and reroutes reload current park r
       ([input]) => input.riskZones.length === 1,
     ),
   ).toBe(true);
+});
+
+const fullSaved = () =>
+  ["START", "CHECKPOINT", "HIGH_RISK", "CHECKPOINT", "OBSERVATION", "END"].map(
+    (type, order) => ({
+      id: "full-" + order,
+      type,
+      order,
+      label: type,
+      latitude: 7.5 + order / 100,
+      longitude: 80.7,
+    }),
+  );
+const fullRequest = (id = "a") =>
+  request(app)
+    .get("/api/navigation/patrols/p/route")
+    .set("Authorization", auth(id));
+test("full route loads authoritative ordered points, excludes HIGH_RISK and uses trusted park avoidance", async () => {
+  db.patrolWaypoint.findMany.mockResolvedValue(fullSaved());
+  db.riskZone.findMany.mockResolvedValue([riskRecord()]);
+  await fullRequest()
+    .query({ waypoints: "forged", avoid_polygons: "forged" })
+    .expect(200);
+  const options = ors.walkingRoute.mock.calls[0][0];
+  expect(options.waypoints.map((p) => p.id)).toEqual([
+    "full-0",
+    "full-1",
+    "full-3",
+    "full-4",
+    "full-5",
+  ]);
+  expect(options.currentLocation.id).toBe("full-0");
+  expect(options.destination.id).toBe("full-5");
+  expect(options.riskZones[0].id).toBe("risk");
+  expect(db.patrolWaypoint.findMany).toHaveBeenCalledWith(
+    expect.objectContaining({
+      where: { patrolId: "p" },
+      orderBy: { order: "asc" },
+    }),
+  );
+  expect(db.patrolLocation.create).not.toHaveBeenCalled();
+});
+test("foreign Ranger cannot obtain full patrol route", async () => {
+  await fullRequest("b").expect(404);
+  expect(ors.walkingRoute).not.toHaveBeenCalled();
+});
+test.each([
+  { role: "PARK_MANAGER" },
+  { approvalStatus: "PENDING" },
+  { isActive: false },
+])(
+  "full-route endpoint requires active approved Ranger: %j",
+  async (changes) => {
+    Object.assign(user, changes);
+    await fullRequest().expect(changes.isActive === false ? 401 : 403);
+    expect(ors.walkingRoute).not.toHaveBeenCalled();
+  },
+);
+test("a later mandatory destination inside a risk zone blocks full routing instead of skipping it", async () => {
+  const saved = fullSaved();
+  db.patrolWaypoint.findMany.mockResolvedValue(saved);
+  db.riskZone.findMany.mockResolvedValue([
+    riskRecord({
+      centerLatitude: saved[3].latitude,
+      centerLongitude: saved[3].longitude,
+    }),
+  ]);
+  const response = await fullRequest().expect(422);
+  expect(response.body.code).toBe("DESTINATION_IN_RISK_ZONE");
+  expect(response.body.riskZones).toHaveLength(1);
+  expect(ors.walkingRoute).not.toHaveBeenCalled();
+});
+test("invalid full sequence and inactive patrol do not call ORS", async () => {
+  db.patrolWaypoint.findMany.mockResolvedValue(fullSaved().slice(1));
+  await fullRequest().expect(422);
+  patrol.status = "SCHEDULED";
+  await fullRequest().expect(409);
+  expect(ors.walkingRoute).not.toHaveBeenCalled();
 });

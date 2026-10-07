@@ -267,11 +267,177 @@ test("rerouting after cooldown keeps avoidance options, and changed-zone geometr
     ),
   ).toBe(true);
 });
-test('coalesced nearby origin is revalidated when its connector crosses a small avoided zone',async()=>{
- const zone={id:'small',geometry:require('../../../../shared/riskGeometry').zonePolygon({centerLatitude:49.41461,centerLongitude:8.68154,radiusMeters:1})};
- let release;fetch.mockImplementation(()=>new Promise(resolve=>{release=resolve;}));
- const first=ors.walkingRoute({...input(),riskZones:[zone]});
- const second=ors.walkingRoute({...input(),riskZones:[zone],currentLocation:{latitude:49.41461,longitude:8.6816}});
- release({ok:true,status:200,json:async()=>data()});
- expect((await first).riskAvoidance.applied).toBe(true);await expect(second).rejects.toMatchObject({code:'NO_RISK_AVOIDING_ROUTE'});expect(fetch).toHaveBeenCalledTimes(1);
+test("coalesced nearby origin is revalidated when its connector crosses a small avoided zone", async () => {
+  const zone = {
+    id: "small",
+    geometry: require("../../../../shared/riskGeometry").zonePolygon({
+      centerLatitude: 49.41461,
+      centerLongitude: 8.68154,
+      radiusMeters: 1,
+    }),
+  };
+  let release;
+  fetch.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const first = ors.walkingRoute({ ...input(), riskZones: [zone] });
+  const second = ors.walkingRoute({
+    ...input(),
+    riskZones: [zone],
+    currentLocation: { latitude: 49.41461, longitude: 8.6816 },
+  });
+  release({ ok: true, status: 200, json: async () => data() });
+  expect((await first).riskAvoidance.applied).toBe(true);
+  await expect(second).rejects.toMatchObject({
+    code: "NO_RISK_AVOIDING_ROUTE",
+  });
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+const fullInput = () => {
+  const waypoints = [
+    "START",
+    "CHECKPOINT",
+    "CHECKPOINT",
+    "OBSERVATION",
+    "END",
+  ].map((type, i) => ({
+    id: "full-" + i,
+    type,
+    label: type,
+    order: i,
+    latitude: 49.41461 + i * 0.001,
+    longitude: 8.681495,
+  }));
+  return {
+    ...input(),
+    currentLocation: waypoints[0],
+    destination: waypoints.at(-1),
+    waypoints,
+  };
+};
+const fullData = () => ({
+  features: [
+    {
+      geometry: {
+        type: "LineString",
+        coordinates: fullInput().waypoints.map((p) => [
+          p.longitude,
+          p.latitude,
+        ]),
+      },
+      properties: {
+        summary: { distance: 600, duration: 450 },
+        way_points: [0, 1, 2, 3, 4],
+      },
+    },
+  ],
+});
+function mockFull(body = fullData()) {
+  fetch.mockResolvedValue({ ok: true, status: 200, json: async () => body });
+}
+test("full patrol uses one ordered multi-coordinate walking request with avoidance and sanitized legs", async () => {
+  mockFull();
+  const z = zone("outside", 8.69);
+  const result = await ors.walkingRoute({ ...fullInput(), riskZones: [z] });
+  const body = JSON.parse(fetch.mock.calls[0][1].body);
+  expect(body.coordinates).toEqual(
+    fullInput().waypoints.map((p) => [p.longitude, p.latitude]),
+  );
+  expect(body.options.avoid_polygons).toEqual(z.geometry);
+  expect(result.legs.map((l) => l.destinationWaypointId)).toEqual([
+    "full-1",
+    "full-2",
+    "full-3",
+    "full-4",
+  ]);
+  expect(result.riskAvoidance.applied).toBe(true);
+  expect(JSON.stringify(result)).not.toContain("isolated-test-key");
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+test("full cache is independent of live cache, coalesces duplicates, and shares cooldown", async () => {
+  mockFull();
+  const first = ors.walkingRoute(fullInput()),
+    second = ors.walkingRoute(fullInput());
+  expect(await first).toEqual(await second);
+  await ors.walkingRoute(fullInput());
+  expect(fetch).toHaveBeenCalledTimes(1);
+  await expect(ors.walkingRoute(input())).rejects.toMatchObject({
+    status: 429,
+  });
+});
+test("full cache reused past live expiry; changed intermediate waypoint invalidates cache", async () => {
+  jest.useFakeTimers();
+  mockFull();
+  await ors.walkingRoute(fullInput());
+  jest.advanceTimersByTime(60000);
+  await ors.walkingRoute(fullInput());
+  expect(fetch).toHaveBeenCalledTimes(1);
+  const changed = fullInput();
+  changed.waypoints[2].latitude += 0.0001;
+  await ors.walkingRoute(changed);
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+test.each([
+  [0, 1, 4],
+  [0, 3, 2, 3, 4],
+  [0, 1, 2, 3, 99],
+])(
+  "invalid provider waypoint indices %j never create a fake full route",
+  async (indices) => {
+    const body = fullData();
+    body.features[0].properties.way_points = indices;
+    mockFull(body);
+    await expect(ors.walkingRoute(fullInput())).rejects.toMatchObject({
+      code: "INVALID_ROUTE",
+    });
+  },
+);
+test("provider no alternative full route preserves avoidance with no fallback request", async () => {
+  fetch.mockResolvedValue({
+    ok: false,
+    status: 404,
+    json: async () => ({ error: { code: 2009 } }),
+  });
+  await expect(
+    ors.walkingRoute({ ...fullInput(), riskZones: [zone()] }),
+  ).rejects.toMatchObject({ code: "NO_RISK_AVOIDING_ROUTE" });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(
+    JSON.parse(fetch.mock.calls[0][1].body).options.avoid_polygons,
+  ).toBeDefined();
+});
+
+test("full route reports an unmapped required point without exposing upstream content or dropping avoidance", async () => {
+  fetch.mockResolvedValue({
+    ok: false,
+    status: 404,
+    json: async () => ({
+      error: { code: 2010, message: "private upstream content" },
+    }),
+  });
+  await expect(
+    ors.walkingRoute({ ...fullInput(), riskZones: [zone()] }),
+  ).rejects.toMatchObject({ code: "PATROL_POINT_UNMAPPED", status: 422 });
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+test("intermediate waypoint connector crossing a RiskZone rejects the entire full route", async () => {
+  const body = fullData();
+  body.features[0].geometry.coordinates[2][0] += 0.001;
+  mockFull(body);
+  const risk = {
+    id: "connector-risk",
+    geometry: require("../../../../shared/riskGeometry").zonePolygon({
+      centerLatitude: fullInput().waypoints[2].latitude,
+      centerLongitude: 8.681995,
+      radiusMeters: 10,
+    }),
+  };
+  await expect(
+    ors.walkingRoute({ ...fullInput(), riskZones: [risk] }),
+  ).rejects.toMatchObject({ code: "NO_RISK_AVOIDING_ROUTE" });
+  expect(fetch).toHaveBeenCalledTimes(1);
 });
