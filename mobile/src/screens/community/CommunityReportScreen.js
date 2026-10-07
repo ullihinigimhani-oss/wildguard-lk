@@ -41,10 +41,18 @@ const REPORT_TYPES = [
 
 const QUICK_SPECIES = ["Elephant", "Leopard", "Sloth Bear", "Wild Boar", "Crocodile"];
 
-export default function CommunityReportScreen({ navigation }) {
+export default function CommunityReportScreen({ navigation, route }) {
   const { user } = useAuth();
 
-  const [reportType, setReportType] = useState("WILDLIFE_SIGHTING");
+  const [reportType, setReportType] = useState(
+    route?.params?.initialReportType || "WILDLIFE_SIGHTING"
+  );
+
+  React.useEffect(() => {
+    if (route?.params?.initialReportType) {
+      setReportType(route.params.initialReportType);
+    }
+  }, [route?.params?.initialReportType]);
   const [species, setSpecies] = useState("");
   const [description, setDescription] = useState("");
   const [manualLocation, setManualLocation] = useState("");

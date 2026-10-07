@@ -13,6 +13,7 @@ import RangerShell from "./RangerShell";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import AlertsScreen from "../screens/alerts/AlertsScreen";
 import AlertDetailsScreen from "../screens/alerts/AlertDetailsScreen";
+import CommunityHomeScreen from "../screens/community/CommunityHomeScreen";
 import CommunityReportScreen from "../screens/community/CommunityReportScreen";
 import ReportStatusScreen from "../screens/community/ReportStatusScreen";
 import LiaisonReviewScreen from "../screens/community/LiaisonReviewScreen";
@@ -52,6 +53,26 @@ export default function AppNavigator() {
             )}
           </Stack.Screen>
         ))}
+        <Stack.Screen
+          name="PatrolDetails"
+          component={PatrolDetailsScreen}
+          options={{
+            headerShown: true,
+            title: "Patrol Details",
+            headerTintColor: "#245b44",
+            headerShadowVisible: false,
+          }}
+        />
+        <Stack.Screen
+          name="PatrolRoute"
+          component={PatrolRouteScreen}
+          options={{
+            headerShown: true,
+            title: "Patrol Route",
+            headerTintColor: "#245b44",
+            headerShadowVisible: false,
+          }}
+        />
       </Stack.Navigator>
     );
   }
@@ -61,10 +82,11 @@ export default function AppNavigator() {
     return (
       <Stack.Navigator
         key={`${user.id}:community`}
-        initialRouteName="SafetyAlerts"
+        initialRouteName="CommunityDashboard"
         screenOptions={{ headerShown: false, animation: "none" }}
       >
         {[
+          ["CommunityDashboard", "Dashboard", CommunityHomeScreen],
           ["SafetyAlerts", "Wildlife Alerts", AlertsScreen],
           ["Report", "Report Incident", CommunityReportScreen],
           ["MyReports", "My Reports", ReportStatusScreen],
@@ -84,26 +106,6 @@ export default function AppNavigator() {
           options={{
             headerShown: true,
             title: "Safety Advisory",
-            headerTintColor: "#245b44",
-            headerShadowVisible: false,
-          }}
-        />
-        <Stack.Screen
-          name="PatrolDetails"
-          component={PatrolDetailsScreen}
-          options={{
-            headerShown: true,
-            title: "Patrol Details",
-            headerTintColor: "#245b44",
-            headerShadowVisible: false,
-          }}
-        />
-        <Stack.Screen
-          name="PatrolRoute"
-          component={PatrolRouteScreen}
-          options={{
-            headerShown: true,
-            title: "Patrol Route",
             headerTintColor: "#245b44",
             headerShadowVisible: false,
           }}

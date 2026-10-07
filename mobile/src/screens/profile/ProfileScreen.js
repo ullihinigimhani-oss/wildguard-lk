@@ -58,7 +58,9 @@ export default function ProfileScreen() {
           ? "Sample profile only. Editing and account access will be added later."
           : user.role === "RANGER"
             ? "Your authenticated account details."
-            : `You are signed in as ${roleLabel(user.role)}. Your role's mobile dashboard is not implemented yet.`}
+            : ["COMMUNITY_USER", "COMMUNITY_LIAISON"].includes(user.role)
+              ? "Your authenticated community account details."
+              : `You are signed in as ${roleLabel(user.role)}. Your role's mobile dashboard is not implemented yet.`}
       </Text>
       <Button
         title={isDemo ? "Exit demo" : "Logout"}

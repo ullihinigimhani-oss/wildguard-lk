@@ -6,6 +6,7 @@ import { colors } from "../constants/theme";
 import { RangerLayoutContext } from "../components/common/Screen";
 
 const tabs = [
+  ["CommunityDashboard", "Home", "home-outline", "home"],
   ["SafetyAlerts", "Alerts", "warning-outline", "warning"],
   ["Report", "Report", "create-outline", "create"],
   ["MyReports", "History", "time-outline", "time"],
