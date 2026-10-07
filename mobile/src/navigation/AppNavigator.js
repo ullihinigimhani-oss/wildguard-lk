@@ -20,7 +20,7 @@ export default function AppNavigator() {
   if (!isDemo && !destination) return <AuthNavigator />;
   const rangerArea = isDemo || destination === "Home";
   if (!isDemo && destination === "Home") return (
-    <Stack.Navigator key={`${user.id}:ranger`} initialRouteName="Home" screenOptions={{ headerTintColor: "#245b44", headerShadowVisible: false, animation: "none" }}>
+    <Stack.Navigator key={`${user.id}:ranger`} initialRouteName="Home" screenOptions={{ headerShown: false, animation: "none" }}>
       {[["Home", "Dashboard", HomeScreen], ["Patrol", "My Patrol", MyPatrolScreen], ["Incident", "Report Incident", RangerIncidentScreen], ["Profile", "Profile", ProfileScreen]].map(([name, title, Component]) => (
         <Stack.Screen key={name} name={name} options={{ title, headerBackVisible: false }}>
           {props => <RangerShell {...props}><Component {...props} /></RangerShell>}

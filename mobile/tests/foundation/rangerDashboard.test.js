@@ -6,6 +6,11 @@ import ProfileScreen from "../../src/screens/profile/ProfileScreen";
 import RangerShell from "../../src/navigation/RangerShell";
 import useRangerPatrols from "../../src/hooks/useRangerPatrols";
 import { todayPatrol } from "../../src/utils/rangerPatrol";
+jest.mock("@expo/vector-icons/Ionicons", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return props => <View {...props} />;
+});
 jest.mock("../../src/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "a", name: "Real Ranger", email: "ranger@example.test", role: "RANGER", approvalStatus: "APPROVED", park: { name: "Confirmed Park" }, requestedPark: { name: "Requested Park" } }, logout: jest.fn() }) }));
 jest.mock("../../src/hooks/useRangerPatrols");
 const patrol = status => ({ id: status, routeName: status + " route", status, park: { name: "Patrol Area" }, scheduledDate: new Date().toISOString(), startTime: new Date().toISOString(), endTime: new Date().toISOString(), patrolType: "ROUTINE", priority: "HIGH" });
@@ -14,13 +19,27 @@ test("dashboard shows confirmed user details, empty state and routes quick actio
   const navigation = { navigate: jest.fn() };
   const ui = render(<HomeScreen navigation={navigation} />);
   expect(ui.getByText("Hello, Real.")).toBeTruthy();
+  expect(ui.getByLabelText("WildGuard LK logo").props.source).toBeTruthy();
   expect(ui.getByText("Confirmed Park")).toBeTruthy();
   expect(ui.queryByText("Requested Park")).toBeNull();
   expect(ui.getByText("No patrol assigned for today.")).toBeTruthy();
-  fireEvent.press(ui.getByLabelText("My Patrol"));
+  fireEvent.press(ui.getByLabelText("My Patrols"));
   expect(navigation.navigate).toHaveBeenCalledWith("Patrol");
   fireEvent.press(ui.getByLabelText("Report Incident"));
   expect(navigation.navigate).toHaveBeenCalledWith("Incident");
+});
+test.each([['SCHEDULED', 'Start Patrol'], ['IN_PROGRESS', 'Continue Patrol'], ['COMPLETED', 'View Patrol']])('%s retains the assigned patrol CTA and structured badges', (status, action) => {
+  const record = { ...patrol(status), scheduledDate: "2026-10-07T00:00:00Z", patrolType: "ANTI_POACHING" };
+  jest.useFakeTimers().setSystemTime(new Date("2026-10-07T10:00:00Z"));
+  useRangerPatrols.mockReturnValue({ patrols: [record], loading: false });
+  const navigation = { navigate: jest.fn() };
+  const ui = render(<HomeScreen navigation={navigation} />);
+  expect(ui.getByText(status.replace(/_/g, ' '))).toBeTruthy();
+  expect(ui.getByLabelText("Priority: HIGH")).toBeTruthy();
+  expect(ui.getByText("Anti-Poaching Operation")).toBeTruthy();
+  fireEvent.press(ui.getByLabelText(action));
+  expect(navigation.navigate).toHaveBeenCalledWith("Patrol", { selectedPatrolId: status, status });
+  jest.useRealTimers();
 });
 test("all three filters display only matching real patrols", () => {
   useRangerPatrols.mockReturnValue({ patrols: ["SCHEDULED", "IN_PROGRESS", "COMPLETED"].map(patrol), loading: false });
@@ -47,6 +66,9 @@ test("bottom navigation contains exactly four working tabs", () => {
   const navigation = { navigate: jest.fn() };
   const ui = render(<RangerShell navigation={navigation} route={{ name: "Home" }} />);
   expect(ui.getAllByRole("tab")).toHaveLength(4);
-  fireEvent.press(ui.getByLabelText("Profile"));
-  expect(navigation.navigate).toHaveBeenCalledWith("Profile");
+  expect(ui.getByLabelText("Dashboard").props.accessibilityState.selected).toBe(true);
+  for (const [label, route] of [['Dashboard', 'Home'], ['My Patrol', 'Patrol'], ['Report Incident', 'Incident'], ['Profile', 'Profile']]) {
+    fireEvent.press(ui.getByLabelText(label));
+    expect(navigation.navigate).toHaveBeenCalledWith(route);
+  }
 });
