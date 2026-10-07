@@ -10,6 +10,21 @@ export const patrolPriorities = [
   ["MEDIUM", "Medium"],
   ["HIGH", "High"],
 ];
+export const patrolStatuses = [
+  ["SCHEDULED", "Scheduled"],
+  ["IN_PROGRESS", "In progress"],
+  ["COMPLETED", "Completed"],
+  ["CANCELLED", "Cancelled"],
+];
+const label = (choices) => (value) =>
+  (choices.find(([choice]) => choice === value) || [value, value])[1];
+export const patrolStatusLabel = label(patrolStatuses);
+export const patrolTypeLabel = label(patrolTypes);
+export const patrolPriorityLabel = label(patrolPriorities);
+export const statusBadge = (value) =>
+  "badge badge-" + String(value).toLowerCase().replace("_", "-");
+export const priorityBadge = (value) =>
+  "badge badge-" + String(value).toLowerCase();
 export const initialPatrol = {
   patrol_title: "",
   park_ranger_area: "",

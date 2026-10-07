@@ -7,6 +7,7 @@ const PATROL_TYPES = [
 ];
 const { scheduleInstant } = require("../../../shared/patrolLifecycle");
 const PATROL_PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
+const PATROL_STATUSES = ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
 const text = (value) => (typeof value === "string" ? value.trim() : "");
 const fail = (fields) =>
   Object.assign(new Error("Please check your patrol details."), {
@@ -133,4 +134,31 @@ function validatePatrolCreation(body) {
     longitude,
   };
 }
-module.exports = { validatePatrolCreation };
+function validatePatrolFilters(query) {
+  const input =
+    query && typeof query === "object" && !Array.isArray(query) ? query : {};
+  const search = text(input.search);
+  const status = text(input.status);
+  const patrolType = text(input.patrolType);
+  const priority = text(input.priority);
+  const rangerId = text(input.rangerId);
+  const date = text(input.date);
+  const page = text(input.page) || "1";
+  if (
+    search.length > 120 ||
+    (status && !PATROL_STATUSES.includes(status)) ||
+    (patrolType && !PATROL_TYPES.includes(patrolType)) ||
+    (priority && !PATROL_PRIORITIES.includes(priority)) ||
+    rangerId.length > 128 ||
+    (date && !calendarDate(date)) ||
+    !/^\d+$/.test(page) ||
+    Number(page) < 1 ||
+    Number(page) > 100000
+  )
+    throw Object.assign(new Error("Invalid patrol filters."), {
+      status: 400,
+      authError: true,
+    });
+  return { search, status, patrolType, priority, rangerId, date, page: Number(page) };
+}
+module.exports = { validatePatrolCreation, validatePatrolFilters };

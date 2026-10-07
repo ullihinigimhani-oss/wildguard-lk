@@ -10,4 +10,6 @@ router.post("/mine/:patrolId/complete", allowRoles("RANGER"), controller.complet
 router.use(allowRoles("PARK_MANAGER"));
 router.get("/rangers", controller.listAssignableRangers);
 router.post("/", controller.create);
+router.get("/", controller.list);
+router.get("/:id", controller.getById);
 module.exports = router;
