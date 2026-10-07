@@ -1,3 +1,4 @@
+import PatrolRouteScreen from "../screens/patrol/PatrolRouteScreen";
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../hooks/useAuth";
@@ -6,6 +7,7 @@ import AuthNavigator from "./AuthNavigator";
 import HomeScreen from "../screens/home/HomeScreen";
 import DemoHomeScreen from "../screens/home/DemoHomeScreen";
 import MyPatrolScreen from "../screens/patrol/MyPatrolScreen";
+import PatrolDetailsScreen from "../screens/patrol/PatrolDetailsScreen";
 import RangerIncidentScreen from "../screens/incident/RangerIncidentScreen";
 import RangerShell from "./RangerShell";
 import ProfileScreen from "../screens/profile/ProfileScreen";
@@ -82,6 +84,26 @@ export default function AppNavigator() {
           options={{
             headerShown: true,
             title: "Safety Advisory",
+            headerTintColor: "#245b44",
+            headerShadowVisible: false,
+          }}
+        />
+        <Stack.Screen
+          name="PatrolDetails"
+          component={PatrolDetailsScreen}
+          options={{
+            headerShown: true,
+            title: "Patrol Details",
+            headerTintColor: "#245b44",
+            headerShadowVisible: false,
+          }}
+        />
+        <Stack.Screen
+          name="PatrolRoute"
+          component={PatrolRouteScreen}
+          options={{
+            headerShown: true,
+            title: "Patrol Route",
             headerTintColor: "#245b44",
             headerShadowVisible: false,
           }}

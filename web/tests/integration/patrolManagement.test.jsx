@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import PatrolManagement from "../../src/pages/PatrolManagement/PatrolManagement";
+import { MemoryRouter } from "react-router-dom";
+import CreatePatrol from "../../src/pages/PatrolManagement/CreatePatrol";
 import {
   createPatrol,
   listAssignableRangers,
@@ -11,6 +12,14 @@ vi.mock("../../src/services/patrolApi", () => ({
   createPatrol: vi.fn(),
 }));
 vi.mock("../../src/services/parkApi", () => ({ listParks: vi.fn() }));
+vi.mock("../../src/components/patrol/PatrolMap", () => ({ default: ({onAdd}) => <button type="button" onClick={() => onAdd({lat:7.5,lng:80.7})}>Choose map location</button> }));
+const plannedRoute = [{type:"START",order:0,latitude:7.5,longitude:80.7,label:"Start Point",note:null},{type:"END",order:1,latitude:7.5,longitude:80.7,label:"End Point",note:null}];
+const mountPage = () =>
+  render(
+    <MemoryRouter>
+      <CreatePatrol />
+    </MemoryRouter>,
+  );
 const rangers = [
   {
     id: "ranger-1",
@@ -77,9 +86,12 @@ async function fillValidForm(events) {
   change("Patrol Date *", "2026-10-10");
   change("Start Time *", "06:30");
   change("Expected End Time *", "10:00");
+  await events.click(screen.getByRole("button", {name:"Choose map location"}));
+  await events.click(screen.getByRole("button", {name:"End Point"}));
+  await events.click(screen.getByRole("button", {name:"Choose map location"}));
 }
 test("loads parks and approved rangers into the form", async () => {
-  render(<PatrolManagement />);
+  mountPage();
   expect(await screen.findByRole("option", { name: /A\. Perera/ })).toBeVisible();
   expect(screen.getByRole("option", { name: /B\. Silva/ })).toBeVisible();
   expect(
@@ -91,7 +103,7 @@ test("loads parks and approved rangers into the form", async () => {
 });
 test("client validation blocks an incomplete submission", async () => {
   const events = userEvent.setup();
-  render(<PatrolManagement />);
+  mountPage();
   await screen.findByRole("option", { name: /A\. Perera/ });
   await events.click(screen.getByRole("button", { name: "Create Patrol" }));
   expect(
@@ -107,11 +119,12 @@ test("client validation blocks an incomplete submission", async () => {
 });
 test("creates a patrol and shows the scheduled confirmation", async () => {
   const events = userEvent.setup();
-  render(<PatrolManagement />);
+  mountPage();
   await fillValidForm(events);
   await events.click(screen.getByRole("button", { name: "Create Patrol" }));
   await waitFor(() => expect(createPatrol).toHaveBeenCalledTimes(1));
   expect(createPatrol).toHaveBeenCalledWith({
+    plannedRoute,
     patrol_title: "Northern boundary sweep",
     park_ranger_area: "park-a",
     assigned_ranger: "ranger-1",
@@ -134,7 +147,7 @@ test("creates a patrol and shows the scheduled confirmation", async () => {
 });
 test("expected end time must follow the start time", async () => {
   const events = userEvent.setup();
-  render(<PatrolManagement />);
+  mountPage();
   await fillValidForm(events);
   change("Expected End Time *", "05:00");
   await events.click(screen.getByRole("button", { name: "Create Patrol" }));
@@ -158,7 +171,7 @@ test("server field errors are shown next to the form", async () => {
     },
   });
   const events = userEvent.setup();
-  render(<PatrolManagement />);
+  mountPage();
   await fillValidForm(events);
   await events.click(screen.getByRole("button", { name: "Create Patrol" }));
   expect(
@@ -174,7 +187,7 @@ test("server field errors are shown next to the form", async () => {
 test("ranger loading failure offers a working retry", async () => {
   listAssignableRangers.mockRejectedValueOnce(new Error("offline"));
   const events = userEvent.setup();
-  render(<PatrolManagement />);
+  mountPage();
   expect(await screen.findByText(/Unable to load rangers/)).toBeVisible();
   expect(
     screen.getByRole("button", { name: "Retry rangers" }),
@@ -187,7 +200,7 @@ test("duplicate submissions are ignored while a patrol is being saved", async ()
   let resolve;
   createPatrol.mockReturnValue(new Promise((r) => (resolve = r)));
   const events = userEvent.setup();
-  render(<PatrolManagement />);
+  mountPage();
   await fillValidForm(events);
   const button = screen.getByRole("button", { name: "Create Patrol" });
   await events.click(button);
@@ -207,17 +220,10 @@ test("duplicate submissions are ignored while a patrol is being saved", async ()
 });
 test("extra patrol details are sent when provided", async () => {
   const events = userEvent.setup();
-  render(<PatrolManagement />);
+  mountPage();
   await fillValidForm(events);
   await events.selectOptions(screen.getByLabelText("Patrol Type *"), "ANTI_POACHING");
   await events.selectOptions(screen.getByLabelText("Priority *"), "HIGH");
-  await events.type(screen.getByLabelText("Starting Point (optional)"), "Main gate");
-  fireEvent.change(screen.getByLabelText("Latitude (optional)"), {
-    target: { value: "7.5" },
-  });
-  fireEvent.change(screen.getByLabelText("Longitude (optional)"), {
-    target: { value: "80.7" },
-  });
   await events.type(
     screen.getByLabelText("Instructions & Notes (optional)"),
     "Check the northern fence line.",
@@ -225,6 +231,7 @@ test("extra patrol details are sent when provided", async () => {
   await events.click(screen.getByRole("button", { name: "Create Patrol" }));
   await waitFor(() => expect(createPatrol).toHaveBeenCalledTimes(1));
   expect(createPatrol).toHaveBeenCalledWith({
+    plannedRoute,
     patrol_title: "Northern boundary sweep",
     park_ranger_area: "park-a",
     assigned_ranger: "ranger-1",
@@ -233,9 +240,6 @@ test("extra patrol details are sent when provided", async () => {
     expected_end_time: "10:00",
     patrol_type: "ANTI_POACHING",
     priority: "HIGH",
-    start_location: "Main gate",
-    latitude: 7.5,
-    longitude: 80.7,
     instructions_notes: "Check the northern fence line.",
   });
 });

@@ -15,6 +15,7 @@ app.use("/api/users", require("./routes/user.routes"));
 app.use("/api/patrols", require("./routes/patrol.routes"));
 app.use("/api/community-reports", require("./routes/communityReport.routes"));
 app.use("/api/alerts", require("./routes/alert.routes"));
+app.use("/api/sensors", require("./routes/sensor.routes"));
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
 });

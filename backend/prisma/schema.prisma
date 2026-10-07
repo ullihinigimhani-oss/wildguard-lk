@@ -148,6 +148,8 @@ model Patrol {
   scheduledDate DateTime?
   startTime     DateTime?
   endTime       DateTime?
+  actualStartTime DateTime?
+  actualEndTime   DateTime?
   status        PatrolStatus @default(SCHEDULED)
 
   patrolType   PatrolType   @default(ROUTINE)
@@ -188,7 +190,19 @@ model PatrolLocation {
   @@index([patrolId])
 }
 
+enum PatrolWaypointType {
+  START
+  CHECKPOINT
+  HIGH_RISK
+  OBSERVATION
+  END
+}
+
 model PatrolWaypoint {
+  // Nullable additions preserve historical, unclassified waypoint rows.
+  type       PatrolWaypointType?
+  order      Int?
+  label      String?
   id         String   @id @default(cuid())
   latitude   Float
   longitude  Float
@@ -199,6 +213,7 @@ model PatrolWaypoint {
   patrol   Patrol @relation(fields: [patrolId], references: [id], onDelete: Cascade)
 
   @@index([patrolId])
+  @@unique([patrolId, order])
 }
 
 // ======================================================
@@ -335,10 +350,13 @@ model TrackingCollar {
 }
 
 model AnimalLocation {
-  id         String   @id @default(cuid())
-  latitude   Float
-  longitude  Float
-  recordedAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  latitude      Float
+  longitude     Float
+  recordedAt    DateTime @default(now())
+  heartRate     Int?
+  temperature   Float?
+  activityLevel String?
 
   // MOCK means this can be simulated IoT collar data
   source String @default("MOCK_COLLAR")

@@ -1,6 +1,11 @@
-const { validatePatrolCreation } = require("../../../src/validators/patrol.validator");
+const plannedRoute = [{ type: "START", order: 0, latitude: 7.5, longitude: 80.7, label: "Main gate", note: null }, { type: "END", order: 1, latitude: 7.6, longitude: 80.8, label: "End Point", note: null }];
+const {
+  validatePatrolCreation,
+  validatePatrolFilters,
+} = require("../../../src/validators/patrol.validator");
 
 const valid = () => ({
+  plannedRoute,
   patrol_title: "Northern boundary sweep",
   park_ranger_area: "park-1",
   assigned_ranger: "ranger-1",
@@ -28,12 +33,13 @@ function expectFailure(overrides, field) {
 test("normalizes a complete payload", () => {
   const result = validatePatrolCreation(valid());
   expect(result).toEqual({
+    waypoints: { create: plannedRoute },
     routeName: "Northern boundary sweep",
     parkId: "park-1",
     rangerId: "ranger-1",
     scheduledDate: new Date("2026-10-10T00:00:00.000Z"),
-    startTime: new Date(2026, 9, 10, 6, 30),
-    endTime: new Date(2026, 9, 10, 10, 0),
+    startTime: new Date("2026-10-10T06:30:00+05:30"),
+    endTime: new Date("2026-10-10T10:00:00+05:30"),
     description: "Check the northern fence line.",
     patrolType: "ANTI_POACHING",
     priority: "HIGH",
@@ -44,6 +50,7 @@ test("normalizes a complete payload", () => {
 });
 test("applies defaults and nulls for optional fields", () => {
   const result = validatePatrolCreation({
+    plannedRoute,
     patrol_title: "  Morning loop  ",
     park_ranger_area: " park-1 ",
     assigned_ranger: " ranger-1 ",
@@ -63,19 +70,20 @@ test("applies defaults and nulls for optional fields", () => {
   expect(result.patrolType).toBe("ROUTINE");
   expect(result.priority).toBe("MEDIUM");
   expect(result.description).toBeNull();
-  expect(result.startLocation).toBeNull();
-  expect(result.latitude).toBeNull();
-  expect(result.longitude).toBeNull();
+  expect(result.startLocation).toBe("Main gate");
+  expect(result.latitude).toBe(7.5);
+  expect(result.longitude).toBe(80.7);
 });
-test("accepts coordinate strings and leaves missing coordinates null", () => {
+test("derives starting location from the planned route", () => {
   const result = validatePatrolCreation({
     ...valid(),
     latitude: "7.5",
     longitude: -80.7,
   });
   expect(result.latitude).toBe(7.5);
-  expect(result.longitude).toBe(-80.7);
+  expect(result.longitude).toBe(80.7);
   const omitted = validatePatrolCreation({
+    plannedRoute,
     patrol_title: "Short loop",
     park_ranger_area: "park-1",
     assigned_ranger: "ranger-1",
@@ -83,9 +91,9 @@ test("accepts coordinate strings and leaves missing coordinates null", () => {
     start_time: "06:30",
     expected_end_time: "07:00",
   });
-  expect(omitted.latitude).toBeNull();
-  expect(omitted.longitude).toBeNull();
-  expect(omitted.startLocation).toBeNull();
+  expect(omitted.latitude).toBe(7.5);
+  expect(omitted.longitude).toBe(80.7);
+  expect(omitted.startLocation).toBe("Main gate");
   expect(omitted.description).toBeNull();
 });
 test.each([
@@ -157,4 +165,61 @@ test("aggregates every field error into one response", () => {
     "patrol_title",
     "start_time",
   ]);
+});
+const emptyFilters = {
+  search: "",
+  status: "",
+  patrolType: "",
+  priority: "",
+  rangerId: "",
+  date: "",
+  page: 1,
+};
+test("an empty filter query defaults to page 1", () => {
+  expect(validatePatrolFilters({})).toEqual(emptyFilters);
+  expect(validatePatrolFilters(undefined)).toEqual(emptyFilters);
+});
+test("normalizes a complete filter query", () => {
+  expect(
+    validatePatrolFilters({
+      search: "  fence  ",
+      status: "IN_PROGRESS",
+      patrolType: "ANTI_POACHING",
+      priority: "HIGH",
+      rangerId: "ranger-1",
+      date: "2026-10-10",
+      page: "3",
+    }),
+  ).toEqual({
+    search: "fence",
+    status: "IN_PROGRESS",
+    patrolType: "ANTI_POACHING",
+    priority: "HIGH",
+    rangerId: "ranger-1",
+    date: "2026-10-10",
+    page: 3,
+  });
+});
+test.each([
+  [{ status: "SLEEPING" }],
+  [{ patrolType: "NAPPING" }],
+  [{ priority: "URGENT" }],
+  [{ date: "2026-02-30" }],
+  [{ date: "10/10/2026" }],
+  [{ page: "0" }],
+  [{ page: "abc" }],
+  [{ page: "-2" }],
+  [{ search: "x".repeat(121) }],
+  [{ rangerId: "r".repeat(129) }],
+])("rejects invalid filters %j", (query) => {
+  let error;
+  try {
+    validatePatrolFilters(query);
+  } catch (caught) {
+    error = caught;
+  }
+  expect(error).toBeDefined();
+  expect(error.message).toBe("Invalid patrol filters.");
+  expect(error.status).toBe(400);
+  expect(error.authError).toBe(true);
 });
