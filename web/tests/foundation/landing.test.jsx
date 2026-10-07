@@ -47,7 +47,7 @@ test("public landing renders its hero and informational sections without a sessi
 });
 test.each([
   ["Sign In", "Welcome back"],
-  ["Sign Up", "Create your account"],
+  ["Sign Up", "Choose Your Role"],
 ])("%s uses the existing auth route", async (link, heading) => {
   const user = mount();
   await user.click(
@@ -61,7 +61,7 @@ test("Get Started opens registration", async () => {
   const user = mount();
   await user.click(screen.getByRole("link", { name: /Get Started/ }));
   expect(
-    screen.getByRole("heading", { name: "Create your account" }),
+    screen.getByRole("heading", { name: "Choose Your Role" }),
   ).toBeVisible();
 });
 test("Explore Features follows the in-page anchor without authentication", async () => {
@@ -94,17 +94,13 @@ test.each(["/dashboard", "/patrols", "/incidents", "/wildlife", "/analytics"])(
   "unauthenticated %s redirects to login",
   (path) => {
     mount(path);
-    expect(
-      screen.getByRole("heading", { name: "Welcome back" }),
-    ).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   },
 );
 test("a demo session is not authorization for operations", () => {
   session.user = demoUser;
   mount("/patrols");
-  expect(
-    screen.getByRole("heading", { name: "Welcome back" }),
-  ).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Welcome back" })).toBeVisible();
 });
 test("authenticated users keep the existing protected navigation", () => {
   session.user = demoUser;
@@ -112,7 +108,7 @@ test("authenticated users keep the existing protected navigation", () => {
   mount("/patrols");
   expect(screen.getByText("COMING SOON")).toBeVisible();
   expect(
-    screen.queryByRole("heading", { name: "Create your account" }),
+    screen.queryByRole("heading", { name: "Choose Your Role" }),
   ).not.toBeInTheDocument();
 });
 test("authenticated Get Started opens the dashboard without registering again", async () => {

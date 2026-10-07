@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import Avatar from "../../components/common/Avatar";
+import { roleLabel } from "../../constants/roles";
 import { useAuth } from "../../hooks/useAuth";
 export default function Navbar({ title, open, onToggle }) {
   const { user, logout } = useAuth();
@@ -32,10 +34,10 @@ export default function Navbar({ title, open, onToggle }) {
           className="user-link"
           aria-label={`Profile: ${user.name}`}
         >
-          <span className="avatar">{user.name.slice(0, 1)}</span>
+          <Avatar user={user} />
           <span>
             {user.name}
-            <small>{user.role.replaceAll('_', ' ')}</small>
+            <small>{roleLabel(user.role)}</small>
             <small>{user.email}</small>
           </span>
         </Link>

@@ -24,11 +24,20 @@ export default function Login() {
     setMessage("");
     if (Object.keys(next).length) return;
     setLoading(true);
-    try { await login({ email, password }); }
-    catch (error) {
-      setMessage(error.response?.status === 401 ? 'Invalid email or password.' : 'Unable to log in. Please check your connection and try again.');
-      setPassword('');
-    } finally { setLoading(false); }
+    try {
+      await login({ email, password });
+    } catch (error) {
+      setMessage(
+        error.response?.status === 403
+          ? error.response.data?.message || "Your account is not approved."
+          : error.response?.status === 401
+            ? "Invalid email or password."
+            : "Unable to log in. Please check your connection and try again.",
+      );
+      setPassword("");
+    } finally {
+      setLoading(false);
+    }
   }
   return (
     <div className="login-page">
@@ -65,7 +74,9 @@ export default function Login() {
           <h2>Welcome back</h2>
           {location.state?.registered && (
             <p role="status" className="demo-notice">
-              Account created successfully. Log in with your new account.
+              {location.state?.approvalStatus === "PENDING"
+                ? "Account created. Your account is awaiting approval before you can sign in."
+                : "Account created successfully. Log in with your new account."}
             </p>
           )}
           <p className="muted">
@@ -128,7 +139,9 @@ export default function Login() {
           <p>
             New to the community? <Link to="/register">Create an account</Link>
           </p>
-          <p className="small muted">Your session lasts up to one hour in this browser tab.</p>
+          <p className="small muted">
+            Your session lasts up to one hour in this browser tab.
+          </p>
         </div>
         <footer className="login-footer">
           WildGuard LK · Conservation operations

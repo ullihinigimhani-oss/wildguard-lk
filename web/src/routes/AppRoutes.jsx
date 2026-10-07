@@ -1,3 +1,4 @@
+import Users from "../pages/Users/Users";
 import Register from "../pages/Register/Register";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
@@ -33,14 +34,19 @@ export default function AppRoutes() {
         <Route element={<OperationsLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
+          <Route element={<ProtectedRoute allowedRoles={["PARK_MANAGER"]} />}>
+            <Route path="/users" element={<Users />} />
+          </Route>
           <Route element={<ProtectedRoute />}>
-            {modules.map((item) => (
-              <Route
-                key={item.path}
-                path={`/${item.path}`}
-                element={<Placeholder title={item.title} />}
-              />
-            ))}
+            {modules
+              .filter((item) => item.path !== "users")
+              .map((item) => (
+                <Route
+                  key={item.path}
+                  path={`/${item.path}`}
+                  element={<Placeholder title={item.title} />}
+                />
+              ))}
           </Route>
         </Route>
       </Route>

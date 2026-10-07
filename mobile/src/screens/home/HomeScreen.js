@@ -1,5 +1,7 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
+import Avatar from "../../components/common/Avatar";
+import { roleLabel } from "../../constants/registrationRoles";
 import Screen from "../../components/common/Screen";
 import { colors, styles } from "../../constants/theme";
 import { fieldActions } from "../../constants/demo";
@@ -10,6 +12,13 @@ export default function HomeScreen({ navigation }) {
   const health = useApiHealth();
   return (
     <Screen>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+        <Avatar user={user} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.heading}>{user.name}</Text>
+          <Text style={styles.muted}>{roleLabel(user.role)}</Text>
+        </View>
+      </View>
       <Text style={styles.eyebrow}>YOUR FIELD WORKSPACE</Text>
       <Text accessibilityRole="header" style={styles.title}>
         Hello, {user.name.split(" ")[0]}.
@@ -23,7 +32,9 @@ export default function HomeScreen({ navigation }) {
           {isDemo ? user.park : "Park assignment is not available yet"}
         </Text>
         <Text style={{ color: "#e3ecda", lineHeight: 23 }}>
-          {isDemo ? "Patrol status: Awaiting assignment (sample)" : "Patrol data is not connected yet"}
+          {isDemo
+            ? "Patrol status: Awaiting assignment (sample)"
+            : "Patrol data is not connected yet"}
         </Text>
         <Text
           accessibilityLiveRegion="polite"
@@ -34,7 +45,9 @@ export default function HomeScreen({ navigation }) {
       </View>
       <View style={styles.notice}>
         <Text style={styles.muted}>
-          {isDemo ? "Demo workspace · Patrol and sync states are simulated. No tracking or reports are recorded." : "Your account is authenticated. Field tools are still being prepared; sync previews are simulated."}
+          {isDemo
+            ? "Demo workspace · Patrol and sync states are simulated. No tracking or reports are recorded."
+            : "Your account is authenticated. Field tools are still being prepared; sync previews are simulated."}
         </Text>
       </View>
       <Text style={styles.heading}>Field essentials</Text>

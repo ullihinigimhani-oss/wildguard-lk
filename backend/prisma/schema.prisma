@@ -18,6 +18,12 @@ enum UserRole {
   COMMUNITY_USER
 }
 
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum PatrolStatus {
   SCHEDULED
   IN_PROGRESS
@@ -71,6 +77,11 @@ model User {
   phone        String?
   role         UserRole
   isActive     Boolean  @default(true)
+  approvalStatus ApprovalStatus @default(APPROVED)
+  profileImageUrl String?
+  rejectionReason String?
+  reviewedAt DateTime?
+  reviewedById String?
 
   parkId String?
   park   Park?   @relation(fields: [parkId], references: [id])
@@ -88,6 +99,7 @@ model User {
 
   @@index([parkId])
   @@index([role])
+  @@index([approvalStatus, role, createdAt])
 }
 
 model Park {

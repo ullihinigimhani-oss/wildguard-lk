@@ -14,16 +14,30 @@ export default function AuthNavigator() {
   const { hasLoggedOut } = useAuth();
   return (
     <Stack.Navigator
-      initialRouteName={hasCompletedOnboarding || hasLoggedOut ? "Welcome" : "Onboarding1"}
+      initialRouteName={
+        hasCompletedOnboarding || hasLoggedOut ? "Welcome" : "Onboarding1"
+      }
       screenOptions={{
         headerTintColor: "#245b44",
         headerShadowVisible: false,
         headerTitleStyle: { fontWeight: "700" },
       }}
     >
-      <Stack.Screen name="Onboarding1" component={OnboardingScreen1} options={{ headerShown: false }} />
-      <Stack.Screen name="Onboarding2" component={OnboardingScreen2} options={{ headerShown: false }} />
-      <Stack.Screen name="Onboarding3" component={OnboardingScreen3} options={{ headerShown: false }} />
+      <Stack.Screen
+        name="Onboarding1"
+        component={OnboardingScreen1}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Onboarding2"
+        component={OnboardingScreen2}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Onboarding3"
+        component={OnboardingScreen3}
+        options={{ headerShown: false }}
+      />
       <Stack.Screen
         name="Welcome"
         component={WelcomeScreen}
@@ -34,7 +48,11 @@ export default function AuthNavigator() {
         component={LoginScreen}
         options={{ title: "Login" }}
       />
-      <Stack.Screen name="Register" component={RegisterScreen} options={{ title: "Join the community" }} />
+      <Stack.Screen
+        name="Register"
+        component={RegisterScreen}
+        options={{ title: "Create Account" }}
+      />
     </Stack.Navigator>
   );
 }

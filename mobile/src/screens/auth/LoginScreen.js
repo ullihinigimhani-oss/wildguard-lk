@@ -24,14 +24,33 @@ export default function LoginScreen({ navigation, route }) {
     if (Object.keys(next).length) return;
     pending.current = true;
     setLoading(true);
-    try { await login({ email, password }); }
-    catch (error) {
-      setMessage(error.response?.status === 401 ? "Invalid email or password." : error.response?.status === 400 ? "Please check your email and password." : "We couldn't sign you in. Please try again.");
-    } finally { setPassword(""); setLoading(false); pending.current = false; }
+    try {
+      await login({ email, password });
+    } catch (error) {
+      setMessage(
+        error.response?.status === 403
+          ? error.response.data?.message || "Your account is not approved."
+          : error.response?.status === 401
+            ? "Invalid email or password."
+            : error.response?.status === 400
+              ? "Please check your email and password."
+              : "We couldn't sign you in. Please try again.",
+      );
+    } finally {
+      setPassword("");
+      setLoading(false);
+      pending.current = false;
+    }
   }
   return (
     <Screen>
-      {route?.params?.registered && <Text accessibilityLiveRegion="polite" style={styles.notice}>Account created successfully. Login to continue.</Text>}
+      {route?.params?.registered && (
+        <Text accessibilityLiveRegion="polite" style={styles.notice}>
+          {route?.params?.approvalStatus === "PENDING"
+            ? "Account created. Your account is awaiting approval before you can sign in."
+            : "Account created successfully. Login to continue."}
+        </Text>
+      )}
       <Text style={styles.eyebrow}>WILDGUARD LK</Text>
       <Text accessibilityRole="header" style={styles.title}>
         Welcome Back
@@ -90,7 +109,16 @@ export default function LoginScreen({ navigation, route }) {
           </Text>
         )}
       </View>
-      <Pressable accessibilityRole="button" disabled={loading} onPress={() => setMessage("Password reset is not available yet. Please contact your account administrator for help.")} style={{ minHeight: 48, justifyContent: "center" }}>
+      <Pressable
+        accessibilityRole="button"
+        disabled={loading}
+        onPress={() =>
+          setMessage(
+            "Password reset is not available yet. Please contact your account administrator for help.",
+          )
+        }
+        style={{ minHeight: 48, justifyContent: "center" }}
+      >
         <Text style={styles.muted}>Forgot Password</Text>
       </Pressable>
       <Button title="Login" loading={loading} onPress={submit} />
@@ -108,10 +136,14 @@ export default function LoginScreen({ navigation, route }) {
           enterDemo();
         }}
       />
-      <Button title="Create a community account" secondary disabled={loading} onPress={() => navigation.navigate("Register")} />
+      <Button
+        title="Create Account"
+        secondary
+        disabled={loading}
+        onPress={() => navigation.navigate("Register")}
+      />
       <Text style={styles.muted}>
-        Staff accounts are provisioned by authorized personnel. No public staff
-        registration is available.
+        Staff accounts require verification before sign-in.
       </Text>
     </Screen>
   );
