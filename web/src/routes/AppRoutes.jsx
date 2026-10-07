@@ -4,6 +4,7 @@ import PatrolManagement from "../pages/PatrolManagement/PatrolManagement";
 import CreatePatrol from "../pages/PatrolManagement/CreatePatrol";
 import PatrolDetails from "../pages/PatrolManagement/PatrolDetails";
 import Reporting from "../pages/Reporting/Reporting";
+import FieldMap from "../pages/FieldMap/FieldMap";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import OperationsLayout from "../layouts/OperationsLayout";
@@ -69,7 +70,7 @@ export default function AppRoutes() {
             {modules
               .filter(
                 (item) =>
-                  !["users", "patrols", "incidents", "community-reports", "reporting"].includes(
+                  !["users", "patrols", "incidents", "community-reports", "reporting", "map"].includes(
                     item.path,
                   ),
               )
@@ -80,6 +81,7 @@ export default function AppRoutes() {
                   element={<Placeholder title={item.title} />}
                 />
               ))}
+            <Route path="/map" element={<FieldMap />} />
           </Route>
         </Route>
       </Route>
