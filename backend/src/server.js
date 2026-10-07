@@ -7,8 +7,15 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
   throw new Error('PORT must be an integer between 0 and 65535');
 }
 
-const server = app.listen(port, () => {
+const server = app.listen(port, async () => {
   console.log(`WildGuard LK API listening on port ${server.address().port}`);
+  try {
+    await prisma.$connect();
+    console.log('Database connection established successfully');
+  } catch (err) {
+    console.error('Failed to connect to the database:', err.message);
+    shutdown(1);
+  }
 });
 
 let stopping = false;
