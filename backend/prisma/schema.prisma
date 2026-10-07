@@ -350,10 +350,13 @@ model TrackingCollar {
 }
 
 model AnimalLocation {
-  id         String   @id @default(cuid())
-  latitude   Float
-  longitude  Float
-  recordedAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  latitude      Float
+  longitude     Float
+  recordedAt    DateTime @default(now())
+  heartRate     Int?
+  temperature   Float?
+  activityLevel String?
 
   // MOCK means this can be simulated IoT collar data
   source String @default("MOCK_COLLAR")
