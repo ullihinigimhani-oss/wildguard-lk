@@ -19,7 +19,7 @@ export const rangerPaths = {
 const stateFor = name => ({ routes: [{ name }] });
 
 // Both existing navigators are the container's root stack, so paths are flat.
-export function createLinking({ user, isAuthenticated, isDemo }) {
+export function createLinking({ user, isAuthenticated, isDemo, hasCompletedOnboarding, hasLoggedOut }) {
   const destination = isAuthenticated ? authenticatedDestination(user) : null;
   const signedIn = !!destination;
   const ranger = destination === "Home";
@@ -34,7 +34,7 @@ export function createLinking({ user, isAuthenticated, isDemo }) {
     config,
     getStateFromPath(path) {
       const cleanPath = path.split(/[?#]/)[0].replace(/^\/+|\/+$/g, "");
-      const fallback = signedIn ? destination : isDemo ? "Home" : "Onboarding1";
+      const fallback = signedIn ? destination : isDemo ? "Home" : hasCompletedOnboarding || hasLoggedOut ? "Welcome" : "Onboarding1";
       if (!cleanPath) return stateFor(fallback);
       const parsed = getStateFromPath(path, config);
       const name = parsed?.routes[parsed.index ?? parsed.routes.length - 1]?.name;

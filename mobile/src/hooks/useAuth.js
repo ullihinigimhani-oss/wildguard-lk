@@ -8,6 +8,7 @@ const Context = createContext(null);
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [demo, setDemo] = useState(false);
+  const [hasLoggedOut, setLoggedOut] = useState(false);
   const generation = useRef(0);
   const pending = useRef(false);
   useEffect(() => () => {
@@ -15,6 +16,7 @@ export function AuthProvider({ children }) {
     delete api.defaults.headers.common.Authorization;
   }, []);
   function logout() {
+    setLoggedOut(true);
     generation.current += 1;
     delete api.defaults.headers.common.Authorization;
     setSession(null);
@@ -61,7 +63,7 @@ export function AuthProvider({ children }) {
   }, [session]);
   return <Context.Provider value={{
     user: demo ? demoRanger : session?.user || null,
-    isDemo: demo, isAuthenticated: !!session && !demo, login, logout,
+    isDemo: demo, isAuthenticated: !!session && !demo, hasLoggedOut, login, logout,
     enterDemo: () => { logout(); setDemo(true); }, leaveDemo: logout,
   }}>{children}</Context.Provider>;
 }

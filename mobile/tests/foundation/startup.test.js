@@ -1,22 +1,23 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import OnboardingScreen1 from "../../src/screens/onboarding/OnboardingScreen1";
 import OnboardingScreen2 from "../../src/screens/onboarding/OnboardingScreen2";
 import OnboardingScreen3 from "../../src/screens/onboarding/OnboardingScreen3";
 import WelcomeScreen from "../../src/screens/auth/WelcomeScreen";
 
+jest.mock("../../src/hooks/useOnboarding", () => ({ useOnboarding: () => ({ completeOnboarding: jest.fn().mockResolvedValue() }) }));
 const navigation = { navigate: jest.fn(), goBack: jest.fn(), reset: jest.fn() };
 const show = Component => render(<NavigationContainer><Component navigation={navigation} /></NavigationContainer>);
 
-test("first onboarding advances or skips to a clean Welcome stack", () => {
+test("first onboarding advances or skips to a clean Welcome stack", async () => {
   show(OnboardingScreen1);
   expect(screen.getByText("Protect Sri Lanka's Wildlife")).toBeTruthy();
   expect(screen.getByLabelText("Page 1 of 3")).toBeTruthy();
   fireEvent.press(screen.getByRole("button", { name: "Next" }));
   expect(navigation.navigate).toHaveBeenCalledWith("Onboarding2");
   fireEvent.press(screen.getByRole("button", { name: "Skip" }));
-  expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: "Welcome" }] });
+  await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: "Welcome" }] }));
 });
 
 test("second onboarding supports forward and back navigation", () => {
@@ -28,11 +29,11 @@ test("second onboarding supports forward and back navigation", () => {
   expect(navigation.goBack).toHaveBeenCalledTimes(1);
 });
 
-test("Get Started clears onboarding history and opens Welcome", () => {
+test("Get Started clears onboarding history and opens Welcome", async () => {
   show(OnboardingScreen3);
   expect(screen.getByLabelText("Page 3 of 3")).toBeTruthy();
   fireEvent.press(screen.getByRole("button", { name: "Get Started" }));
-  expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: "Welcome" }] });
+  await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: "Welcome" }] }));
   fireEvent.press(screen.getByRole("button", { name: "Back" }));
   expect(navigation.goBack).toHaveBeenCalledTimes(1);
 });

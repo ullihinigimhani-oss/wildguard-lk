@@ -6,11 +6,15 @@ import LoginScreen from "../screens/auth/LoginScreen";
 import OnboardingScreen1 from "../screens/onboarding/OnboardingScreen1";
 import OnboardingScreen2 from "../screens/onboarding/OnboardingScreen2";
 import OnboardingScreen3 from "../screens/onboarding/OnboardingScreen3";
+import { useOnboarding } from "../hooks/useOnboarding";
+import { useAuth } from "../hooks/useAuth";
 const Stack = createNativeStackNavigator();
 export default function AuthNavigator() {
+  const { hasCompletedOnboarding } = useOnboarding();
+  const { hasLoggedOut } = useAuth();
   return (
     <Stack.Navigator
-      initialRouteName="Onboarding1"
+      initialRouteName={hasCompletedOnboarding || hasLoggedOut ? "Welcome" : "Onboarding1"}
       screenOptions={{
         headerTintColor: "#245b44",
         headerShadowVisible: false,

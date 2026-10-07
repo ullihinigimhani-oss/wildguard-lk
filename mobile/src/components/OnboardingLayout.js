@@ -5,11 +5,16 @@ import { useIsFocused } from "@react-navigation/native";
 import Button from "./common/Button";
 import PhotoOverlay from "./common/PhotoOverlay";
 import { colors } from "../constants/theme";
+import { useOnboarding } from "../hooks/useOnboarding";
 
 export default function OnboardingLayout({ navigation, image, title, description, page, nextRoute }) {
   const focused = useIsFocused();
   const { height } = useWindowDimensions();
-  const finish = () => navigation.reset({ index: 0, routes: [{ name: "Welcome" }] });
+  const { completeOnboarding } = useOnboarding();
+  const finish = async () => {
+    await completeOnboarding();
+    navigation.reset({ index: 0, routes: [{ name: "Welcome" }] });
+  };
   return <ImageBackground source={image} resizeMode="cover" style={local.screen}>
     {focused && <StatusBar barStyle="light-content" />}
     <PhotoOverlay />

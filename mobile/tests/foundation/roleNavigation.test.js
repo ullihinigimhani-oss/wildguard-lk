@@ -4,6 +4,7 @@ import { render } from "@testing-library/react-native";
 import AppNavigator from "../../src/navigation/AppNavigator";
 import { useAuth } from "../../src/hooks/useAuth";
 import { authenticatedDestination } from "../../src/constants/roles";
+jest.mock("../../src/hooks/useOnboarding", () => ({ useOnboarding: () => ({ hasCompletedOnboarding: false }) }));
 jest.mock("../../src/hooks/useAuth", () => ({ useAuth: jest.fn() }));
 jest.mock("@react-navigation/native-stack", () => {
   const React = require("react");
