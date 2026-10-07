@@ -115,10 +115,10 @@ test('cancelled and completed assignments cannot be restarted', async () => {
   await change('assignment', 'start').expect(409);
   expect(db.patrol.updateMany).not.toHaveBeenCalled();
 });
-test('all assigned records remain visible without allowing workflow changes to cancelled patrols', async () => {
+test('cancelled assignments are excluded from actionable lists without allowing workflow changes', async () => {
   records.assignment.status = 'CANCELLED';
   const res = await request(app).get('/api/patrols/mine').set('Authorization', authorization('a')).expect(200);
-  expect(res.body.patrols[0].status).toBe('CANCELLED');
+  expect(res.body.patrols).toEqual([]);
   expect(db.patrol.findMany.mock.calls[0][0].where).toEqual({ rangerId: 'a' });
 });
 test('database failures are sanitized', async () => {

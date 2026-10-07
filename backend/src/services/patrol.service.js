@@ -21,7 +21,7 @@ async function transition(id, rangerId, action) {
   }
   const result = await repository.transitionRangerPatrol(id, rangerId, from, {
     status: to, ...(starting ? { actualStartTime: now } : { actualEndTime: now }),
-  });
+  }, patrol.updatedAt);
   const updated = await exports.getRangerPatrol(id, rangerId);
   if (!result.count && updated.status !== to) throw patrolError(409, "This patrol changed. Refresh it and try again.");
   return updated;
@@ -37,7 +37,7 @@ const invalid = (fields) =>
 const httpError = (status, message) =>
   Object.assign(new Error(message), { status, authError: true });
 exports.getAssignableRangers = () => repository.findAssignableRangers();
-exports.getRangerPatrols = (rangerId) => repository.findRangerPatrols(rangerId);
+exports.getRangerPatrols = async (rangerId) => (await repository.findRangerPatrols(rangerId)).filter(patrol => patrol.status !== "CANCELLED");
 exports.listPatrols = (filters) => {
   const where = {};
   if (filters.status) where.status = filters.status;
@@ -72,4 +72,24 @@ exports.createPatrol = async (input, createdById) => {
   )
     throw invalid({ assigned_ranger: "Select an approved ranger." });
   return repository.createPatrol({ ...input, status: "SCHEDULED", createdById });
+};
+
+exports.updatePatrol = async (id, input) => {
+  const patrol = await exports.getPatrol(id);
+  if (patrol.status !== "SCHEDULED") throw patrolError(409, "Only scheduled patrols can be edited.");
+  const park = await repository.findPark(input.parkId);
+  if (!park) throw invalid({ park_ranger_area: "Select a valid park or ranger area." });
+  const ranger = await repository.findRanger(input.rangerId);
+  if (!ranger || ranger.role !== "RANGER" || ranger.approvalStatus !== "APPROVED" || !ranger.isActive)
+    throw invalid({ assigned_ranger: "Select an approved ranger." });
+  // Unassigned approved Rangers are eligible for any park; assigned Rangers
+  // must match the patrol park. This preserves the existing global pool.
+  if (ranger.parkId && ranger.parkId !== input.parkId)
+    throw invalid({ assigned_ranger: "This ranger is assigned to a different park." });
+  return repository.updateScheduledPatrol(id, input);
+};
+exports.cancelPatrol = async id => {
+  const patrol = await exports.getPatrol(id);
+  if (patrol.status !== "SCHEDULED") throw patrolError(409, "Only scheduled patrols can be cancelled.");
+  return repository.updateScheduledPatrol(id, { status: "CANCELLED" });
 };

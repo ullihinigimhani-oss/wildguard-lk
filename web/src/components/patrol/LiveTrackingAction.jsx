@@ -1,11 +1,12 @@
+import PatrolActionIcon from "./PatrolActionIcon";
 export default function LiveTrackingAction({ patrolId, onSelect }) {
   return (
     <button
       type="button"
-      className="text-button live-tracking-action"
+      className="patrol-action live-tracking-action"
       onClick={() => onSelect(patrolId)}
     >
-      Live Tracking
+      <PatrolActionIcon kind="tracking" />Live Tracking
     </button>
   );
 }

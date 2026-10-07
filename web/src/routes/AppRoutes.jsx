@@ -1,6 +1,7 @@
 import Users from "../pages/Users/Users";
 import Register from "../pages/Register/Register";
 import PatrolManagement from "../pages/PatrolManagement/PatrolManagement";
+import EditPatrol from "../pages/PatrolManagement/EditPatrol";
 import CreatePatrol from "../pages/PatrolManagement/CreatePatrol";
 import PatrolDetails from "../pages/PatrolManagement/PatrolDetails";
 import Reporting from "../pages/Reporting/Reporting";
@@ -43,6 +44,7 @@ export default function AppRoutes() {
             <Route path="/users" element={<Users />} />
             <Route path="/patrols" element={<PatrolManagement />} />
             <Route path="/patrols/new" element={<CreatePatrol />} />
+            <Route path="/patrols/:id/edit" element={<EditPatrol />} />
             <Route path="/patrols/:id" element={<PatrolDetails />} />
             <Route
               path="/incidents"

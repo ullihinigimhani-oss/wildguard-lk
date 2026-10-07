@@ -195,3 +195,16 @@ test("pending or failed Start Patrol never opens navigation or changes status op
   expect(navigation.navigate).not.toHaveBeenCalled();
   expect(ui.queryByLabelText("Open Navigation")).toBeNull();
 });
+
+
+test("refresh receives manager route edits and cancellation removes start and navigation actions", async () => {
+  const ui = mount(); await ui.findByText("Boundary patrol");
+  getMyPatrol.mockResolvedValue({ ...record(), routeName: "Manager changed route", plannedRoute });
+  fireEvent.press(ui.getByLabelText("Refresh patrol"));
+  await ui.findByText("Manager changed route");
+  getMyPatrol.mockResolvedValue({ ...record(), status: "CANCELLED" });
+  fireEvent.press(ui.getByLabelText("Refresh patrol"));
+  await ui.findByText("CANCELLED");
+  expect(ui.queryByLabelText("Start Patrol")).toBeNull();
+  expect(ui.queryByLabelText("Open Navigation")).toBeNull();
+});

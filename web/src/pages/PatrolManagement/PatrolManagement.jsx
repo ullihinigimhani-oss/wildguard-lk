@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { listAssignableRangers, listPatrols } from "../../services/patrolApi";
+import { cancelPatrol, listAssignableRangers, listPatrols } from "../../services/patrolApi";
 import LiveTrackingAction from "../../components/patrol/LiveTrackingAction";
+import PatrolActionIcon from "../../components/patrol/PatrolActionIcon";
 import {
   patrolPriorities,
   patrolStatuses,
@@ -38,6 +39,21 @@ export default function PatrolManagement() {
   const [refresh, setRefresh] = useState(0);
   const [pollError, setPollError] = useState("");
   const [trackingPatrolId, setTrackingPatrolId] = useState(null);
+  const [cancelling, setCancelling] = useState(null);
+  const [cancelPending, setCancelPending] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const cancelInFlight = useRef(false);
+  async function confirmCancel() {
+    if (!cancelling || cancelInFlight.current) return;
+    cancelInFlight.current = true; setCancelPending(true); setCancelError("");
+    try {
+      await cancelPatrol(cancelling.id);
+      setCancelling(null); setRefresh(n => n + 1);
+    } catch (error) {
+      setCancelError(error.response?.data?.message || "Unable to cancel this patrol. Please try again.");
+      setRefresh(n => n + 1);
+    } finally { cancelInFlight.current = false; setCancelPending(false); }
+  }
   const inFlight = useRef(null);
   const hasFilters = Boolean(
     filters.search ||
@@ -212,6 +228,16 @@ export default function PatrolManagement() {
           Live patrol tracking will be available here.
         </p>
       )}
+      {cancelling && <div role="dialog" aria-modal="false" aria-labelledby="cancel-patrol-title" className="demo-notice">
+        <h3 id="cancel-patrol-title">Cancel this patrol?</h3>
+        <p><strong>{cancelling.routeName}</strong></p>
+        <p>This patrol will be removed from the Ranger's upcoming patrol list. This action cannot be undone from this screen.</p>
+        {cancelError && <p role="alert">{cancelError}</p>}
+        <div className="patrol-actions">
+          <button className="button secondary" disabled={cancelPending} onClick={() => setCancelling(null)}>Keep Patrol</button>
+          <button className="button danger" disabled={cancelPending} onClick={confirmCancel}>{cancelPending ? "Cancelling…" : "Confirm Cancellation"}</button>
+        </div>
+      </div>}
       {loading ? (
         <p role="status">Loading patrols…</p>
       ) : error ? (
@@ -239,7 +265,7 @@ export default function PatrolManagement() {
                     "Status",
                     "Actions",
                   ].map((heading) => (
-                    <th key={heading}>{heading}</th>
+                    <th key={heading} className={heading === "Actions" ? "patrol-actions-cell" : undefined}>{heading}</th>
                   ))}
                 </tr>
               </thead>
@@ -277,14 +303,18 @@ export default function PatrolManagement() {
                         {patrolStatusLabel(patrol.status)}
                       </span>
                     </td>
-                    <td>
-                      <div className="users-actions">
+                    <td className="patrol-actions-cell">
+                      <div className="users-actions patrol-actions-row">
                         <Link
-                          className="text-button"
+                          className="patrol-action patrol-action-view"
                           to={`/patrols/${patrol.id}`}
                         >
-                          View
+                          <PatrolActionIcon kind="view" />View
                         </Link>
+                        {patrol.status === "SCHEDULED" && <>
+                          <Link className="patrol-action patrol-action-edit" to={`/patrols/${patrol.id}/edit`}><PatrolActionIcon kind="edit" />Edit</Link>
+                          <button type="button" className="patrol-action patrol-action-cancel" onClick={() => { setCancelling(patrol); setCancelError(""); }}><PatrolActionIcon kind="cancel" />Cancel</button>
+                        </>}
                         {patrol.status === "IN_PROGRESS" && (
                           <LiveTrackingAction
                             patrolId={patrol.id}

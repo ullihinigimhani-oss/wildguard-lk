@@ -55,3 +55,16 @@ exports.create = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.update = async (req, res, next) => {
+  try {
+    const patrol = await service.updatePatrol(req.params.id, validatePatrolCreation(req.body));
+    res.set("Cache-Control", "no-store").json({ success: true, patrol });
+  } catch (error) { next(error); }
+};
+exports.cancel = async (req, res, next) => {
+  try {
+    const patrol = await service.cancelPatrol(req.params.id);
+    res.set("Cache-Control", "no-store").json({ success: true, patrol });
+  } catch (error) { next(error); }
+};
