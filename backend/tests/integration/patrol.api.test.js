@@ -3,7 +3,12 @@ const jwt = require("jsonwebtoken");
 jest.mock("../../src/config/database", () => ({
   park: { findUnique: jest.fn() },
   user: { findUnique: jest.fn(), findMany: jest.fn() },
-  patrol: { create: jest.fn(), findMany: jest.fn() },
+  patrol: {
+    create: jest.fn(),
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    count: jest.fn(),
+  },
 }));
 const db = require("../../src/config/database");
 const app = require("../../src/app");
@@ -66,6 +71,9 @@ beforeEach(() => {
     createdBy: { id: "manager", name: "Existing Manager" },
     ...data,
   }));
+  db.patrol.findMany.mockResolvedValue([]);
+  db.patrol.findUnique.mockResolvedValue(null);
+  db.patrol.count.mockResolvedValue(0);
 });
 test("unauthenticated requests are rejected", async () => {
   await request(app).get("/api/patrols/mine").expect(401);
@@ -292,4 +300,133 @@ test("database errors stay private", async () => {
     .set("Authorization", asManager())
     .expect(500);
   expect(list.body.message).toBe("Internal server error");
+});
+const lastPatrolQuery = () =>
+  db.patrol.findMany.mock.calls[db.patrol.findMany.mock.calls.length - 1][0];
+test("manager lists patrols with pagination metadata and latest status", async () => {
+  db.patrol.findMany.mockResolvedValue([
+    { id: "patrol-1", status: "IN_PROGRESS" },
+  ]);
+  db.patrol.count.mockResolvedValue(26);
+  const { body } = await request(app)
+    .get("/api/patrols")
+    .set("Authorization", asManager())
+    .expect(200);
+  expect(body).toEqual({
+    success: true,
+    patrols: [{ id: "patrol-1", status: "IN_PROGRESS" }],
+    total: 26,
+    page: 1,
+    pageSize: 25,
+  });
+  expect(body.patrols[0].status).toBe("IN_PROGRESS");
+  const query = lastPatrolQuery();
+  expect(query.take).toBe(25);
+  expect(query.skip).toBe(0);
+  expect(query.where).toEqual({});
+  expect(query.select).toHaveProperty("startLocation");
+  expect(query.select).toHaveProperty("latitude");
+  expect(body.patrols[0]).not.toHaveProperty("passwordHash");
+});
+test("applies every list filter on the server", async () => {
+  const { body } = await request(app)
+    .get(
+      "/api/patrols?search=fence&status=IN_PROGRESS&patrolType=ANTI_POACHING&priority=HIGH&rangerId=ranger-1&date=2026-10-10&page=2",
+    )
+    .set("Authorization", asManager())
+    .expect(200);
+  expect(body).toEqual({
+    success: true,
+    patrols: [],
+    total: 0,
+    page: 2,
+    pageSize: 25,
+  });
+  expect(lastPatrolQuery().where).toEqual({
+    status: "IN_PROGRESS",
+    patrolType: "ANTI_POACHING",
+    priority: "HIGH",
+    rangerId: "ranger-1",
+    scheduledDate: { gte: new Date("2026-10-10"), lt: new Date("2026-10-11") },
+    routeName: { contains: "fence", mode: "insensitive" },
+  });
+  expect(lastPatrolQuery().skip).toBe(25);
+});
+test.each([
+  "status=SLEEPING",
+  "patrolType=NAPPING",
+  "priority=URGENT",
+  "date=2026-02-30",
+  "page=0",
+  "page=abc",
+  "search=" + "x".repeat(121),
+])("rejects invalid filter %s", async (query) => {
+  const { body } = await request(app)
+    .get("/api/patrols?" + query)
+    .set("Authorization", asManager())
+    .expect(400);
+  expect(body).toEqual({ success: false, message: "Invalid patrol filters." });
+  expect(db.patrol.findMany).not.toHaveBeenCalled();
+});
+test("patrol details return the latest persisted record", async () => {
+  db.patrol.findUnique.mockResolvedValue({
+    id: "patrol-1",
+    status: "IN_PROGRESS",
+    routeName: "Northern boundary sweep",
+    startLocation: "Main gate",
+    latitude: 7.5,
+    longitude: 80.7,
+    description: "Check the fence line.",
+    park: { id: "park-a", name: "Yala National Park" },
+    ranger: { id: "ranger-1", name: "A. Perera", email: "ranger-1@example.test" },
+  });
+  const { body } = await request(app)
+    .get("/api/patrols/patrol-1")
+    .set("Authorization", asManager())
+    .expect(200);
+  expect(body.success).toBe(true);
+  expect(body.patrol).toEqual(
+    expect.objectContaining({
+      status: "IN_PROGRESS",
+      startLocation: "Main gate",
+      latitude: 7.5,
+      longitude: 80.7,
+      description: "Check the fence line.",
+      ranger: expect.objectContaining({ name: "A. Perera" }),
+    }),
+  );
+  expect(db.patrol.findUnique).toHaveBeenCalledWith(
+    expect.objectContaining({ where: { id: "patrol-1" } }),
+  );
+  expect(body.patrol).not.toHaveProperty("passwordHash");
+});
+test("unknown patrol id returns a 404 message", async () => {
+  const { body } = await request(app)
+    .get("/api/patrols/does-not-exist")
+    .set("Authorization", asManager())
+    .expect(404);
+  expect(body).toEqual({ success: false, message: "Patrol not found." });
+  expect(db.patrol.findUnique).toHaveBeenCalledWith(
+    expect.objectContaining({ where: { id: "does-not-exist" } }),
+  );
+});
+test("list and details require an authenticated park manager", async () => {
+  accounts.intruder = {
+    id: "intruder",
+    name: "Community Person",
+    email: "intruder@example.test",
+    role: "COMMUNITY_USER",
+    approvalStatus: "APPROVED",
+    isActive: true,
+  };
+  const user = "Bearer " + token("intruder");
+  await request(app).get("/api/patrols").set("Authorization", user).expect(403);
+  await request(app)
+    .get("/api/patrols/patrol-1")
+    .set("Authorization", user)
+    .expect(403);
+  await request(app).get("/api/patrols").expect(401);
+  await request(app).get("/api/patrols/patrol-1").expect(401);
+  expect(db.patrol.findMany).not.toHaveBeenCalled();
+  expect(db.patrol.findUnique).not.toHaveBeenCalled();
 });

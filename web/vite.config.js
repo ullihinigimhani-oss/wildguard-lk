@@ -9,6 +9,8 @@ export default defineConfig({
     include: [
       "tests/foundation/**/*.test.jsx",
       "tests/integration/patrolManagement.test.jsx",
+      "tests/integration/patrolList.test.jsx",
+      "tests/integration/patrolDetails.test.jsx",
     ],
   },
 });

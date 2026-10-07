@@ -1,6 +1,8 @@
 import Users from "../pages/Users/Users";
 import Register from "../pages/Register/Register";
 import PatrolManagement from "../pages/PatrolManagement/PatrolManagement";
+import CreatePatrol from "../pages/PatrolManagement/CreatePatrol";
+import PatrolDetails from "../pages/PatrolManagement/PatrolDetails";
 import Reporting from "../pages/Reporting/Reporting";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
@@ -39,6 +41,8 @@ export default function AppRoutes() {
           <Route element={<ProtectedRoute allowedRoles={["PARK_MANAGER"]} />}>
             <Route path="/users" element={<Users />} />
             <Route path="/patrols" element={<PatrolManagement />} />
+            <Route path="/patrols/new" element={<CreatePatrol />} />
+            <Route path="/patrols/:id" element={<PatrolDetails />} />
             <Route
               path="/incidents"
               element={<Placeholder title="Incidents" />}
