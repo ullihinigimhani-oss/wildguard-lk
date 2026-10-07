@@ -5,6 +5,7 @@ const PATROL_TYPES = [
   "CONFLICT_RESPONSE",
   "SPECIAL",
 ];
+const { scheduleInstant } = require("../../../shared/patrolLifecycle");
 const PATROL_PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
 const text = (value) => (typeof value === "string" ? value.trim() : "");
 const fail = (fields) =>
@@ -117,16 +118,13 @@ function validatePatrolCreation(body) {
   )
     fields.longitude = "Longitude must be a number between -180 and 180.";
   if (Object.keys(fields).length) throw fail(fields);
-  const [year, month, day] = dateText.split("-").map(Number);
-  const [startHour, startMinute] = startText.split(":").map(Number);
-  const [endHour, endMinute] = endText.split(":").map(Number);
   return {
     routeName,
     parkId,
     rangerId,
     scheduledDate,
-    startTime: new Date(year, month - 1, day, startHour, startMinute),
-    endTime: new Date(year, month - 1, day, endHour, endMinute),
+    startTime: scheduleInstant(dateText, startText),
+    endTime: scheduleInstant(dateText, endText),
     description: text(input.instructions_notes) || null,
     patrolType,
     priority,

@@ -12,6 +12,7 @@ export const publicPaths = {
 export const rangerPaths = {
   Home: "ranger",
   Patrol: "ranger/patrols",
+  PatrolDetails: "ranger/patrols/:patrolId",
   Incident: "ranger/incidents",
   Alerts: "ranger/alerts",
   Sync: "ranger/sync",
@@ -52,6 +53,8 @@ export function createLinking({ user, isAuthenticated, isDemo, hasCompletedOnboa
       if (!signedIn && !isDemo) return stateFor("Login");
       if (Object.hasOwn(rangerPaths, name) && !ranger && !isDemo) return stateFor(destination);
       if (ranger && !isDemo && ["Alerts", "Sync"].includes(name)) return stateFor("Home");
+      if (isDemo && name === "PatrolDetails") return stateFor("Home");
+      if (name === "PatrolDetails") return { index: 1, routes: [{ name: "Patrol" }, parsed.routes[parsed.index ?? parsed.routes.length - 1]] };
       return parsed;
     },
   };

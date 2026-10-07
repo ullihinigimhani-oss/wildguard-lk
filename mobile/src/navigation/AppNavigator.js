@@ -6,6 +6,7 @@ import AuthNavigator from "./AuthNavigator";
 import HomeScreen from "../screens/home/HomeScreen";
 import DemoHomeScreen from "../screens/home/DemoHomeScreen";
 import MyPatrolScreen from "../screens/patrol/MyPatrolScreen";
+import PatrolDetailsScreen from "../screens/patrol/PatrolDetailsScreen";
 import RangerIncidentScreen from "../screens/incident/RangerIncidentScreen";
 import RangerShell from "./RangerShell";
 import ProfileScreen from "../screens/profile/ProfileScreen";
@@ -26,6 +27,7 @@ export default function AppNavigator() {
           {props => <RangerShell {...props}><Component {...props} /></RangerShell>}
         </Stack.Screen>
       ))}
+      <Stack.Screen name="PatrolDetails" component={PatrolDetailsScreen} options={{ headerShown: true, title: "Patrol Details", headerTintColor: "#245b44", headerShadowVisible: false }} />
     </Stack.Navigator>
   );
   return (

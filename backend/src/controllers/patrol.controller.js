@@ -1,5 +1,16 @@
 const service = require("../services/patrol.service");
 const { validatePatrolCreation } = require("../validators/patrol.validator");
+function rangerAction(method) {
+  return async (req, res, next) => {
+    try {
+      const patrol = await service[method](req.params.patrolId, req.user.id);
+      res.set("Cache-Control", "no-store").json({ success: true, patrol });
+    } catch (error) { next(error); }
+  };
+}
+exports.getMine = rangerAction("getRangerPatrol");
+exports.startMine = rangerAction("startRangerPatrol");
+exports.completeMine = rangerAction("completeRangerPatrol");
 exports.listMine = async (req, res, next) => {
   try {
     res.set("Cache-Control", "no-store").json({
