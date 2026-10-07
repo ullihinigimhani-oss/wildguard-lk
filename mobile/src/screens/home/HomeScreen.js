@@ -8,7 +8,8 @@ import PatrolCard from "../../components/PatrolCard";
 import PatrolLoadState from "../../components/PatrolLoadState";
 import { useAuth } from "../../hooks/useAuth";
 import useRangerPatrols from "../../hooks/useRangerPatrols";
-import { todayPatrol, patrolAction } from "../../utils/rangerPatrol";
+import { dashboardPatrols, classifyPatrol } from "../../utils/rangerPatrol";
+import usePatrolClock from "../../hooks/usePatrolClock";
 import { styles, colors } from "../../constants/theme";
 import { rangerStyles as ui } from "../../constants/rangerTheme";
 function QuickAction({ title, detail, icon, onPress }) {
@@ -21,7 +22,9 @@ function QuickAction({ title, detail, icon, onPress }) {
 export default function HomeScreen({ navigation }) {
   const { user } = useAuth();
   const state = useRangerPatrols();
-  const patrol = todayPatrol(state.patrols);
+  const now = usePatrolClock();
+  const summary = dashboardPatrols(state.patrols, now);
+  const patrol = summary.selected;
   const { width, fontScale } = useWindowDimensions();
   return <Screen>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
@@ -34,10 +37,17 @@ export default function HomeScreen({ navigation }) {
       <Text style={{ ...styles.text, fontSize: 14, fontWeight: "600" }}>Park Ranger</Text>
       <Text style={{ ...styles.muted, fontSize: 12 }}>{user.park?.name || "Not assigned"}</Text>
     </View></View>
-    <Text style={styles.eyebrow}>TODAY'S PATROL</Text><PatrolLoadState {...state} />
-    {!state.loading && !state.error && (patrol ? <PatrolCard patrol={patrol}>
-      <Button title={patrolAction[patrol.status]} onPress={() => navigation.navigate("Patrol", { selectedPatrolId: patrol.id, status: patrol.status })} />
-    </PatrolCard> : <View style={ui.card}><Ionicons accessible={false} name="map-outline" size={25} color={colors.green} /><Text style={styles.text}>No patrol assigned for today.</Text></View>)}
+    <PatrolLoadState {...state} />
+    {!state.loading && !state.error && <>
+      {!summary.hasPatrolToday && <Text style={styles.muted}>No patrol scheduled for today.</Text>}
+      {summary.allTodayCompleted && <Pressable accessibilityRole="button" accessibilityLabel="View today's completed patrols" onPress={() => navigation.navigate("Patrol", { filter: "COMPLETED" })} style={styles.notice}><Text style={styles.text}>Today's patrols are completed.</Text></Pressable>}
+      {summary.overdueCount > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`${summary.overdueCount} overdue ${summary.overdueCount === 1 ? "patrol requires" : "patrols require"} attention`} onPress={() => navigation.navigate("Patrol", { filter: "OVERDUE" })} style={styles.notice}>
+        <Text style={{ ...styles.text, fontSize: 13, fontWeight: "600" }}>{summary.overdueCount} overdue {summary.overdueCount === 1 ? "patrol requires" : "patrols require"} attention</Text>
+      </Pressable>}
+      {patrol && <><Text style={styles.eyebrow}>{summary.heading}</Text><PatrolCard patrol={patrol} now={now}>
+        <Button title={classifyPatrol(patrol, now).action} onPress={() => navigation.navigate("PatrolDetails", { patrolId: patrol.id })} />
+      </PatrolCard></>}
+    </>}
     <Text style={ui.section}>Quick Actions</Text>
     <View style={{ flexDirection: width < 350 || fontScale > 1.3 ? "column" : "row", gap: 12 }}>
       <QuickAction title="My Patrols" detail="View assigned patrols" icon="map-outline" onPress={() => navigation.navigate("Patrol")} />

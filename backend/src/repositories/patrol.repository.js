@@ -40,25 +40,22 @@ exports.findRanger = (id) =>
   });
 exports.createPatrol = (data) =>
   db().patrol.create({ data, select: patrolSelect });
+const rangerPatrolSelect = {
+  id: true, routeName: true, description: true, scheduledDate: true,
+  startTime: true, endTime: true, actualStartTime: true, actualEndTime: true,
+  status: true, patrolType: true, priority: true, startLocation: true,
+  park: { select: { id: true, name: true } },
+  ranger: { select: { name: true } },
+};
 exports.findRangerPatrols = (rangerId) => db().patrol.findMany({
-  where: { rangerId, status: { in: ["SCHEDULED", "IN_PROGRESS", "COMPLETED"] } },
-  select: {
-    id: true, routeName: true, description: true, scheduledDate: true,
-    startTime: true, endTime: true, status: true, patrolType: true, priority: true,
-    park: { select: { id: true, name: true } },
-  },
+  where: { rangerId },
+  select: rangerPatrolSelect,
   orderBy: [{ scheduledDate: "desc" }, { startTime: "asc" }, { id: "asc" }],
 });
-exports.findPatrols = (where, page) =>
-  Promise.all([
-    db().patrol.findMany({
-      where,
-      select: patrolSelect,
-      orderBy: [{ scheduledDate: "desc" }, { startTime: "asc" }, { id: "asc" }],
-      take: 25,
-      skip: (page - 1) * 25,
-    }),
-    db().patrol.count({ where }),
-  ]);
-exports.findPatrolById = (id) =>
-  db().patrol.findUnique({ where: { id }, select: patrolSelect });
+exports.findRangerPatrol = (id, rangerId) => db().patrol.findFirst({
+  where: { id, rangerId }, select: rangerPatrolSelect,
+});
+exports.transitionRangerPatrol = (id, rangerId, status, data) => db().patrol.updateMany({
+  // Atomic compare-and-set prevents parallel/retried requests rewriting actual times.
+  where: { id, rangerId, status }, data,
+});

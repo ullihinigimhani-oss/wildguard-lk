@@ -148,6 +148,8 @@ model Patrol {
   scheduledDate DateTime?
   startTime     DateTime?
   endTime       DateTime?
+  actualStartTime DateTime?
+  actualEndTime   DateTime?
   status        PatrolStatus @default(SCHEDULED)
 
   patrolType   PatrolType   @default(ROUTINE)
