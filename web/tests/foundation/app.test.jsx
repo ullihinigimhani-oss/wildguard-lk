@@ -212,3 +212,15 @@ test("a new failed login clears the previous approval notice and preserves crede
   expect(await screen.findByText("Invalid email or password.")).toBeVisible();
   expect(screen.queryByText("Account Pending Approval")).toBeNull();
 });
+
+test("an authenticated non-manager cannot open patrol management", async () => {
+  sessionStorage.setItem("wildguard.session", "saved-token");
+  mount("/patrols");
+  expect(await screen.findByRole("heading", { name: "Test Ranger" })).toBeVisible();
+  expect(
+    screen.queryByRole("heading", { name: "Patrol Management" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("heading", { name: "Create Patrol" }),
+  ).not.toBeInTheDocument();
+});

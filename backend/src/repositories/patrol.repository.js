@@ -49,3 +49,16 @@ exports.findRangerPatrols = (rangerId) => db().patrol.findMany({
   },
   orderBy: [{ scheduledDate: "desc" }, { startTime: "asc" }, { id: "asc" }],
 });
+exports.findPatrols = (where, page) =>
+  Promise.all([
+    db().patrol.findMany({
+      where,
+      select: patrolSelect,
+      orderBy: [{ scheduledDate: "desc" }, { startTime: "asc" }, { id: "asc" }],
+      take: 25,
+      skip: (page - 1) * 25,
+    }),
+    db().patrol.count({ where }),
+  ]);
+exports.findPatrolById = (id) =>
+  db().patrol.findUnique({ where: { id }, select: patrolSelect });

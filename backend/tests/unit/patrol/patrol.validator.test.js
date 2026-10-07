@@ -1,4 +1,7 @@
-const { validatePatrolCreation } = require("../../../src/validators/patrol.validator");
+const {
+  validatePatrolCreation,
+  validatePatrolFilters,
+} = require("../../../src/validators/patrol.validator");
 
 const valid = () => ({
   patrol_title: "Northern boundary sweep",
@@ -157,4 +160,61 @@ test("aggregates every field error into one response", () => {
     "patrol_title",
     "start_time",
   ]);
+});
+const emptyFilters = {
+  search: "",
+  status: "",
+  patrolType: "",
+  priority: "",
+  rangerId: "",
+  date: "",
+  page: 1,
+};
+test("an empty filter query defaults to page 1", () => {
+  expect(validatePatrolFilters({})).toEqual(emptyFilters);
+  expect(validatePatrolFilters(undefined)).toEqual(emptyFilters);
+});
+test("normalizes a complete filter query", () => {
+  expect(
+    validatePatrolFilters({
+      search: "  fence  ",
+      status: "IN_PROGRESS",
+      patrolType: "ANTI_POACHING",
+      priority: "HIGH",
+      rangerId: "ranger-1",
+      date: "2026-10-10",
+      page: "3",
+    }),
+  ).toEqual({
+    search: "fence",
+    status: "IN_PROGRESS",
+    patrolType: "ANTI_POACHING",
+    priority: "HIGH",
+    rangerId: "ranger-1",
+    date: "2026-10-10",
+    page: 3,
+  });
+});
+test.each([
+  [{ status: "SLEEPING" }],
+  [{ patrolType: "NAPPING" }],
+  [{ priority: "URGENT" }],
+  [{ date: "2026-02-30" }],
+  [{ date: "10/10/2026" }],
+  [{ page: "0" }],
+  [{ page: "abc" }],
+  [{ page: "-2" }],
+  [{ search: "x".repeat(121) }],
+  [{ rangerId: "r".repeat(129) }],
+])("rejects invalid filters %j", (query) => {
+  let error;
+  try {
+    validatePatrolFilters(query);
+  } catch (caught) {
+    error = caught;
+  }
+  expect(error).toBeDefined();
+  expect(error.message).toBe("Invalid patrol filters.");
+  expect(error.status).toBe(400);
+  expect(error.authError).toBe(true);
 });

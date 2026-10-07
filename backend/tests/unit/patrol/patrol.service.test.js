@@ -89,3 +89,54 @@ test("ranger list is a pass-through to the repository", async () => {
   await expect(service.getAssignableRangers()).resolves.toEqual(rangers);
   expect(repository.findAssignableRangers).toHaveBeenCalledTimes(1);
 });
+test("listPatrols builds the where clause from every filter", async () => {
+  repository.findPatrols.mockResolvedValue([[{ id: "patrol-1" }], 1]);
+  const result = await service.listPatrols({
+    search: "fence",
+    status: "IN_PROGRESS",
+    patrolType: "ANTI_POACHING",
+    priority: "HIGH",
+    rangerId: "ranger-1",
+    date: "2026-10-10",
+    page: 2,
+  });
+  expect(repository.findPatrols).toHaveBeenCalledWith(
+    {
+      status: "IN_PROGRESS",
+      patrolType: "ANTI_POACHING",
+      priority: "HIGH",
+      rangerId: "ranger-1",
+      scheduledDate: { gte: new Date("2026-10-10"), lt: new Date("2026-10-11") },
+      routeName: { contains: "fence", mode: "insensitive" },
+    },
+    2,
+  );
+  expect(result).toEqual([[{ id: "patrol-1" }], 1]);
+});
+test("listPatrols with no active filters queries the whole table", async () => {
+  repository.findPatrols.mockResolvedValue([[], 0]);
+  const result = await service.listPatrols({
+    search: "",
+    status: "",
+    patrolType: "",
+    priority: "",
+    rangerId: "",
+    date: "",
+    page: 1,
+  });
+  expect(repository.findPatrols).toHaveBeenCalledWith({}, 1);
+  expect(result).toEqual([[], 0]);
+});
+test("getPatrol returns the persisted patrol including ranger-updated status", async () => {
+  const patrol = { id: "patrol-1", status: "IN_PROGRESS", latitude: 7.5 };
+  repository.findPatrolById.mockResolvedValue(patrol);
+  await expect(service.getPatrol("patrol-1")).resolves.toEqual(patrol);
+  expect(repository.findPatrolById).toHaveBeenCalledWith("patrol-1");
+});
+test("getPatrol throws a 404 for an unknown patrol", async () => {
+  repository.findPatrolById.mockResolvedValue(null);
+  await expect(service.getPatrol("missing")).rejects.toMatchObject({
+    status: 404,
+    message: "Patrol not found.",
+  });
+});
