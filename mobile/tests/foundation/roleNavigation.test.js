@@ -20,7 +20,7 @@ test.each(["PARK_MANAGER", "COMMUNITY_LIAISON", "RESEARCHER", "COMMUNITY_USER"])
   const ui = render(<AppNavigator />);
   expect(authenticatedDestination(user)).toBe("Profile");
   expect(ui.getByTestId("route-Profile")).toBeTruthy();
-  ["Home", "Patrol", "Incident", "Alerts", "Sync"].forEach(route => expect(ui.queryByTestId(`route-${route}`)).toBeNull());
+  ["Home", "Patrol", "PatrolDetails", "PatrolRoute", "Incident", "Alerts", "Sync"].forEach(route => expect(ui.queryByTestId(`route-${route}`)).toBeNull());
 });
 test("authenticated ranger uses existing Home and field routes", () => {
   const user = { id: "u1", role: "RANGER" };
@@ -29,6 +29,7 @@ test("authenticated ranger uses existing Home and field routes", () => {
   expect(authenticatedDestination(user)).toBe("Home");
   expect(ui.getByTestId("route-Home")).toBeTruthy();
   expect(ui.getByTestId("route-Patrol")).toBeTruthy();
+  expect(ui.getByTestId("route-PatrolRoute")).toBeTruthy();
 });
 test("unknown roles fail closed", () => {
   const user = { id: "u1", role: "ADMIN" };

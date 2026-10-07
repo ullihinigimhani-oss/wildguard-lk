@@ -20,11 +20,17 @@ test.each(['COMMUNITY_USER','PARK_MANAGER','COMMUNITY_LIAISON','RESEARCHER'])('%
  expect(selected(linking.getStateFromPath('/'))).toBe('Profile');
  expect(getPathFromState(linking.getStateFromPath('/account'),linking.config)).toBe('/account');
 });
-test.each(Object.entries(rangerPaths).filter(([name]) => !['Alerts', 'Sync'].includes(name)))('verified ranger can load %s at /%s',(name,path)=>{
+test.each(Object.entries(rangerPaths).filter(([name]) => !['Alerts', 'Sync', 'PatrolDetails', 'PatrolRoute'].includes(name)))('verified ranger can load %s at /%s',(name,path)=>{
  const linking=createLinking({user:{id:'u1',role:'RANGER'},isAuthenticated:true});
  const state=linking.getStateFromPath('/'+path);
  expect(selected(state)).toBe(name);
  expect(getPathFromState(state,linking.config)).toBe('/'+path);
+});
+test('patrol detail links preserve a contextual Back destination and patrol ID', () => {
+ const linking = createLinking({ user: { id: 'u1', role: 'RANGER' }, isAuthenticated: true });
+ const state = linking.getStateFromPath('/ranger/patrols/assigned-record');
+ expect(state.routes.map(route => route.name)).toEqual(['Patrol', 'PatrolDetails']);
+ expect(state.routes[1].params.patrolId).toBe('assigned-record');
 });
 test.each(['ranger/alerts', 'ranger/sync'])('removed prototype route /%s returns to Dashboard', path => {
  const linking = createLinking({ user: { id: 'u1', role: 'RANGER' }, isAuthenticated: true });
@@ -33,4 +39,14 @@ test.each(['ranger/alerts', 'ranger/sync'])('removed prototype route /%s returns
 test('demo links stay separate and never authenticate a user',()=>{
  const linking=createLinking({isDemo:true});
  expect(getPathFromState(linking.getStateFromPath('/demo/ranger'),linking.config)).toBe('/demo/ranger');
+});
+test('route links preserve My Patrol and Details back destinations', () => {
+ const linking=createLinking({user:{id:'u1',role:'RANGER'},isAuthenticated:true});
+ const state=linking.getStateFromPath('/ranger/patrols/assigned-record/route');
+ expect(state.routes.map(route=>route.name)).toEqual(['Patrol','PatrolDetails','PatrolRoute']);
+ expect(state.routes[1].params.patrolId).toBe('assigned-record');
+ expect(state.routes[2].params.patrolId).toBe('assigned-record');
+});
+test('demo cannot open an authenticated planned route',()=>{
+ expect(selected(createLinking({isDemo:true}).getStateFromPath('/demo/ranger/patrols/assigned-record/route'))).toBe('Home');
 });

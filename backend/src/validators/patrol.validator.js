@@ -5,7 +5,9 @@ const PATROL_TYPES = [
   "CONFLICT_RESPONSE",
   "SPECIAL",
 ];
+const { scheduleInstant } = require("../../../shared/patrolLifecycle");
 const PATROL_PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
+const PATROL_STATUSES = ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
 const text = (value) => (typeof value === "string" ? value.trim() : "");
 const fail = (fields) =>
   Object.assign(new Error("Please check your patrol details."), {
@@ -39,6 +41,7 @@ function coordinate(value) {
         : NaN;
   return Number.isFinite(number) ? number : NaN;
 }
+const validatePlannedRoute = require("./plannedRoute.validator");
 function validatePatrolCreation(body) {
   const input =
     body && typeof body === "object" && !Array.isArray(body) ? body : {};
@@ -116,23 +119,52 @@ function validatePatrolCreation(body) {
     (longitude !== null && (longitude < -180 || longitude > 180))
   )
     fields.longitude = "Longitude must be a number between -180 and 180.";
+  let points;
+  try { points = validatePlannedRoute(input.plannedRoute); }
+  catch (error) { fields.plannedRoute = error.message; }
   if (Object.keys(fields).length) throw fail(fields);
-  const [year, month, day] = dateText.split("-").map(Number);
-  const [startHour, startMinute] = startText.split(":").map(Number);
-  const [endHour, endMinute] = endText.split(":").map(Number);
   return {
     routeName,
     parkId,
     rangerId,
     scheduledDate,
-    startTime: new Date(year, month - 1, day, startHour, startMinute),
-    endTime: new Date(year, month - 1, day, endHour, endMinute),
+    startTime: scheduleInstant(dateText, startText),
+    endTime: scheduleInstant(dateText, endText),
     description: text(input.instructions_notes) || null,
     patrolType,
     priority,
-    startLocation: text(input.start_location) || null,
-    latitude,
-    longitude,
+    startLocation: points[0].label || "Start Point",
+    latitude: points[0].latitude,
+    longitude: points[0].longitude,
+    // Prisma nested writes commit the assignment and every waypoint atomically.
+    waypoints: { create: points },
   };
 }
-module.exports = { validatePatrolCreation };
+function validatePatrolFilters(query) {
+  const input =
+    query && typeof query === "object" && !Array.isArray(query) ? query : {};
+  const search = text(input.search);
+  const status = text(input.status);
+  const patrolType = text(input.patrolType);
+  const priority = text(input.priority);
+  const rangerId = text(input.rangerId);
+  const date = text(input.date);
+  const page = text(input.page) || "1";
+  if (
+    search.length > 120 ||
+    (status && !PATROL_STATUSES.includes(status)) ||
+    (patrolType && !PATROL_TYPES.includes(patrolType)) ||
+    (priority && !PATROL_PRIORITIES.includes(priority)) ||
+    rangerId.length > 128 ||
+    (date && !calendarDate(date)) ||
+    !/^\d+$/.test(page) ||
+    Number(page) < 1 ||
+    Number(page) > 100000
+  )
+    throw Object.assign(new Error("Invalid patrol filters."), {
+      status: 400,
+      authError: true,
+    });
+  return { search, status, patrolType, priority, rangerId, date, page: Number(page) };
+}
+module.exports = { validatePatrolCreation, validatePatrolFilters };

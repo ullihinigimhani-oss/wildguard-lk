@@ -482,6 +482,22 @@ td small {
   background: #f7efdd;
   color: #886829;
 }
+.badge-low {
+  background: #eaf0e5;
+  color: #46623d;
+}
+.badge-in-progress {
+  background: #e3edf6;
+  color: #33608a;
+}
+.badge-completed {
+  background: #e2f0e5;
+  color: #2f7a4d;
+}
+.badge-cancelled {
+  background: #efe9f3;
+  color: #6b5278;
+}
 .park-panel {
   background: #214b3b;
   border-radius: 9px;
@@ -1497,6 +1513,18 @@ td small {
 .patrol-success .patrol-details {
   margin: 12px 0 0;
 }
+
+/* Map container styles */
+.map-container {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: white;
+}
+.map-container .leaflet-container {
+  height: 600px;
+  width: 100%;
+}
 .ranger-select select {
   width: 100%;
   padding: 14px;
@@ -1508,6 +1536,34 @@ td small {
 }
 .ranger-select input {
   width: 100%;
+}
+.patrol-list-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.patrol-list-heading h2 {
+  margin-bottom: 4px;
+}
+.patrol-list-heading .muted {
+  margin-top: 0;
+}
+.patrol-details-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.patrol-details-heading h2 {
+  margin: 0;
+}
+.patrol-details-actions {
+  margin: 18px 0 0;
+}
+.patrol-details-actions .button {
+  display: inline-block;
 }
 @media (max-width: 700px) {
   .patrol-panel {
