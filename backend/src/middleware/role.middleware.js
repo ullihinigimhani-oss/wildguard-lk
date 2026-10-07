@@ -10,7 +10,7 @@ module.exports =
         .status(403)
         .json({
           success: false,
-          message: "You do not have permission to manage these accounts.",
+          message: "You do not have permission to perform this action.",
         });
     }
     next();

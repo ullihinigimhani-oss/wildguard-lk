@@ -1,0 +1,8 @@
+const router = require("express").Router();
+const authenticate = require("../middleware/auth.middleware");
+const allowRoles = require("../middleware/role.middleware");
+const controller = require("../controllers/patrol.controller");
+router.use(authenticate, allowRoles("PARK_MANAGER"));
+router.get("/rangers", controller.listAssignableRangers);
+router.post("/", controller.create);
+module.exports = router;
