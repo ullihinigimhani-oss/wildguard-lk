@@ -3,6 +3,7 @@ import LivePatrolNavigationScreen from "../screens/patrol/LivePatrolNavigationSc
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../hooks/useAuth";
+import { useFontStyle } from "../components/common/Typography";
 import { authenticatedDestination } from "../constants/roles";
 import AuthNavigator from "./AuthNavigator";
 import HomeScreen from "../screens/home/HomeScreen";
@@ -17,6 +18,7 @@ import SyncScreen from "../screens/placeholders/SyncScreen";
 import PlaceholderScreen from "../screens/placeholders/PlaceholderScreen";
 const Stack = createNativeStackNavigator();
 export default function AppNavigator() {
+  const headerFont = useFontStyle({ fontWeight: "700" });
   const { user, isDemo, isAuthenticated } = useAuth();
   if (!user) return <AuthNavigator />;
   const destination = isAuthenticated ? authenticatedDestination(user) : null;
@@ -27,7 +29,11 @@ export default function AppNavigator() {
       <Stack.Navigator
         key={`${user.id}:ranger`}
         initialRouteName="Home"
-        screenOptions={{ headerShown: false, animation: "none" }}
+        screenOptions={{
+          headerShown: false,
+          animation: "none",
+          headerTitleStyle: headerFont,
+        }}
       >
         {[
           ["Home", "Dashboard", HomeScreen],
@@ -83,7 +89,11 @@ export default function AppNavigator() {
     <Stack.Navigator
       key={isDemo ? "demo" : `${user.id}:${user.role}`}
       initialRouteName={rangerArea ? "Home" : "Profile"}
-      screenOptions={{ headerTintColor: "#245b44", headerShadowVisible: false }}
+      screenOptions={{
+        headerTintColor: "#245b44",
+        headerShadowVisible: false,
+        headerTitleStyle: headerFont,
+      }}
     >
       {rangerArea && (
         <>

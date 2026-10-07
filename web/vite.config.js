@@ -11,6 +11,7 @@ export default defineConfig({
       "tests/integration/patrolManagement.test.jsx",
       "tests/integration/patrolList.test.jsx",
       "tests/integration/patrolDetails.test.jsx",
+      "tests/integration/patrolEditCancel.test.jsx",
     ],
   },
 });

@@ -5,7 +5,8 @@ import {
 } from "../../utils/navigationSession";
 import { readPlannedRoute } from "../../utils/plannedPatrolRoute";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "../../components/common/Typography";
 import { useFocusEffect } from "@react-navigation/native";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";

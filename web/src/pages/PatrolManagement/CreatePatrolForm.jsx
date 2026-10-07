@@ -10,7 +10,7 @@ import {
   patrolTypes,
   validatePatrol,
 } from "../../constants/patrols";
-import { createPatrol } from "../../services/patrolApi";
+import { createPatrol, updatePatrol } from "../../services/patrolApi";
 const formFields = [
   {
     key: "patrol_title",
@@ -49,8 +49,8 @@ const formFields = [
   },
   { kind: "notes" },
 ];
-export default function CreatePatrolForm({ onCreated }) {
-  const [values, setValues] = useState(initialPatrol);
+export default function CreatePatrolForm({ onCreated, patrolId, initialValues = initialPatrol }) {
+  const [values, setValues] = useState(initialValues);
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -71,16 +71,16 @@ export default function CreatePatrolForm({ onCreated }) {
     pending.current = true;
     setLoading(true);
     try {
-      const data = await createPatrol(patrolPayload(values));
+      const data = await (patrolId ? updatePatrol(patrolId, patrolPayload(values)) : createPatrol(patrolPayload(values)));
       setErrors({});
-      setValues(initialPatrol);
+      if (!patrolId) setValues(initialPatrol);
       onCreated?.(data.patrol);
     } catch (error) {
       const body = error.response?.data;
       setErrors(body?.errors || {});
       setMessage(
         body?.message ||
-          "Unable to create this patrol. Please check your connection and try again.",
+          "Unable to save this patrol. Please check your connection and try again.",
       );
     } finally {
       pending.current = false;
@@ -219,10 +219,10 @@ export default function CreatePatrolForm({ onCreated }) {
           </Link>
         )}
         <button className="button primary" disabled={loading}>
-          {loading ? "Creating patrol…" : "Create Patrol"}
+          {loading ? (patrolId ? "Saving changes…" : "Creating patrol…") : (patrolId ? "Save Changes" : "Create Patrol")}
         </button>
         <span className="small muted">
-          New patrols start with Scheduled status.
+          {patrolId ? "Only scheduled patrols can be edited." : "New patrols start with Scheduled status."}
         </span>
       </div>
     </form>

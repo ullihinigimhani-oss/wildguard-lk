@@ -19,3 +19,10 @@ export async function getPatrol(id) {
   if (!data.success || !data.patrol) throw new Error("Patrol unavailable");
   return data.patrol;
 }
+
+export async function updatePatrol(id, payload) {
+  return (await api.patch("/patrols/" + encodeURIComponent(id), payload)).data;
+}
+export async function cancelPatrol(id) {
+  return (await api.post("/patrols/" + encodeURIComponent(id) + "/cancel")).data;
+}

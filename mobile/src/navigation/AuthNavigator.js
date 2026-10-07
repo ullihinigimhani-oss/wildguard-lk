@@ -8,8 +8,10 @@ import OnboardingScreen2 from "../screens/onboarding/OnboardingScreen2";
 import OnboardingScreen3 from "../screens/onboarding/OnboardingScreen3";
 import { useOnboarding } from "../hooks/useOnboarding";
 import { useAuth } from "../hooks/useAuth";
+import { useFontStyle } from "../components/common/Typography";
 const Stack = createNativeStackNavigator();
 export default function AuthNavigator() {
+  const headerFont = useFontStyle({ fontWeight: "700" });
   const { hasCompletedOnboarding } = useOnboarding();
   const { hasLoggedOut } = useAuth();
   return (
@@ -20,7 +22,7 @@ export default function AuthNavigator() {
       screenOptions={{
         headerTintColor: "#245b44",
         headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: "700" },
+        headerTitleStyle: headerFont,
       }}
     >
       <Stack.Screen

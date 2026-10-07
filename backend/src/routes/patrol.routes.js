@@ -30,4 +30,6 @@ router.get("/rangers", controller.listAssignableRangers);
 router.post("/", controller.create);
 router.get("/", controller.list);
 router.get("/:id", controller.getById);
+router.patch("/:id", controller.update);
+router.post("/:id/cancel", controller.cancel);
 module.exports = router;

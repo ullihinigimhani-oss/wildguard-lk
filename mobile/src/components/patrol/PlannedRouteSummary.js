@@ -1,5 +1,6 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "../common/Typography";
 import { styles } from "../../constants/theme";
 import { rangerStyles as ui } from "../../constants/rangerTheme";
 import { plannedDistanceKm } from "../../utils/plannedPatrolRoute";

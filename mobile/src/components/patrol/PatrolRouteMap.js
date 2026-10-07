@@ -5,7 +5,8 @@ import React, {
   useState,
   useRef,
 } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
+import { Text } from "../common/Typography";
 import Button from "../common/Button";
 import { colors, styles } from "../../constants/theme";
 import PatrolMapSurface from "./PatrolMapSurface";
