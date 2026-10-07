@@ -82,11 +82,11 @@ export default function CommunityHomeScreen({ navigation }) {
 
     try {
       const [alertRes, reportRes] = await Promise.all([
-        listAlerts({ status: "ACTIVE" }).catch(() => ({ alerts: [] })),
-        listMyReports({ pageSize: 5 }).catch(() => ({ reports: [] })),
+        listAlerts({ status: "ACTIVE" }),
+        listMyReports({ pageSize: 5 }),
       ]);
-      setAlerts(alertRes.alerts || []);
-      setReports(reportRes.reports || []);
+      setAlerts(alertRes?.alerts || []);
+      setReports(reportRes?.reports || []);
     } catch (err) {
       setError("Unable to load community dashboard data. Pull down to retry.");
     } finally {
