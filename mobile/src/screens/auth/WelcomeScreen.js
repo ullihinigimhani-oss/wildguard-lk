@@ -6,6 +6,7 @@ import PhotoOverlay from "../../components/common/PhotoOverlay";
 import { colors } from "../../constants/theme";
 
 const wildlife = require("../../../assets/images/onboarding-wildlife.jpg");
+const home = require("../../../assets/images/home.jpg");
 const mission = require("../../../assets/images/welcome-wildlife.jpg");
 const ranger = require("../../../assets/images/onboarding-ranger.jpg");
 const monitoring = require("../../../assets/images/onboarding-monitoring.jpg");
@@ -49,7 +50,7 @@ export default function WelcomeScreen({ navigation }) {
   return <SafeAreaView style={local.screen}>
     {focused && <StatusBar barStyle="light-content" />}
     <ScrollView ref={scroll} bounces={false} contentContainerStyle={local.content}>
-      <PhotoSection source={wildlife} minHeight={Math.max(640, height * 0.88)} label="PROTECT • PRESERVE" title="WildGuard LK" subtitle="A safer wilderness starts with you."
+      <PhotoSection source={home} minHeight={Math.max(640, height * 0.88)} label="PROTECT • PRESERVE" title="WildGuard LK" subtitle="A safer wilderness starts with you."
         description="Connecting communities and conservation teams to protect Sri Lanka's wildlife."
         header={<View style={local.header}>
           <View style={local.logoBacking}><Image source={require("../../../assets/images/wildguard-logo.png")} resizeMode="contain" style={local.logo} accessibilityLabel="WildGuard logo" /></View>
