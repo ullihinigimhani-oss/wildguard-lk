@@ -168,3 +168,30 @@ test("successful start automatically opens navigation, while active patrol can r
   fireEvent.press(ui.getByLabelText("Open Navigation"));
   expect(navigation.navigate).toHaveBeenCalledTimes(2);
 });
+
+test("pending or failed Start Patrol never opens navigation or changes status optimistically", async () => {
+  const navigation = { navigate: jest.fn() };
+  let reject;
+  startMyPatrol.mockImplementation(
+    () =>
+      new Promise((resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  const ui = render(
+    <PatrolDetailsScreen
+      route={{ params: { patrolId: "assignment" } }}
+      navigation={navigation}
+    />,
+  );
+  await ui.findByLabelText("Start Patrol");
+  fireEvent.press(ui.getByLabelText("Start Patrol"));
+  expect(navigation.navigate).not.toHaveBeenCalled();
+  expect(ui.queryByLabelText("Open Navigation")).toBeNull();
+  reject({ response: { status: 409 } });
+  await ui.findByText(
+    "This patrol's state or schedule has changed. Refresh it before trying again.",
+  );
+  expect(navigation.navigate).not.toHaveBeenCalled();
+  expect(ui.queryByLabelText("Open Navigation")).toBeNull();
+});

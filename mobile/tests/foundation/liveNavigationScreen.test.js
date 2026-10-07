@@ -12,6 +12,11 @@ jest.mock("../../src/hooks/useAuth", () => ({
 jest.mock("../../src/hooks/useAssignedPatrol", () => jest.fn());
 jest.mock("../../src/hooks/useForegroundLocation", () => jest.fn());
 jest.mock("../../src/hooks/useLiveNavigation", () => jest.fn());
+jest.mock("../../src/hooks/useFullPatrolRoute", () => () => ({
+  route: null,
+  loading: false,
+  error: null,
+}));
 jest.mock("../../src/services/patrolApi", () => ({
   completeMyPatrol: jest.fn(),
 }));
@@ -134,4 +139,45 @@ test("Ranger and destination inside warnings are separate and remain visible wit
   expect(ui.getByText(/You are currently inside/)).toBeTruthy();
   expect(ui.getByText(/Next patrol point is inside/)).toBeTruthy();
   expect(completeMyPatrol).not.toHaveBeenCalled();
+});
+
+test("Locating state and denied permission recovery are clearly labelled", () => {
+  useForegroundLocation.mockReturnValue({
+    position: null,
+    active: true,
+    waiting: true,
+  });
+  const ui = render(
+    <LivePatrolNavigationScreen
+      route={{ params: { patrolId: "p" } }}
+      navigation={{ navigate: jest.fn() }}
+    />,
+  );
+  expect(ui.getByText("Locating you...")).toBeTruthy();
+  expect(
+    ui.getByText("Getting your current position for patrol navigation."),
+  ).toBeTruthy();
+  const retry = jest.fn(),
+    openSettings = jest.fn();
+  useForegroundLocation.mockReturnValue({
+    position: null,
+    active: true,
+    waiting: false,
+    error: "Location permission is required for live patrol navigation.",
+    errorCode: "PERMISSION_DENIED",
+    canOpenSettings: true,
+    retry,
+    openSettings,
+  });
+  ui.rerender(
+    <LivePatrolNavigationScreen
+      route={{ params: { patrolId: "p" } }}
+      navigation={{ navigate: jest.fn() }}
+    />,
+  );
+  expect(ui.queryByText("Locating you...")).toBeNull();
+  fireEvent.press(ui.getByLabelText("Retry"));
+  fireEvent.press(ui.getByLabelText("Open Settings"));
+  expect(retry).toHaveBeenCalledTimes(1);
+  expect(openSettings).toHaveBeenCalledTimes(1);
 });

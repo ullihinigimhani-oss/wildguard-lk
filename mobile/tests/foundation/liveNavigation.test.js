@@ -149,7 +149,8 @@ test("live map separates GPS/ORS/actual layers, omits planned straight polyline 
   expect(html).toContain("var live=true");
   expect(html).toContain("if(!live)data.segments");
   expect(html).toContain("window.updatePatrolNavigation");
-  expect(html).toContain("Navigation Route · foot-walking");
+  expect(html).toContain("Route to Patrol Start");
+  expect(html).toContain("Active Patrol Leg · foot-walking");
   expect(html).toContain("Recorded GPS trail");
   expect(html).toContain("Re-centre");
   expect(html).not.toContain("ORS_API_KEY");

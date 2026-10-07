@@ -59,9 +59,10 @@ export function buildPlannedMapDocument(points, segments, live = false) {
     var map=L.map('map',{zoomControl:true,scrollWheelZoom:false});
     var plannedLayer=L.layerGroup().addTo(map);
     map.createPane('riskAreas');map.getPane('riskAreas').style.zIndex=350;
-    var riskLayer=L.layerGroup().addTo(map),currentLayer=L.layerGroup().addTo(map),navigationLayer=L.layerGroup().addTo(map),actualLayer=L.layerGroup().addTo(map),currentPosition=null,riskSignature=null;
-    var live=${Boolean(live)};
+    var riskLayer=L.layerGroup().addTo(map),fullRouteLayer=L.layerGroup().addTo(map),currentLayer=L.layerGroup().addTo(map),navigationLayer=L.layerGroup().addTo(map),actualLayer=L.layerGroup().addTo(map),currentPosition=null,riskSignature=null;
+    var live=${Boolean(live)},initialNavigationFitted=false,activeRoutePositions=[],activeDestination=null,fullPositions=[],fullSignature=null;
     function valid(p){return p && Number.isFinite(p.latitude)&&Math.abs(p.latitude)<=90&&Number.isFinite(p.longitude)&&Math.abs(p.longitude)<=180;}
+    function validLine(g){return g && g.type==='LineString' && Array.isArray(g.coordinates) && g.coordinates.length>1 && g.coordinates.every(function(p){return Array.isArray(p)&&valid({longitude:p[0],latitude:p[1]});});}
     window.updatePatrolNavigation=function(payload){
       if(!live || !payload || typeof payload!=='object')return;
       currentLayer.clearLayers();navigationLayer.clearLayers();actualLayer.clearLayers();currentPosition=null;
@@ -76,13 +77,29 @@ export function buildPlannedMapDocument(points, segments, live = false) {
       });}
       if(valid(payload.currentLocation)){
         currentPosition=[payload.currentLocation.latitude,payload.currentLocation.longitude];
-        L.circleMarker(currentPosition,{radius:9,color:'white',weight:3,fillColor:'#1679dc',fillOpacity:1}).bindTooltip('Current Ranger GPS location').addTo(currentLayer);
+        L.circleMarker(currentPosition,{radius:9,color:'white',weight:3,fillColor:'#1679dc',fillOpacity:1}).bindTooltip('Your location · Current Ranger GPS location').addTo(currentLayer);
         if(Number.isFinite(payload.currentLocation.accuracy))L.circle(currentPosition,{radius:Math.min(100,payload.currentLocation.accuracy),color:'#1679dc',weight:1,fillOpacity:0.08}).addTo(currentLayer);
       }
       var geometry=payload.geometry;
-      if(geometry && geometry.type==='LineString' && Array.isArray(geometry.coordinates) && geometry.coordinates.length>1 && geometry.coordinates.every(function(p){return Array.isArray(p)&&valid({longitude:p[0],latitude:p[1]});}))L.polyline(geometry.coordinates.map(function(p){return[p[1],p[0]];}),{color:'#1679dc',weight:5}).bindTooltip('Navigation Route · foot-walking').addTo(navigationLayer);
+      activeRoutePositions=[];activeDestination=valid(payload.destination)?[payload.destination.latitude,payload.destination.longitude]:null;
+      var nextFullSignature=JSON.stringify({route:payload.fullRoute||null,reached:payload.reachedWaypointIds||[]});
+      if(nextFullSignature!==fullSignature){fullSignature=nextFullSignature;fullRouteLayer.clearLayers();fullPositions=[];
+        var full=payload.fullRoute,reached=Array.isArray(payload.reachedWaypointIds)?payload.reachedWaypointIds:[];
+        if(full && validLine(full.geometry) && Array.isArray(full.legs))full.legs.forEach(function(leg){
+          if(!validLine(leg.geometry))return;
+          var positions=leg.geometry.coordinates.map(function(p){return[p[1],p[0]];}),done=reached.indexOf(leg.destinationWaypointId)!==-1;
+          L.polyline(positions,{color:'#27804b',weight:4,opacity:done?0.3:0.8}).bindTooltip('Planned Patrol Navigation').addTo(fullRouteLayer);
+          if(!done)fullPositions=fullPositions.concat(positions);
+        });
+      }
+      if(validLine(geometry)){
+        activeRoutePositions=geometry.coordinates.map(function(p){return[p[1],p[0]];});
+        var approaching=payload.approaching!==false;
+        L.polyline(activeRoutePositions,{color:approaching?'#1679dc':'#145b34',weight:approaching?5:7}).bindTooltip(approaching?'Route to Patrol Start':'Active Patrol Leg · foot-walking').addTo(navigationLayer);
+      }
       if(Array.isArray(payload.trail)){var trail=payload.trail.filter(valid).map(function(p){return[p.latitude,p.longitude];});if(trail.length>1)L.polyline(trail,{color:'#c76b19',weight:3,dashArray:'3 5'}).bindTooltip('Recorded GPS trail').addTo(actualLayer);}
       var recenter=document.getElementById('recenter');if(recenter)recenter.disabled=!currentPosition;
+      if(!initialNavigationFitted && currentPosition && activeRoutePositions.length){fit();initialNavigationFitted=true;}
     };
     window.addEventListener('message',function(event){if(event.source!==window.parent)return;if(event.data && event.data.type==='navigation-update')window.updatePatrolNavigation(event.data.payload);});
     if(live){var recenter=document.createElement('button');recenter.id='recenter';recenter.textContent='Re-centre';recenter.disabled=true;recenter.style.cssText='position:absolute;z-index:600;right:10px;top:58px;background:white;border:1px solid #bed0c3;border-radius:8px;padding:11px 14px;color:#245b44;font:600 13px system-ui';recenter.onclick=function(){if(currentPosition)map.setView(currentPosition,16);};document.body.appendChild(recenter);}
@@ -99,7 +116,7 @@ export function buildPlannedMapDocument(points, segments, live = false) {
       if(point.note){var note=document.createElement('div');note.textContent=point.note;note.className='popup-note';popup.appendChild(note);}
       marker.bindPopup(popup);marker.on('click',function(){notify('point-selected',{order:point.order});});
     });
-    function fit(){map.invalidateSize();var positions=data.points.map(function(p){return[p.latitude,p.longitude];});if(positions.length===1){map.setView(positions[0],15);}else{map.fitBounds(L.latLngBounds(positions),{padding:[38,38],maxZoom:16});}}
+    function fit(){map.invalidateSize();var positions=live && (activeRoutePositions.length || fullPositions.length)?activeRoutePositions.concat(fullPositions):data.points.map(function(p){return[p.latitude,p.longitude];});if(live && currentPosition)positions.push(currentPosition);if(live && activeDestination)positions.push(activeDestination);if(positions.length===1){map.setView(positions[0],15);}else{map.fitBounds(L.latLngBounds(positions),{padding:[38,38],maxZoom:16});}}
     document.getElementById('fit').onclick=fit;fit();
     window.addEventListener('resize',function(){map.invalidateSize();});
     notify('map-ready');

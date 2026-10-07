@@ -120,6 +120,75 @@ exports.riskContext = async (patrolId, rangerId) => {
     );
   return riskZones.forPark(patrol.parkId);
 };
+exports.fullPatrolRoute = async (patrolId, rangerId) => {
+  if (!validId(patrolId))
+    throw fail(400, "INVALID_PATROL", "Select a valid patrol.");
+  const patrol = await ownedPatrol(patrolId, rangerId);
+  if (patrol.status !== "IN_PROGRESS")
+    throw fail(
+      409,
+      "PATROL_NOT_ACTIVE",
+      "Live navigation requires an active patrol.",
+    );
+  const saved = await db().patrolWaypoint.findMany({
+    where: { patrolId },
+    orderBy: { order: "asc" },
+    select: {
+      id: true,
+      type: true,
+      order: true,
+      label: true,
+      latitude: true,
+      longitude: true,
+    },
+  });
+  if (
+    saved.length < 2 ||
+    saved.length > 100 ||
+    saved.some(
+      (p, i) =>
+        p.order !== i ||
+        !validCoordinate(p) ||
+        ![...DESTINATION_TYPES, "HIGH_RISK"].includes(p.type),
+    ) ||
+    saved[0].type !== "START" ||
+    saved.at(-1).type !== "END" ||
+    saved.filter((p) => p.type === "START").length !== 1 ||
+    saved.filter((p) => p.type === "END").length !== 1
+  )
+    throw fail(
+      422,
+      "INVALID_PATROL_ROUTE",
+      "A complete valid saved patrol route is required. Contact the Park Manager.",
+    );
+  const waypoints = saved.filter((p) => DESTINATION_TYPES.includes(p.type));
+  const zones = await riskZones.forPark(patrol.parkId);
+  const blocked = waypoints.find((p) =>
+    zones.some((z) => pointInGeometry(p, z.geometry)),
+  );
+  if (blocked)
+    throw Object.assign(
+      fail(
+        422,
+        "DESTINATION_IN_RISK_ZONE",
+        "A required patrol point is inside a known high-risk area. Review the planned route and contact the Park Manager.",
+      ),
+      { riskZones: zones, waypointId: blocked.id },
+    );
+  try {
+    return await ors.walkingRoute({
+      rangerId,
+      patrolId,
+      currentLocation: waypoints[0],
+      destination: waypoints.at(-1),
+      waypoints,
+      riskZones: zones,
+    });
+  } catch (error) {
+    if (error.navigationError) error.riskZones = zones;
+    throw error;
+  }
+};
 exports.locations = async (patrolId, rangerId) => {
   if (!validId(patrolId))
     throw fail(400, "INVALID_PATROL", "Select a valid patrol.");
