@@ -1,24 +1,35 @@
 import React from "react";
 import { Text, View } from "react-native";
+import Avatar from "../../components/common/Avatar";
+import { roleLabel } from "../../constants/registrationRoles";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
-import { useDemoAuth } from "../../hooks/useDemoAuth";
+import { useAuth } from "../../hooks/useAuth";
 import { styles } from "../../constants/theme";
 export default function ProfileScreen() {
-  const { user, leaveDemo } = useDemoAuth();
+  const { user, logout, isDemo } = useAuth();
   return (
     <Screen>
-      <Text style={styles.eyebrow}>DEMO RANGER PROFILE</Text>
+      <Avatar user={user} />
+      <Text style={styles.eyebrow}>
+        {isDemo ? "DEMO RANGER PROFILE" : "WILDGUARD LK / ACCOUNT"}
+      </Text>
       <Text accessibilityRole="header" style={styles.title}>
         {user.name}
       </Text>
       <View style={styles.card}>
         {Object.entries({
           Name: user.name,
-          "Ranger ID": user.id,
+          "Account ID": user.id,
           Email: user.email,
-          "Assigned park": user.park,
-          Role: user.role,
+          ...(isDemo ? { "Assigned park": user.park } : {}),
+          Role: roleLabel(user.role),
+          ...(!isDemo && user.role === "RANGER"
+            ? {
+                "Assigned Park / Ranger Area":
+                  user.park?.name || "Not assigned",
+              }
+            : {}),
         }).map(([label, value]) => (
           <View key={label} style={{ paddingVertical: 8, gap: 5 }}>
             <Text style={styles.muted}>{label}</Text>
@@ -27,9 +38,17 @@ export default function ProfileScreen() {
         ))}
       </View>
       <Text style={styles.muted}>
-        Sample profile only. Editing and account access will be added later.
+        {isDemo
+          ? "Sample profile only. Editing and account access will be added later."
+          : user.role === "RANGER"
+            ? "Your authenticated account details."
+            : `You are signed in as ${roleLabel(user.role)}. Your role's mobile dashboard is not implemented yet.`}
       </Text>
-      <Button title="Exit demo" secondary onPress={leaveDemo} />
+      <Button
+        title={isDemo ? "Exit demo" : "Logout"}
+        secondary
+        onPress={logout}
+      />
     </Screen>
   );
 }

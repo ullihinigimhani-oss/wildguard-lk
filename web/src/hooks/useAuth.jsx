@@ -9,22 +9,42 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let active = true;
     const token = sessionStorage.getItem(storageKey);
-    if (!token) { setLoading(false); return; }
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    api.get('/auth/me').then(({ data }) => { if (active) setUser(data.user); })
-      .catch(() => { sessionStorage.removeItem(storageKey); delete api.defaults.headers.common.Authorization; })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
-  useEffect(() => {
-    const id = api.interceptors.response.use(response => response, error => {
-      if (error.response?.status === 401) {
+    api
+      .get("/auth/me")
+      .then(({ data }) => {
+        if (active) setUser(data.user);
+      })
+      .catch(() => {
         sessionStorage.removeItem(storageKey);
         delete api.defaults.headers.common.Authorization;
-        setUser(null);
-      }
-      return Promise.reject(error);
-    });
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    const id = api.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (
+          error.response?.status === 401 ||
+          error.response?.data?.code === "ACCOUNT_NOT_APPROVED"
+        ) {
+          sessionStorage.removeItem(storageKey);
+          delete api.defaults.headers.common.Authorization;
+          setUser(null);
+        }
+        return Promise.reject(error);
+      },
+    );
     return () => api.interceptors.response.eject(id);
   }, []);
   async function login(credentials) {
@@ -42,11 +62,29 @@ export function AuthProvider({ children }) {
     if (!user) return;
     // Expiry is only a UI timer; the backend remains the authority on validity.
     let expiry;
-    try { expiry = JSON.parse(atob(sessionStorage.getItem(storageKey).split('.')[1].replaceAll('-', '+').replaceAll('_', '/'))).exp * 1000; }
-    catch { return; }
+    try {
+      expiry =
+        JSON.parse(
+          atob(
+            sessionStorage
+              .getItem(storageKey)
+              .split(".")[1]
+              .replaceAll("-", "+")
+              .replaceAll("_", "/"),
+          ),
+        ).exp * 1000;
+    } catch {
+      return;
+    }
     const timer = setTimeout(logout, Math.max(0, expiry - Date.now()));
     return () => clearTimeout(timer);
   }, [user]);
-  return <Context.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout }}>{children}</Context.Provider>;
+  return (
+    <Context.Provider
+      value={{ user, isAuthenticated: !!user, isLoading, login, logout }}
+    >
+      {children}
+    </Context.Provider>
+  );
 }
 export const useAuth = () => useContext(Context);

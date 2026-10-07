@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import Brand from "../../components/common/Brand";
+import ApprovalStatus from "../../components/common/ApprovalStatus";
+import { getApprovalNotice } from "../../utils/loginStatus";
 import { useAuth } from "../../hooks/useAuth";
 export default function Login() {
   const location = useLocation();
@@ -10,6 +12,7 @@ export default function Login() {
   const [visible, setVisible] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [approvalNotice, setApprovalNotice] = useState(null);
   const [message, setMessage] = useState("");
   if (isLoading) return <p role="status">Restoring your session…</p>;
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
@@ -22,13 +25,26 @@ export default function Login() {
     if (!password) next.password = "Enter your password.";
     setErrors(next);
     setMessage("");
+    setApprovalNotice(null);
     if (Object.keys(next).length) return;
     setLoading(true);
-    try { await login({ email, password }); }
-    catch (error) {
-      setMessage(error.response?.status === 401 ? 'Invalid email or password.' : 'Unable to log in. Please check your connection and try again.');
-      setPassword('');
-    } finally { setLoading(false); }
+    try {
+      await login({ email, password });
+    } catch (error) {
+      const notice = getApprovalNotice(error);
+      setApprovalNotice(notice);
+      if (!notice)
+        setMessage(
+          error.response?.status === 403
+            ? error.response.data?.message || "Your account is not approved."
+            : error.response?.status === 401
+              ? "Invalid email or password."
+              : "Unable to log in. Please check your connection and try again.",
+        );
+      setPassword("");
+    } finally {
+      setLoading(false);
+    }
   }
   return (
     <div className="login-page">
@@ -65,7 +81,9 @@ export default function Login() {
           <h2>Welcome back</h2>
           {location.state?.registered && (
             <p role="status" className="demo-notice">
-              Account created successfully. Log in with your new account.
+              {location.state?.approvalStatus === "PENDING"
+                ? "Account created. Your account is awaiting approval before you can sign in."
+                : "Account created successfully. Log in with your new account."}
             </p>
           )}
           <p className="muted">
@@ -121,6 +139,7 @@ export default function Login() {
             <button className="button primary full-width" disabled={loading}>
               {loading ? "Logging in..." : "Log in"}
             </button>
+            <ApprovalStatus notice={approvalNotice} />
             <p role="status" className="form-message">
               {message}
             </p>
@@ -128,7 +147,9 @@ export default function Login() {
           <p>
             New to the community? <Link to="/register">Create an account</Link>
           </p>
-          <p className="small muted">Your session lasts up to one hour in this browser tab.</p>
+          <p className="small muted">
+            Your session lasts up to one hour in this browser tab.
+          </p>
         </div>
         <footer className="login-footer">
           WildGuard LK · Conservation operations

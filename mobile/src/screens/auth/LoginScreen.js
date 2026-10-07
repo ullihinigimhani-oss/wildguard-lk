@@ -1,46 +1,68 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
 import { styles } from "../../constants/theme";
-import { useDemoAuth } from "../../hooks/useDemoAuth";
+import ApprovalStatus from "../../components/common/ApprovalStatus";
+import { getApprovalNotice } from "../../utils/loginStatus";
+import { useAuth } from "../../hooks/useAuth";
 export default function LoginScreen({ navigation, route }) {
-  const { enterDemo } = useDemoAuth();
+  const { login, enterDemo } = useAuth();
+  const pending = useRef(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [approvalNotice, setApprovalNotice] = useState(null);
   const [message, setMessage] = useState("");
   async function submit() {
+    if (pending.current) return;
     const next = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
       next.email = "Enter a valid email address.";
     if (!password) next.password = "Enter your password.";
     setErrors(next);
     setMessage("");
+    setApprovalNotice(null);
     if (Object.keys(next).length) return;
+    pending.current = true;
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    setLoading(false);
-    setPassword("");
-    setMessage(
-      "Staff sign-in is coming soon. No credentials were sent or saved. Use the demo preview below.",
-    );
+    try {
+      await login({ email, password });
+    } catch (error) {
+      const notice = getApprovalNotice(error);
+      setApprovalNotice(notice);
+      if (!notice)
+        setMessage(
+          error.response?.status === 403
+            ? error.response.data?.message || "Your account is not approved."
+            : error.response?.status === 401
+              ? "Invalid email or password."
+              : error.response?.status === 400
+                ? "Please check your email and password."
+                : "We couldn't sign you in. Please try again.",
+        );
+    } finally {
+      setPassword("");
+      setLoading(false);
+      pending.current = false;
+    }
   }
   return (
     <Screen>
-      {route?.params?.registered && <Text accessibilityLiveRegion="polite" style={styles.notice}>Account created successfully. Sign-in is coming soon; your community account has been saved.</Text>}
-      <Text style={styles.eyebrow}>WILDGUARD LK / RANGER WORKSPACE</Text>
-      <Text accessibilityRole="header" style={styles.title}>
-        Ready for the field?
-      </Text>
-      <Text style={styles.muted}>Sign in to your ranger workspace.</Text>
-      <View style={styles.notice}>
-        <Text style={styles.muted}>
-          Authentication UI preview. Please do not enter real credentials.
+      {route?.params?.registered && (
+        <Text accessibilityLiveRegion="polite" style={styles.notice}>
+          {route?.params?.approvalStatus === "PENDING"
+            ? "Account created. Your account is awaiting approval before you can sign in."
+            : "Account created successfully. Login to continue."}
         </Text>
-      </View>
+      )}
+      <Text style={styles.eyebrow}>WILDGUARD LK</Text>
+      <Text accessibilityRole="header" style={styles.title}>
+        Welcome Back
+      </Text>
+      <Text style={styles.muted}>Sign in to continue to WildGuard LK</Text>
       <View>
         <Text style={styles.label}>Email address</Text>
         <TextInput
@@ -48,10 +70,11 @@ export default function LoginScreen({ navigation, route }) {
           autoCapitalize="none"
           keyboardType="email-address"
           autoComplete="username"
+          editable={!loading}
           value={email}
           onChangeText={setEmail}
           style={styles.input}
-          placeholder="you@example.test"
+          placeholder="you@example.com"
           placeholderTextColor="#627267"
         />
         {errors.email && (
@@ -67,6 +90,7 @@ export default function LoginScreen({ navigation, route }) {
           secureTextEntry={!visible}
           autoCapitalize="none"
           autoComplete="current-password"
+          editable={!loading}
           value={password}
           onChangeText={setPassword}
           style={styles.input}
@@ -92,11 +116,20 @@ export default function LoginScreen({ navigation, route }) {
           </Text>
         )}
       </View>
-      <Text style={styles.muted}>
-        Remember me · Available with real authentication. This preview does not
-        save sessions.
-      </Text>
-      <Button title="Log in" loading={loading} onPress={submit} />
+      <Pressable
+        accessibilityRole="button"
+        disabled={loading}
+        onPress={() =>
+          setMessage(
+            "Password reset is not available yet. Please contact your account administrator for help.",
+          )
+        }
+        style={{ minHeight: 48, justifyContent: "center" }}
+      >
+        <Text style={styles.muted}>Forgot Password</Text>
+      </Pressable>
+      <Button title="Login" loading={loading} onPress={submit} />
+      <ApprovalStatus notice={approvalNotice} />
       {!!message && (
         <Text accessibilityLiveRegion="polite" style={styles.muted}>
           {message}
@@ -104,16 +137,21 @@ export default function LoginScreen({ navigation, route }) {
       )}
       <Button
         title="Explore ranger demo"
+        disabled={loading}
         secondary
         onPress={() => {
           setPassword("");
           enterDemo();
         }}
       />
-      <Button title="Create a community account" secondary onPress={() => navigation.navigate("Register")} />
+      <Button
+        title="Create Account"
+        secondary
+        disabled={loading}
+        onPress={() => navigation.navigate("Register")}
+      />
       <Text style={styles.muted}>
-        Staff accounts are provisioned by authorized personnel. No public staff
-        registration is available.
+        Staff accounts require verification before sign-in.
       </Text>
     </Screen>
   );

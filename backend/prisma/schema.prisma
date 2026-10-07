@@ -18,6 +18,12 @@ enum UserRole {
   COMMUNITY_USER
 }
 
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum PatrolStatus {
   SCHEDULED
   IN_PROGRESS
@@ -71,9 +77,17 @@ model User {
   phone        String?
   role         UserRole
   isActive     Boolean  @default(true)
+  approvalStatus ApprovalStatus @default(APPROVED)
+  profileImageUrl String?
+  rejectionReason String?
+  reviewedAt DateTime?
+  reviewedById String?
 
   parkId String?
-  park   Park?   @relation(fields: [parkId], references: [id])
+  park   Park?   @relation("AssignedPark", fields: [parkId], references: [id])
+
+  requestedParkId String?
+  requestedPark Park? @relation("RequestedPark", fields: [requestedParkId], references: [id])
 
   assignedPatrols Patrol[] @relation("AssignedRanger")
   createdPatrols  Patrol[] @relation("CreatedByManager")
@@ -87,7 +101,9 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@index([parkId])
+  @@index([requestedParkId])
   @@index([role])
+  @@index([approvalStatus, role, createdAt])
 }
 
 model Park {
@@ -96,7 +112,8 @@ model Park {
   location    String?
   description String?
 
-  users       User[]
+  users       User[] @relation("AssignedPark")
+  requestedUsers User[] @relation("RequestedPark")
   patrols     Patrol[]
   incidents   Incident[]
   riskZones   RiskZone[]

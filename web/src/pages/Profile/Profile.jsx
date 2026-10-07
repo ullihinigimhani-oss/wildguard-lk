@@ -1,9 +1,11 @@
+import Avatar from "../../components/common/Avatar";
+import { roleLabel } from "../../constants/roles";
 import { useAuth } from "../../hooks/useAuth";
 export default function Profile() {
   const { user } = useAuth();
   return (
     <section className="panel profile-panel">
-      <span className="avatar large-avatar">{user.name.slice(0, 1)}</span>
+      <Avatar user={user} large />
       <span className="eyebrow">MY PROFILE</span>
       <h2>{user.name}</h2>
       <p className="muted">Your conservation workspace identity.</p>
@@ -11,8 +13,15 @@ export default function Profile() {
         {Object.entries({
           Name: user.name,
           Email: user.email,
-          Role: user.role,
-          Phone: user.phone || 'Not provided',
+          Role: roleLabel(user.role),
+          ...(user.role === "RANGER"
+            ? {
+                "Assigned Park / Ranger Area":
+                  user.park?.name || "Not assigned",
+              }
+            : {}),
+          "Approval status": user.approvalStatus || "APPROVED",
+          Phone: user.phone || "Not provided",
         }).map(([label, value]) => (
           <div key={label}>
             <dt>{label}</dt>
@@ -20,9 +29,7 @@ export default function Profile() {
           </div>
         ))}
       </dl>
-      <div className="demo-notice">
-        Account editing is not available yet.
-      </div>
+      <div className="demo-notice">Account editing is not available yet.</div>
     </section>
   );
 }

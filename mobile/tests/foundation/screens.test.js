@@ -9,7 +9,15 @@ import { DemoAuthProvider, useDemoAuth } from "../../src/hooks/useDemoAuth";
 import LoginScreen from "../../src/screens/auth/LoginScreen";
 import HomeScreen from "../../src/screens/home/HomeScreen";
 import SyncScreen from "../../src/screens/placeholders/SyncScreen";
+jest.mock("../../src/services/authApi", () => ({
+  loginAccount: jest.fn().mockRejectedValue({ response: { status: 401 } }),
+  getSessionUser: jest.fn(),
+}));
 jest.mock("../../src/services/api", () => ({
+  api: {
+    defaults: { headers: { common: {} } },
+    interceptors: { response: { use: jest.fn(), eject: jest.fn() } },
+  },
   getHealth: jest
     .fn()
     .mockResolvedValue({ success: true, database: "connected" }),
@@ -22,7 +30,7 @@ function Preview() {
     <LoginScreen />
   );
 }
-test("ranger login renders, validates and toggles password visibility", () => {
+test("common login renders, validates and toggles password visibility", () => {
   render(
     <DemoAuthProvider>
       <LoginScreen />
@@ -30,13 +38,13 @@ test("ranger login renders, validates and toggles password visibility", () => {
   );
   expect(screen.getByLabelText("Email address")).toBeTruthy();
   expect(screen.getByLabelText("Password").props.secureTextEntry).toBe(true);
-  fireEvent.press(screen.getByLabelText("Log in"));
+  fireEvent.press(screen.getByLabelText("Login"));
   expect(screen.getByText("Enter a valid email address.")).toBeTruthy();
   expect(screen.getByText("Enter your password.")).toBeTruthy();
   fireEvent.press(screen.getByLabelText("Show password"));
   expect(screen.getByLabelText("Password").props.secureTextEntry).toBe(false);
 });
-test("credentials cannot authenticate and are cleared after UI availability check", async () => {
+test("invalid credentials are rejected and the password is cleared", async () => {
   render(
     <DemoAuthProvider>
       <Preview />
@@ -47,8 +55,8 @@ test("credentials cannot authenticate and are cleared after UI availability chec
     "person@example.test",
   );
   fireEvent.changeText(screen.getByLabelText("Password"), "sample-only");
-  fireEvent.press(screen.getByLabelText("Log in"));
-  await screen.findByText(/Staff sign-in is coming soon/);
+  fireEvent.press(screen.getByLabelText("Login"));
+  await screen.findByText("Invalid email or password.");
   expect(screen.getByLabelText("Password").props.value).toBe("");
 });
 test("explicit demo entry renders ranger home and routes field actions", async () => {
@@ -75,3 +83,45 @@ test("sync previews are clearly simulated and switch state", () => {
   expect(screen.getByText("Pending Sync: 3 sample items")).toBeTruthy();
   expect(screen.getByText("SIMULATED SYNC STATUS")).toBeTruthy();
 });
+
+test.each([
+  [
+    "PENDING",
+    "Account Pending Approval",
+    "Your account has not been approved yet. Please wait for a Park Manager to verify your account. Once approved, you can sign in to WildGuard LK.",
+  ],
+  [
+    "REJECTED",
+    "Account Not Approved",
+    "Your account request has been rejected. Please contact the Park Manager if you need further assistance.",
+  ],
+])(
+  "approval restriction shows professional status for %s",
+  async (approvalStatus, title, message) => {
+    const {
+      loginAccount,
+      getSessionUser,
+    } = require("../../src/services/authApi");
+    loginAccount.mockRejectedValueOnce({
+      response: {
+        status: 403,
+        data: { code: "ACCOUNT_NOT_APPROVED", approvalStatus },
+      },
+    });
+    render(
+      <DemoAuthProvider>
+        <LoginScreen />
+      </DemoAuthProvider>,
+    );
+    fireEvent.changeText(
+      screen.getByLabelText("Email address"),
+      "staff@example.test",
+    );
+    fireEvent.changeText(screen.getByLabelText("Password"), "Testing123!");
+    fireEvent.press(screen.getByLabelText("Login"));
+    expect(await screen.findByText(title)).toBeTruthy();
+    expect(screen.getByText(message)).toBeTruthy();
+    expect(getSessionUser).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Password").props.value).toBe("");
+  },
+);
