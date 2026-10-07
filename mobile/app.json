@@ -18,10 +18,17 @@
           "isAndroidBackgroundLocationEnabled": false,
           "isAndroidForegroundServiceEnabled": false
         }
-      ]
+      ],
+      "expo-font"
     ],
-    "ios": { "supportsTablet": true },
-    "android": { "package": "lk.wildguard.prototype" },
-    "web": { "favicon": "./assets/images/wildguard-logo.png" }
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "lk.wildguard.prototype"
+    },
+    "web": {
+      "favicon": "./assets/images/wildguard-logo.png"
+    }
   }
 }

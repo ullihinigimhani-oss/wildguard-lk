@@ -1,5 +1,6 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "../../components/common/Typography";
 import Avatar from "../../components/common/Avatar";
 import { roleLabel } from "../../constants/registrationRoles";
 import Screen from "../../components/common/Screen";

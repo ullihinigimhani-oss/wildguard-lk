@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Image, Text, View } from "react-native";
+import { Image, View } from "react-native";
+import { Text } from "./Typography";
 export default function Avatar({ user, size = 80 }) {
   const [failed, setFailed] = useState(false);
   return user.profileImageUrl && !failed ? (
@@ -20,7 +21,9 @@ export default function Avatar({ user, size = 80 }) {
         justifyContent: "center",
       }}
     >
-      <Text style={{ fontSize: size * 0.35, color: "#163e2e", fontWeight: "600" }}>
+      <Text
+        style={{ fontSize: size * 0.35, color: "#163e2e", fontWeight: "600" }}
+      >
         {user.name?.slice(0, 1) || "?"}
       </Text>
     </View>

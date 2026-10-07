@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Platform, Text, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
+import { Text } from "../../components/common/Typography";
 import { useIsFocused } from "@react-navigation/native";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
