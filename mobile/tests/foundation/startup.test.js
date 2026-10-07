@@ -37,21 +37,22 @@ test("Get Started clears onboarding history and opens Welcome", () => {
   expect(navigation.goBack).toHaveBeenCalledTimes(1);
 });
 
-test("welcome uses the existing community and ranger authentication routes", () => {
+test("welcome contains only the hero and uses the existing authentication routes", () => {
   show(WelcomeScreen);
-  const communityButtons = [
-    ...screen.getAllByRole("button", { name: "Join the Community" }),
-    screen.getByRole("button", { name: "Get Started" }),
-  ];
-  expect(communityButtons).toHaveLength(3);
+  const communityButtons = screen.getAllByRole("button", { name: "Join the Community" });
+  expect(communityButtons).toHaveLength(1);
   communityButtons.forEach(button => {
     fireEvent.press(button);
     expect(navigation.navigate).toHaveBeenLastCalledWith("Register");
   });
   const rangerButtons = screen.getAllByRole("button", { name: "Login" });
-  expect(rangerButtons).toHaveLength(3);
+  expect(rangerButtons).toHaveLength(1);
   rangerButtons.forEach(button => {
     fireEvent.press(button);
     expect(navigation.navigate).toHaveBeenLastCalledWith("Login");
   });
+  expect(screen.getAllByRole("button")).toHaveLength(2);
+  expect(screen.queryByText("OUR MISSION")).toBeNull();
+  expect(screen.queryByText("One platform. Better conservation.")).toBeNull();
+  expect(screen.queryByText("University Prototype")).toBeNull();
 });
