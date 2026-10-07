@@ -40,6 +40,16 @@ exports.findRanger = (id) =>
   });
 exports.createPatrol = (data) =>
   db().patrol.create({ data, select: patrolSelect });
+exports.findPatrols = (where, page) => Promise.all([
+  db().patrol.findMany({
+    where, select: patrolSelect, take: 25, skip: (page - 1) * 25,
+    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+  }),
+  db().patrol.count({ where }),
+]);
+exports.findPatrolById = (id) => db().patrol.findUnique({
+  where: { id }, select: patrolSelect,
+});
 const rangerPatrolSelect = {
   id: true, routeName: true, description: true, scheduledDate: true,
   startTime: true, endTime: true, actualStartTime: true, actualEndTime: true,
