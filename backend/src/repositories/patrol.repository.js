@@ -40,3 +40,12 @@ exports.findRanger = (id) =>
   });
 exports.createPatrol = (data) =>
   db().patrol.create({ data, select: patrolSelect });
+exports.findRangerPatrols = (rangerId) => db().patrol.findMany({
+  where: { rangerId, status: { in: ["SCHEDULED", "IN_PROGRESS", "COMPLETED"] } },
+  select: {
+    id: true, routeName: true, description: true, scheduledDate: true,
+    startTime: true, endTime: true, status: true, patrolType: true, priority: true,
+    park: { select: { id: true, name: true } },
+  },
+  orderBy: [{ scheduledDate: "desc" }, { startTime: "asc" }, { id: "asc" }],
+});

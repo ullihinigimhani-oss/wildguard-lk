@@ -1,5 +1,12 @@
 const service = require("../services/patrol.service");
 const { validatePatrolCreation } = require("../validators/patrol.validator");
+exports.listMine = async (req, res, next) => {
+  try {
+    res.set("Cache-Control", "no-store").json({
+      success: true, patrols: await service.getRangerPatrols(req.user.id),
+    });
+  } catch (error) { next(error); }
+};
 exports.listAssignableRangers = async (req, res, next) => {
   try {
     res

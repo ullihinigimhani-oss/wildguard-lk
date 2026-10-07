@@ -6,6 +6,7 @@ const invalid = (fields) =>
     fields,
   });
 exports.getAssignableRangers = () => repository.findAssignableRangers();
+exports.getRangerPatrols = (rangerId) => repository.findRangerPatrols(rangerId);
 exports.createPatrol = async (input, createdById) => {
   const park = await repository.findPark(input.parkId);
   if (!park)

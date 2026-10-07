@@ -28,6 +28,7 @@ export default function ProfileScreen() {
             ? {
                 "Assigned Park / Ranger Area":
                   user.park?.name || "Not assigned",
+                "Approval status": user.approvalStatus,
               }
             : {}),
         }).map(([label, value]) => (
