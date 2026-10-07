@@ -1,6 +1,7 @@
 import Users from "../pages/Users/Users";
 import Register from "../pages/Register/Register";
 import PatrolManagement from "../pages/PatrolManagement/PatrolManagement";
+import Reporting from "../pages/Reporting/Reporting";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import OperationsLayout from "../layouts/OperationsLayout";
@@ -53,11 +54,18 @@ export default function AppRoutes() {
               element={<Placeholder title="Community Reports" />}
             />
           </Route>
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["RESEARCHER"]} />
+            }
+          >
+            <Route path="/reporting" element={<Reporting />} />
+          </Route>
           <Route element={<ProtectedRoute />}>
             {modules
               .filter(
                 (item) =>
-                  !["users", "patrols", "incidents", "community-reports"].includes(
+                  !["users", "patrols", "incidents", "community-reports", "reporting"].includes(
                     item.path,
                   ),
               )
