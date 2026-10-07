@@ -1,7 +1,9 @@
 import { NavLink } from "react-router-dom";
 import Brand from "../common/Brand";
 import { modules } from "../../constants/navigation";
+import { useAuth } from "../../hooks/useAuth";
 export default function Sidebar({ open, onClose }) {
+  const { user } = useAuth();
   return (
     <>
       {open && (
@@ -24,12 +26,14 @@ export default function Sidebar({ open, onClose }) {
           <NavLink to="/dashboard" onClick={onClose}>
             <span aria-hidden="true">▦</span>Dashboard
           </NavLink>
-          {modules.map((item) => (
-            <NavLink key={item.path} to={`/${item.path}`} onClick={onClose}>
-              <span aria-hidden="true">{item.icon}</span>
-              {item.title}
-            </NavLink>
-          ))}
+          {modules
+            .filter((item) => !item.roles || item.roles.includes(user?.role))
+            .map((item) => (
+              <NavLink key={item.path} to={`/${item.path}`} onClick={onClose}>
+                <span aria-hidden="true">{item.icon}</span>
+                {item.title}
+              </NavLink>
+            ))}
         </nav>
         <div className="sidebar-footer">
           <span className="park-dot" /> Conservation starts here.

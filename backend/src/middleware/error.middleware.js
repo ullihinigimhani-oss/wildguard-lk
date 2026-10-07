@@ -17,6 +17,11 @@ function errorHandler(error, req, res, next) {
       .status(error.status)
       .json({ success: false, message: error.message, errors: error.fields });
   }
+  if (error.validationError && error.status === 400) {
+    return res
+      .status(400)
+      .json({ success: false, message: error.message, errors: error.fields });
+  }
   const status = error.status >= 400 && error.status < 500 ? error.status : 500;
   const message =
     status === 400

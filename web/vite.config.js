@@ -6,6 +6,9 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: "./tests/setup.js",
-    include: ["tests/foundation/**/*.test.jsx"],
+    include: [
+      "tests/foundation/**/*.test.jsx",
+      "tests/integration/patrolManagement.test.jsx",
+    ],
   },
 });
