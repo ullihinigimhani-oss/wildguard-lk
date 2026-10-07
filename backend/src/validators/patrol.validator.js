@@ -41,6 +41,7 @@ function coordinate(value) {
         : NaN;
   return Number.isFinite(number) ? number : NaN;
 }
+const validatePlannedRoute = require("./plannedRoute.validator");
 function validatePatrolCreation(body) {
   const input =
     body && typeof body === "object" && !Array.isArray(body) ? body : {};
@@ -118,6 +119,9 @@ function validatePatrolCreation(body) {
     (longitude !== null && (longitude < -180 || longitude > 180))
   )
     fields.longitude = "Longitude must be a number between -180 and 180.";
+  let points;
+  try { points = validatePlannedRoute(input.plannedRoute); }
+  catch (error) { fields.plannedRoute = error.message; }
   if (Object.keys(fields).length) throw fail(fields);
   return {
     routeName,
@@ -129,9 +133,11 @@ function validatePatrolCreation(body) {
     description: text(input.instructions_notes) || null,
     patrolType,
     priority,
-    startLocation: text(input.start_location) || null,
-    latitude,
-    longitude,
+    startLocation: points[0].label || "Start Point",
+    latitude: points[0].latitude,
+    longitude: points[0].longitude,
+    // Prisma nested writes commit the assignment and every waypoint atomically.
+    waypoints: { create: points },
   };
 }
 function validatePatrolFilters(query) {

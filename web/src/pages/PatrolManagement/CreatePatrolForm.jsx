@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import PatrolRoutePlanner from "../../components/patrol/PatrolRoutePlanner";
 import { useRef, useState } from "react";
 import ParkSelect from "../../components/common/ParkSelect";
 import RangerSelect from "../../components/common/RangerSelect";
@@ -39,26 +41,11 @@ const formFields = [
     required: true,
     options: patrolTypes,
   },
-  { key: "priority", label: "Priority", required: true, options: patrolPriorities },
   {
-    key: "start_location",
-    label: "Starting Point",
-    span: true,
-    placeholder: "e.g. Main gate",
-  },
-  {
-    key: "latitude",
-    label: "Latitude",
-    type: "number",
-    step: "any",
-    placeholder: "e.g. 7.54",
-  },
-  {
-    key: "longitude",
-    label: "Longitude",
-    type: "number",
-    step: "any",
-    placeholder: "e.g. 80.77",
+    key: "priority",
+    label: "Priority",
+    required: true,
+    options: patrolPriorities,
   },
   { kind: "notes" },
 ];
@@ -214,12 +201,23 @@ export default function CreatePatrolForm({ onCreated }) {
           </div>
         );
       })}
+      <PatrolRoutePlanner
+        points={values.plannedRoute}
+        onChange={(points) => update("plannedRoute", points)}
+        disabled={loading}
+        error={errors.plannedRoute}
+      />
       {message && (
         <p role="alert" className="field-error patrol-span">
           {message}
         </p>
       )}
       <div className="patrol-actions patrol-span">
+        {!loading && (
+          <Link className="button secondary" to="/patrols">
+            Cancel
+          </Link>
+        )}
         <button className="button primary" disabled={loading}>
           {loading ? "Creating patrol…" : "Create Patrol"}
         </button>

@@ -1,9 +1,11 @@
+const plannedRoute = [{ type: "START", order: 0, latitude: 7.5, longitude: 80.7, label: "Main gate", note: null }, { type: "END", order: 1, latitude: 7.6, longitude: 80.8, label: "End Point", note: null }];
 const {
   validatePatrolCreation,
   validatePatrolFilters,
 } = require("../../../src/validators/patrol.validator");
 
 const valid = () => ({
+  plannedRoute,
   patrol_title: "Northern boundary sweep",
   park_ranger_area: "park-1",
   assigned_ranger: "ranger-1",
@@ -31,6 +33,7 @@ function expectFailure(overrides, field) {
 test("normalizes a complete payload", () => {
   const result = validatePatrolCreation(valid());
   expect(result).toEqual({
+    waypoints: { create: plannedRoute },
     routeName: "Northern boundary sweep",
     parkId: "park-1",
     rangerId: "ranger-1",
@@ -47,6 +50,7 @@ test("normalizes a complete payload", () => {
 });
 test("applies defaults and nulls for optional fields", () => {
   const result = validatePatrolCreation({
+    plannedRoute,
     patrol_title: "  Morning loop  ",
     park_ranger_area: " park-1 ",
     assigned_ranger: " ranger-1 ",
@@ -66,19 +70,20 @@ test("applies defaults and nulls for optional fields", () => {
   expect(result.patrolType).toBe("ROUTINE");
   expect(result.priority).toBe("MEDIUM");
   expect(result.description).toBeNull();
-  expect(result.startLocation).toBeNull();
-  expect(result.latitude).toBeNull();
-  expect(result.longitude).toBeNull();
+  expect(result.startLocation).toBe("Main gate");
+  expect(result.latitude).toBe(7.5);
+  expect(result.longitude).toBe(80.7);
 });
-test("accepts coordinate strings and leaves missing coordinates null", () => {
+test("derives starting location from the planned route", () => {
   const result = validatePatrolCreation({
     ...valid(),
     latitude: "7.5",
     longitude: -80.7,
   });
   expect(result.latitude).toBe(7.5);
-  expect(result.longitude).toBe(-80.7);
+  expect(result.longitude).toBe(80.7);
   const omitted = validatePatrolCreation({
+    plannedRoute,
     patrol_title: "Short loop",
     park_ranger_area: "park-1",
     assigned_ranger: "ranger-1",
@@ -86,9 +91,9 @@ test("accepts coordinate strings and leaves missing coordinates null", () => {
     start_time: "06:30",
     expected_end_time: "07:00",
   });
-  expect(omitted.latitude).toBeNull();
-  expect(omitted.longitude).toBeNull();
-  expect(omitted.startLocation).toBeNull();
+  expect(omitted.latitude).toBe(7.5);
+  expect(omitted.longitude).toBe(80.7);
+  expect(omitted.startLocation).toBe("Main gate");
   expect(omitted.description).toBeNull();
 });
 test.each([

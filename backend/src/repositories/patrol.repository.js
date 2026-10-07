@@ -1,6 +1,24 @@
 // Lazy connection keeps isolated tests independent of database setup.
 const db = () => require("../config/database");
+const routeSelect = {
+  where: { type: { not: null }, order: { not: null } },
+  orderBy: { order: "asc" },
+  select: {
+    type: true,
+    order: true,
+    latitude: true,
+    longitude: true,
+    label: true,
+    note: true,
+  },
+};
+const withRoute = (patrol) => {
+  if (!patrol) return patrol;
+  const { waypoints, ...details } = patrol;
+  return { ...details, plannedRoute: waypoints || [] };
+};
 const patrolSelect = {
+  waypoints: routeSelect,
   id: true,
   routeName: true,
   description: true,
@@ -39,33 +57,57 @@ exports.findRanger = (id) =>
     select: { id: true, role: true, approvalStatus: true, isActive: true },
   });
 exports.createPatrol = (data) =>
-  db().patrol.create({ data, select: patrolSelect });
-exports.findPatrols = (where, page) => Promise.all([
-  db().patrol.findMany({
-    where, select: patrolSelect, take: 25, skip: (page - 1) * 25,
-    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-  }),
-  db().patrol.count({ where }),
-]);
-exports.findPatrolById = (id) => db().patrol.findUnique({
-  where: { id }, select: patrolSelect,
-});
+  db().patrol.create({ data, select: patrolSelect }).then(withRoute);
+exports.findPatrols = (where, page) =>
+  Promise.all([
+    db().patrol.findMany({
+      where,
+      select: patrolSelect,
+      take: 25,
+      skip: (page - 1) * 25,
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+    }),
+    db().patrol.count({ where }),
+  ]).then(([patrols, total]) => [patrols.map(withRoute), total]);
+exports.findPatrolById = (id) =>
+  db()
+    .patrol.findUnique({
+      where: { id },
+      select: patrolSelect,
+    })
+    .then(withRoute);
 const rangerPatrolSelect = {
-  id: true, routeName: true, description: true, scheduledDate: true,
-  startTime: true, endTime: true, actualStartTime: true, actualEndTime: true,
-  status: true, patrolType: true, priority: true, startLocation: true,
+  id: true,
+  routeName: true,
+  description: true,
+  scheduledDate: true,
+  startTime: true,
+  endTime: true,
+  actualStartTime: true,
+  actualEndTime: true,
+  status: true,
+  patrolType: true,
+  priority: true,
+  startLocation: true,
   park: { select: { id: true, name: true } },
   ranger: { select: { name: true } },
 };
-exports.findRangerPatrols = (rangerId) => db().patrol.findMany({
-  where: { rangerId },
-  select: rangerPatrolSelect,
-  orderBy: [{ scheduledDate: "desc" }, { startTime: "asc" }, { id: "asc" }],
-});
-exports.findRangerPatrol = (id, rangerId) => db().patrol.findFirst({
-  where: { id, rangerId }, select: rangerPatrolSelect,
-});
-exports.transitionRangerPatrol = (id, rangerId, status, data) => db().patrol.updateMany({
-  // Atomic compare-and-set prevents parallel/retried requests rewriting actual times.
-  where: { id, rangerId, status }, data,
-});
+exports.findRangerPatrols = (rangerId) =>
+  db().patrol.findMany({
+    where: { rangerId },
+    select: rangerPatrolSelect,
+    orderBy: [{ scheduledDate: "desc" }, { startTime: "asc" }, { id: "asc" }],
+  });
+exports.findRangerPatrol = (id, rangerId) =>
+  db()
+    .patrol.findFirst({
+      where: { id, rangerId },
+      select: { ...rangerPatrolSelect, waypoints: routeSelect },
+    })
+    .then(withRoute);
+exports.transitionRangerPatrol = (id, rangerId, status, data) =>
+  db().patrol.updateMany({
+    // Atomic compare-and-set prevents parallel/retried requests rewriting actual times.
+    where: { id, rangerId, status },
+    data,
+  });

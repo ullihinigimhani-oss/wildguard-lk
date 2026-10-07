@@ -190,7 +190,19 @@ model PatrolLocation {
   @@index([patrolId])
 }
 
+enum PatrolWaypointType {
+  START
+  CHECKPOINT
+  HIGH_RISK
+  OBSERVATION
+  END
+}
+
 model PatrolWaypoint {
+  // Nullable additions preserve historical, unclassified waypoint rows.
+  type       PatrolWaypointType?
+  order      Int?
+  label      String?
   id         String   @id @default(cuid())
   latitude   Float
   longitude  Float
@@ -201,6 +213,7 @@ model PatrolWaypoint {
   patrol   Patrol @relation(fields: [patrolId], references: [id], onDelete: Cascade)
 
   @@index([patrolId])
+  @@unique([patrolId, order])
 }
 
 // ======================================================

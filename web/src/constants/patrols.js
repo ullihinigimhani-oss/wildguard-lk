@@ -1,3 +1,4 @@
+import { routeError, routePayload } from "../components/patrol/routePlanning";
 export const patrolTypes = [
   ["ROUTINE", "Routine patrol"],
   ["ANTI_POACHING", "Anti-poaching operation"],
@@ -26,6 +27,7 @@ export const statusBadge = (value) =>
 export const priorityBadge = (value) =>
   "badge badge-" + String(value).toLowerCase();
 export const initialPatrol = {
+  plannedRoute: [],
   patrol_title: "",
   park_ranger_area: "",
   assigned_ranger: "",
@@ -101,12 +103,15 @@ export function validatePatrol(values) {
   const notes = String(values.instructions_notes || "");
   if (notes.length > 2000)
     errors.instructions_notes = "Use up to 2000 characters for instructions.";
+  const routeValidation = routeError(values.plannedRoute);
+  if (routeValidation) errors.plannedRoute = routeValidation;
   return errors;
 }
 export function patrolPayload(values) {
   const location = String(values.start_location || "").trim();
   const notes = String(values.instructions_notes || "").trim();
   return {
+    plannedRoute: routePayload(values.plannedRoute),
     patrol_title: String(values.patrol_title || "").trim(),
     park_ranger_area: values.park_ranger_area,
     assigned_ranger: values.assigned_ranger,

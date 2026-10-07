@@ -1,3 +1,4 @@
+const plannedRoute = [{ type: "START", order: 0, latitude: 7.5, longitude: 80.7, label: "Main gate", note: null }, { type: "END", order: 1, latitude: 7.6, longitude: 80.8, label: "End Point", note: null }];
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 jest.mock("../../src/config/database", () => ({
@@ -22,6 +23,7 @@ const token = (id) =>
     expiresIn: "1h",
   });
 const payload = (overrides) => ({
+  plannedRoute,
   patrol_title: "Northern boundary sweep",
   park_ranger_area: "park-a",
   assigned_ranger: "ranger-1",
@@ -70,6 +72,7 @@ beforeEach(() => {
     park: { id: "park-a", name: "Yala National Park" },
     createdBy: { id: "manager", name: "Existing Manager" },
     ...data,
+    waypoints: data.waypoints.create,
   }));
   db.patrol.findMany.mockResolvedValue([]);
   db.patrol.findUnique.mockResolvedValue(null);
@@ -188,9 +191,10 @@ test("creates a scheduled patrol with defaults for optional fields", async () =>
     description: null,
     patrolType: "ROUTINE",
     priority: "MEDIUM",
-    startLocation: null,
-    latitude: null,
-    longitude: null,
+    startLocation: "Main gate",
+    latitude: 7.5,
+    longitude: 80.7,
+    waypoints: { create: plannedRoute },
     status: "SCHEDULED",
     createdById: "manager",
   });
@@ -263,6 +267,16 @@ test("unknown park returns a field error", async () => {
   expect(db.patrol.create).not.toHaveBeenCalled();
 });
 test.each([
+  undefined, [], [plannedRoute[1]], [plannedRoute[0]],
+  [plannedRoute[0], {...plannedRoute[0], order:1}, {...plannedRoute[1], order:2}],
+  [plannedRoute[0], {...plannedRoute[1], order:7}],
+  [{...plannedRoute[0], latitude:91}, plannedRoute[1]],
+].map(route => [route]))("invalid route %j returns a friendly field error without creating a patrol", async route => {
+  const {body} = await request(app).post("/api/patrols").set("Authorization", asManager()).send(payload({plannedRoute:route})).expect(400);
+  expect(body.errors.plannedRoute).toBeTruthy();
+  expect(db.patrol.create).not.toHaveBeenCalled();
+});
+test.each([
   ["missing ranger", null],
   ["pending ranger", { approvalStatus: "PENDING" }],
   ["inactive ranger", { isActive: false }],
@@ -314,7 +328,7 @@ test("manager lists patrols with pagination metadata and latest status", async (
     .expect(200);
   expect(body).toEqual({
     success: true,
-    patrols: [{ id: "patrol-1", status: "IN_PROGRESS" }],
+    patrols: [{ id: "patrol-1", status: "IN_PROGRESS", plannedRoute: [] }],
     total: 26,
     page: 1,
     pageSize: 25,

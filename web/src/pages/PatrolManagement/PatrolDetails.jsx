@@ -1,3 +1,4 @@
+import PatrolRoutePlanner from "../../components/patrol/PatrolRoutePlanner";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getPatrol } from "../../services/patrolApi";
@@ -14,6 +15,7 @@ const formatTime = (value) =>
     ? new Date(value).toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: "Asia/Colombo",
       })
     : "—";
 export default function PatrolDetails() {
@@ -146,6 +148,13 @@ export default function PatrolDetails() {
               <dd>{patrol.description || "—"}</dd>
             </div>
           </dl>
+          <PatrolRoutePlanner
+            points={(patrol.plannedRoute || []).map((p) => ({
+              ...p,
+              id: String(p.order),
+            }))}
+            readOnly
+          />
           <p className="patrol-details-actions">
             <Link className="button primary" to="/patrols/new">
               Create Patrol

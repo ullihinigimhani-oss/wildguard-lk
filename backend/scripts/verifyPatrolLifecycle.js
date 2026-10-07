@@ -39,14 +39,34 @@ async function verify() {
       assert.equal(me.body.user.park.id, park.id);
       checks.push('Approved login and confirmed park');
       const today = localDateKey();
-      const create = async day => {
-        const response = await request(app).post('/api/patrols').set('Authorization', manager).send({ patrol_title: 'Transaction-only lifecycle verification', park_ranger_area: park.id, assigned_ranger: accounts[1].id, patrol_date: day, start_time: '00:00', expected_end_time: '23:59', instructions_notes: 'Never committed; verification transaction rolls back.' }).expect(201);
+      const route = types => types.map((type, order) => ({ type, order, latitude: 7.5 + order / 100, longitude: 80.7 + order / 100, label: type + ' ' + order, note: type === 'HIGH_RISK' ? 'Check snare locations' : null }));
+      const create = async (day, plannedRoute = route(['START', 'END'])) => {
+        const response = await request(app).post('/api/patrols').set('Authorization', manager).send({ plannedRoute, patrol_title: 'Transaction-only lifecycle verification', park_ranger_area: park.id, assigned_ranger: accounts[1].id, patrol_date: day, start_time: '00:00', expected_end_time: '23:59', instructions_notes: 'Never committed; verification transaction rolls back.' }).expect(201);
         patrolIds.push(response.body.patrol.id);
+        assert.deepEqual(response.body.patrol.plannedRoute, plannedRoute);
+        assert.equal(await tx.patrolWaypoint.count({ where: { patrolId: response.body.patrol.id } }), plannedRoute.length);
+        assert.equal(await tx.patrolLocation.count({ where: { patrolId: response.body.patrol.id } }), 0);
         return response.body.patrol;
       };
-      const future = await create(dateOffset(today, 2));
+      const future = await create(dateOffset(today, 2), route(['START','CHECKPOINT','CHECKPOINT','END']));
       const overdue = await create(dateOffset(today, -1));
-      const current = await create(today);
+      const current = await create(today, route(['START','CHECKPOINT','HIGH_RISK','OBSERVATION','CHECKPOINT','END']));
+      for (const patrol of [future, overdue, current]) {
+        const detail = await request(app).get('/api/patrols/mine/' + patrol.id).set('Authorization', rangerA).expect(200);
+        assert.deepEqual(detail.body.patrol.plannedRoute, patrol.plannedRoute);
+        const managerDetail = await request(app).get('/api/patrols/' + patrol.id).set('Authorization', manager).expect(200);
+        assert.deepEqual(managerDetail.body.patrol.plannedRoute, patrol.plannedRoute);
+      }
+      // Force a database-level nested-write failure inside a recoverable savepoint.
+      // This proves a waypoint constraint failure cannot leave an orphan patrol.
+      await tx.$executeRawUnsafe('SAVEPOINT planned_route_failure');
+      const failedTitle = randomUUID();
+      const invalidPoints = route(['START', 'END']); invalidPoints[1].order = 0;
+      await assert.rejects(tx.patrol.create({data:{routeName:failedTitle,parkId:park.id,rangerId:accounts[1].id,createdById:accounts[0].id,waypoints:{create:invalidPoints}}}));
+      await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT planned_route_failure');
+      assert.equal(await tx.patrol.count({where:{routeName:failedTitle}}),0);
+      checks.push('Waypoint constraint failure leaves no partial patrol');
+      checks.push('Atomic planned route persistence, all point types and ordered owner-only details; no actual GPS records');
       const mine = await request(app).get('/api/patrols/mine').set('Authorization', rangerA).expect(200);
       assert.equal(mine.body.patrols.length, 3);
       assert(mine.body.patrols.some(p => p.id === future.id));
@@ -94,6 +114,7 @@ async function verify() {
   }
   assert.equal(await database.user.count({ where: { id: { in: accountIds } } }), 0);
   assert.equal(await database.patrol.count({ where: { id: { in: patrolIds } } }), 0);
+  assert.equal(await database.patrolWaypoint.count({ where: { patrolId: { in: patrolIds } } }), 0);
   checks.push('Rollback verified: no verification accounts or patrols persisted');
   console.log(JSON.stringify({ success: true, checks }, null, 2));
 }
