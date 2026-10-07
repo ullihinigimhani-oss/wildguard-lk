@@ -1,6 +1,13 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import PatrolManagement from "../../src/pages/PatrolManagement/PatrolManagement";
 import {
   getPatrol,
@@ -68,9 +75,10 @@ test("displays existing patrols with assigned ranger, status and schedule", asyn
   expect(listPatrols).toHaveBeenCalledWith(
     expect.objectContaining({ page: 1 }),
   );
-  expect(
-    screen.getByRole("link", { name: "Create Patrol" }),
-  ).toHaveAttribute("href", "/patrols/new");
+  expect(screen.getByRole("link", { name: "Create Patrol" })).toHaveAttribute(
+    "href",
+    "/patrols/new",
+  );
   expect(screen.getByRole("link", { name: "View" })).toHaveAttribute(
     "href",
     "/patrols/patrol-1",
@@ -129,9 +137,7 @@ test("date filter and clear filters work together", async () => {
       expect.objectContaining({ date: "2026-10-10" }),
     ),
   );
-  expect(
-    screen.getByRole("button", { name: "Clear filters" }),
-  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "Clear filters" })).toBeVisible();
   await events.click(screen.getByRole("button", { name: "Clear filters" }));
   await waitFor(() =>
     expect(listPatrols).toHaveBeenLastCalledWith({
@@ -153,11 +159,10 @@ test("date filter and clear filters work together", async () => {
 test("empty results explain whether filters or data are the cause", async () => {
   listPatrols.mockResolvedValue(pageOf([]));
   mountPage();
-  expect(await screen.findByText("No patrols yet. Create the first patrol.")).toBeVisible();
-  await userEvent.selectOptions(
-    screen.getByLabelText("Status"),
-    "CANCELLED",
-  );
+  expect(
+    await screen.findByText("No patrols yet. Create the first patrol."),
+  ).toBeVisible();
+  await userEvent.selectOptions(screen.getByLabelText("Status"), "CANCELLED");
   expect(
     await screen.findByText("No patrols match the current filters."),
   ).toBeVisible();
@@ -201,4 +206,152 @@ test("ranger-updated status is visible after a refresh", async () => {
   listPatrols.mockResolvedValue(pageOf([{ ...patrol, status: "IN_PROGRESS" }]));
   mountPage();
   expect(await screen.findByText("In progress")).toBeVisible();
+});
+
+test.each(["SCHEDULED", "IN_PROGRESS", "COMPLETED"])(
+  "Live Tracking visibility follows backend status %s",
+  async (status) => {
+    listPatrols.mockResolvedValue(pageOf([{ ...patrol, status }]));
+    mountPage();
+    await screen.findByText(patrol.routeName);
+    const button = screen.queryByRole("button", { name: "Live Tracking" });
+    if (status === "IN_PROGRESS") expect(button).toBeVisible();
+    else expect(button).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View" })).toHaveAttribute(
+      "href",
+      "/patrols/" + patrol.id,
+    );
+  },
+);
+test("Live Tracking passes the selected row ID to its placeholder without navigating away", async () => {
+  const second = {
+    ...patrol,
+    id: "another-patrol",
+    routeName: "Second active patrol",
+  };
+  listPatrols.mockResolvedValue(pageOf([patrol, second]));
+  mountPage();
+  const title = await screen.findByText(second.routeName);
+  fireEvent.click(
+    within(title.closest("tr")).getByRole("button", { name: "Live Tracking" }),
+  );
+  expect(
+    screen.getByText("Live patrol tracking will be available here."),
+  ).toHaveAttribute("data-patrol-id", second.id);
+  expect(screen.getByRole("table")).toBeVisible();
+  expect(screen.getAllByRole("link", { name: "View" })).toHaveLength(2);
+});
+test("existing View action still navigates to the selected patrol details", async () => {
+  render(
+    <MemoryRouter initialEntries={["/patrols"]}>
+      <Routes>
+        <Route path="/patrols" element={<PatrolManagement />} />
+        <Route path="/patrols/:id" element={<p>Patrol detail destination</p>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await screen.findByText(patrol.routeName);
+  fireEvent.click(screen.getByRole("link", { name: "View" }));
+  expect(screen.getByText("Patrol detail destination")).toBeVisible();
+});
+test("polling reflects Ranger status changes and removes the action on completion", async () => {
+  vi.useFakeTimers();
+  try {
+    listPatrols
+      .mockResolvedValueOnce(pageOf([{ ...patrol, status: "SCHEDULED" }]))
+      .mockResolvedValueOnce(pageOf([patrol]))
+      .mockResolvedValue(pageOf([{ ...patrol, status: "COMPLETED" }]));
+    const ui = mountPage();
+    await act(async () => vi.advanceTimersByTimeAsync(200));
+    expect(
+      screen.queryByRole("button", { name: "Live Tracking" }),
+    ).not.toBeInTheDocument();
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(screen.getByRole("button", { name: "Live Tracking" })).toBeVisible();
+    expect(screen.getByRole("table")).toBeVisible();
+    expect(listPatrols).toHaveBeenCalledTimes(2);
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(
+      screen.queryByRole("button", { name: "Live Tracking" }),
+    ).not.toBeInTheDocument();
+    ui.unmount();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+test("polling waits for pending requests and cleans up after unmount", async () => {
+  vi.useFakeTimers();
+  try {
+    let resolve;
+    listPatrols.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const ui = mountPage();
+    await act(async () => vi.advanceTimersByTimeAsync(200));
+    await act(async () => vi.advanceTimersByTimeAsync(45000));
+    expect(listPatrols).toHaveBeenCalledTimes(1);
+    await act(async () => resolve(pageOf([patrol])));
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(listPatrols).toHaveBeenCalledTimes(2);
+    ui.unmount();
+    await act(async () => vi.advanceTimersByTimeAsync(60000));
+    expect(listPatrols).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+test("filter changes wait for an in-flight request and never apply stale results", async () => {
+  vi.useFakeTimers();
+  try {
+    let resolve;
+    listPatrols.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const ui = mountPage();
+    await act(async () => vi.advanceTimersByTimeAsync(200));
+    fireEvent.change(screen.getByLabelText("Search patrol title"), {
+      target: { value: "new search" },
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(200));
+    expect(listPatrols).toHaveBeenCalledTimes(1);
+    await act(async () =>
+      resolve(pageOf([{ ...patrol, routeName: "Stale response" }])),
+    );
+    expect(listPatrols).toHaveBeenCalledTimes(2);
+    expect(listPatrols).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: "new search" }),
+    );
+    expect(screen.queryByText("Stale response")).not.toBeInTheDocument();
+    expect(screen.getByText(patrol.routeName)).toBeVisible();
+    ui.unmount();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+test("transient polling failure preserves the existing table and recovers automatically", async () => {
+  vi.useFakeTimers();
+  try {
+    listPatrols
+      .mockResolvedValueOnce(pageOf([patrol]))
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(pageOf([patrol]));
+    const ui = mountPage();
+    await act(async () => vi.advanceTimersByTimeAsync(200));
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(screen.getByRole("table")).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Unable to refresh patrols",
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    ui.unmount();
+  } finally {
+    vi.useRealTimers();
+  }
 });

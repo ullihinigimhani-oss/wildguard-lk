@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { listAssignableRangers, listPatrols } from "../../services/patrolApi";
+import LiveTrackingAction from "../../components/patrol/LiveTrackingAction";
 import {
   patrolPriorities,
   patrolStatuses,
@@ -35,6 +36,9 @@ export default function PatrolManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [pollError, setPollError] = useState("");
+  const [trackingPatrolId, setTrackingPatrolId] = useState(null);
+  const inFlight = useRef(null);
   const hasFilters = Boolean(
     filters.search ||
       filters.status ||
@@ -58,22 +62,40 @@ export default function PatrolManagement() {
   }, [refresh]);
   useEffect(() => {
     let current = true;
+    let timer;
     setLoading(true);
     setError("");
-    const timer = setTimeout(
-      () =>
-        listPatrols({ ...filters })
-          .then((data) => {
-            if (current) setResult(data);
-          })
-          .catch(() => {
-            if (current) setError("Unable to load patrols. Please try again.");
-          })
-          .finally(() => {
-            if (current) setLoading(false);
-          }),
-      200,
-    );
+    setPollError("");
+    async function fetchList(background = false) {
+      // Filter changes also wait for the preceding request to settle.
+      if (inFlight.current) await inFlight.current.catch(() => {});
+      if (!current) return;
+      const request = listPatrols({ ...filters });
+      inFlight.current = request;
+      try {
+        const data = await request;
+        if (current) {
+          setResult(data);
+          setError("");
+          setPollError("");
+        }
+      } catch {
+        if (current) {
+          if (background)
+            setPollError(
+              "Unable to refresh patrols. Showing the last loaded list; retrying automatically.",
+            );
+          else setError("Unable to load patrols. Please try again.");
+        }
+      } finally {
+        if (inFlight.current === request) inFlight.current = null;
+        if (current) {
+          setLoading(false);
+          timer = setTimeout(() => fetchList(true), 15000);
+        }
+      }
+    }
+    timer = setTimeout(() => fetchList(), 200);
     return () => {
       current = false;
       clearTimeout(timer);
@@ -180,6 +202,16 @@ export default function PatrolManagement() {
           {error}
         </p>
       )}
+      {pollError && (
+        <p role="alert" className="field-error">
+          {pollError}
+        </p>
+      )}
+      {trackingPatrolId && (
+        <p role="status" className="muted" data-patrol-id={trackingPatrolId}>
+          Live patrol tracking will be available here.
+        </p>
+      )}
       {loading ? (
         <p role="status">Loading patrols…</p>
       ) : error ? (
@@ -246,12 +278,20 @@ export default function PatrolManagement() {
                       </span>
                     </td>
                     <td>
-                      <Link
-                        className="text-button"
-                        to={`/patrols/${patrol.id}`}
-                      >
-                        View
-                      </Link>
+                      <div className="users-actions">
+                        <Link
+                          className="text-button"
+                          to={`/patrols/${patrol.id}`}
+                        >
+                          View
+                        </Link>
+                        {patrol.status === "IN_PROGRESS" && (
+                          <LiveTrackingAction
+                            patrolId={patrol.id}
+                            onSelect={setTrackingPatrolId}
+                          />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
