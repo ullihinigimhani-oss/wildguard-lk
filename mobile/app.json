@@ -7,6 +7,7 @@
     "userInterfaceStyle": "light",
     "scheme": "wildguard-lk",
     "ios": { "supportsTablet": true },
-    "android": { "package": "lk.wildguard.prototype" }
+    "android": { "package": "lk.wildguard.prototype" },
+    "web": { "favicon": "./assets/images/wildguard-logo.png" }
   }
 }

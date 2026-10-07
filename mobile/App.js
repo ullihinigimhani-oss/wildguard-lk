@@ -7,12 +7,14 @@ import AppNavigator from "./src/navigation/AppNavigator";
 import { createLinking } from "./src/navigation/linking";
 import { OnboardingProvider, useOnboarding } from "./src/hooks/useOnboarding";
 
+const documentTitle = { enabled: true, formatter: () => "WildGuard LK" };
+
 function AppNavigation() {
   const { user, isAuthenticated, isDemo, hasLoggedOut } = useAuth();
   const { hasCompletedOnboarding, isReady } = useOnboarding();
   const linking = useMemo(() => createLinking({ user, isAuthenticated, isDemo, hasCompletedOnboarding, hasLoggedOut }), [user, isAuthenticated, isDemo, hasCompletedOnboarding, hasLoggedOut]);
   if (!isReady) return <ActivityIndicator style={{ flex: 1 }} accessibilityLabel="Loading app" />;
-  return <NavigationContainer linking={linking}><AppNavigator /></NavigationContainer>;
+  return <NavigationContainer linking={linking} documentTitle={documentTitle}><AppNavigator /></NavigationContainer>;
 }
 export default function App() {
   return (
