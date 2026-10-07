@@ -9,6 +9,7 @@ import { AppState } from "react-native";
 import { demoRanger } from "../constants/demo";
 import { loginAccount, getSessionUser } from "../services/authApi";
 import { api } from "../services/api";
+import { clearNavigationSessions } from "../utils/navigationSession";
 const Context = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -20,11 +21,13 @@ export function AuthProvider({ children }) {
   useEffect(
     () => () => {
       generation.current += 1;
+      clearNavigationSessions();
       delete api.defaults.headers.common.Authorization;
     },
     [],
   );
   function logout() {
+    clearNavigationSessions();
     setLoggedOut(true);
     generation.current += 1;
     delete api.defaults.headers.common.Authorization;

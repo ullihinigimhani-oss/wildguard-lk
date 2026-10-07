@@ -47,7 +47,7 @@ test('planned route details are ordered, owner-protected and strictly read-only'
   const query=db.patrol.findFirst.mock.calls[0][0];
   expect(query.where).toEqual({id:'assignment',rangerId:'a'});
   expect(query.select.waypoints.orderBy).toEqual({order:'asc'});
-  expect(query.select.waypoints.select).toEqual({type:true,order:true,latitude:true,longitude:true,label:true,note:true});
+  expect(query.select.waypoints.select).toEqual({id:true,type:true,order:true,latitude:true,longitude:true,label:true,note:true});
   const foreign=await read('assignment','b').expect(404);
   expect(foreign.body.patrol).toBeUndefined();
   expect(JSON.stringify(records.assignment)).toBe(before);

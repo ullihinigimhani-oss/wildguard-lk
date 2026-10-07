@@ -1,4 +1,8 @@
 import PlannedRouteSummary from "../../components/patrol/PlannedRouteSummary";
+import {
+  clearNavigationSession,
+  sessionKey,
+} from "../../utils/navigationSession";
 import { readPlannedRoute } from "../../utils/plannedPatrolRoute";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
@@ -92,6 +96,10 @@ export default function PatrolDetailsScreen({ route, navigation }) {
       if (attempt === generation.current) {
         setState({ patrol, loading: false, error: null });
         setConfirming(false);
+        if (action === "complete" && patrol.status === "COMPLETED")
+          clearNavigationSession(sessionKey(user.id, patrol));
+        if (action === "start" && patrol.status === "IN_PROGRESS")
+          navigation?.navigate("PatrolNavigation", { patrolId: id });
       }
     } catch (error) {
       if (attempt === generation.current) {
@@ -190,6 +198,16 @@ export default function PatrolDetailsScreen({ route, navigation }) {
               title="Start Patrol"
               onPress={() => update("start")}
               loading={busy}
+            />
+          )}
+          {display.active && (
+            <Button
+              title="Open Navigation"
+              secondary
+              disabled={busy}
+              onPress={() =>
+                navigation.navigate("PatrolNavigation", { patrolId: id })
+              }
             />
           )}
           {display.active &&

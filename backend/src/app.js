@@ -13,6 +13,7 @@ app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/parks", require("./routes/park.routes"));
 app.use("/api/users", require("./routes/user.routes"));
 app.use("/api/patrols", require("./routes/patrol.routes"));
+app.use("/api/navigation", require("./routes/navigation.routes"));
 app.use("/api/sensors", require("./routes/sensor.routes"));
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
