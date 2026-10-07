@@ -13,20 +13,32 @@ export const rangerPaths = {
   Home: "ranger",
   Patrol: "ranger/patrols",
   PatrolDetails: "ranger/patrols/:patrolId",
+  PatrolRoute: "ranger/patrols/:patrolId/route",
   Incident: "ranger/incidents",
   Alerts: "ranger/alerts",
   Sync: "ranger/sync",
 };
-const stateFor = name => ({ routes: [{ name }] });
+const stateFor = (name) => ({ routes: [{ name }] });
 
 // Both existing navigators are the container's root stack, so paths are flat.
-export function createLinking({ user, isAuthenticated, isDemo, hasCompletedOnboarding, hasLoggedOut }) {
+export function createLinking({
+  user,
+  isAuthenticated,
+  isDemo,
+  hasCompletedOnboarding,
+  hasLoggedOut,
+}) {
   const destination = isAuthenticated ? authenticatedDestination(user) : null;
   const signedIn = !!destination;
   const ranger = destination === "Home";
   const paths = {
     ...publicPaths,
-    ...Object.fromEntries(Object.entries(rangerPaths).map(([name, path]) => [name, isDemo ? `demo/${path}` : path])),
+    ...Object.fromEntries(
+      Object.entries(rangerPaths).map(([name, path]) => [
+        name,
+        isDemo ? `demo/${path}` : path,
+      ]),
+    ),
     Profile: isDemo ? "demo/account" : "account",
   };
   const config = { screens: paths };
@@ -35,26 +47,65 @@ export function createLinking({ user, isAuthenticated, isDemo, hasCompletedOnboa
     config,
     getStateFromPath(path) {
       const cleanPath = path.split(/[?#]/)[0].replace(/^\/+|\/+$/g, "");
-      const fallback = signedIn ? destination : isDemo ? "Home" : hasCompletedOnboarding || hasLoggedOut ? "Welcome" : "Onboarding1";
+      const fallback = signedIn
+        ? destination
+        : isDemo
+          ? "Home"
+          : hasCompletedOnboarding || hasLoggedOut
+            ? "Welcome"
+            : "Onboarding1";
       if (!cleanPath) return stateFor(fallback);
       const parsed = getStateFromPath(path, config);
-      const name = parsed?.routes[parsed.index ?? parsed.routes.length - 1]?.name;
+      const name =
+        parsed?.routes[parsed.index ?? parsed.routes.length - 1]?.name;
       const protectedPath = /^(ranger|account|demo)(\/|$)/.test(cleanPath);
-      if (!parsed) return stateFor(protectedPath && !signedIn && !isDemo ? "Login" : fallback);
+      if (!parsed)
+        return stateFor(
+          protectedPath && !signedIn && !isDemo ? "Login" : fallback,
+        );
       if (Object.hasOwn(publicPaths, name)) {
         if (signedIn || isDemo) return stateFor(fallback);
         // A direct later-onboarding link still has sensible in-app Back behavior.
         if (/^Onboarding[23]$/.test(name)) {
           const page = Number(name.slice(-1));
-          return { index: page - 1, routes: Array.from({ length: page }, (_, index) => ({ name: `Onboarding${index + 1}` })) };
+          return {
+            index: page - 1,
+            routes: Array.from({ length: page }, (_, index) => ({
+              name: `Onboarding${index + 1}`,
+            })),
+          };
         }
         return parsed;
       }
       if (!signedIn && !isDemo) return stateFor("Login");
-      if (Object.hasOwn(rangerPaths, name) && !ranger && !isDemo) return stateFor(destination);
-      if (ranger && !isDemo && ["Alerts", "Sync"].includes(name)) return stateFor("Home");
-      if (isDemo && name === "PatrolDetails") return stateFor("Home");
-      if (name === "PatrolDetails") return { index: 1, routes: [{ name: "Patrol" }, parsed.routes[parsed.index ?? parsed.routes.length - 1]] };
+      if (Object.hasOwn(rangerPaths, name) && !ranger && !isDemo)
+        return stateFor(destination);
+      if (ranger && !isDemo && ["Alerts", "Sync"].includes(name))
+        return stateFor("Home");
+      if (isDemo && ["PatrolDetails", "PatrolRoute"].includes(name))
+        return stateFor("Home");
+      if (name === "PatrolRoute") {
+        const route = parsed.routes[parsed.index ?? parsed.routes.length - 1];
+        return {
+          index: 2,
+          routes: [
+            { name: "Patrol" },
+            {
+              name: "PatrolDetails",
+              params: { patrolId: route.params.patrolId },
+            },
+            route,
+          ],
+        };
+      }
+      if (name === "PatrolDetails")
+        return {
+          index: 1,
+          routes: [
+            { name: "Patrol" },
+            parsed.routes[parsed.index ?? parsed.routes.length - 1],
+          ],
+        };
       return parsed;
     },
   };

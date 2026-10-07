@@ -2,6 +2,7 @@ import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import PatrolDetailsScreen from "../../src/screens/patrol/PatrolDetailsScreen";
 import { getMyPatrol, startMyPatrol, completeMyPatrol } from "../../src/services/patrolApi";
+import { plannedRoute } from "../fixtures/plannedRoute";
 jest.mock('@expo/vector-icons/Ionicons', () => { const { View } = require('react-native'); return View; });
 jest.mock('@react-navigation/native', () => ({ useFocusEffect: callback => { const React = require('react'); React.useEffect(callback, [callback]); } }));
 jest.mock('../../src/hooks/usePatrolClock', () => () => new Date('2026-10-07T11:35:00+05:30'));
@@ -52,4 +53,19 @@ test('missing or foreign patrol is unavailable', async () => {
   getMyPatrol.mockRejectedValue({ response: { status: 404 } });
   const ui = mount(); await ui.findByText('This patrol is not available.');
   expect(ui.queryByLabelText('Start Patrol')).toBeNull();
+});
+test('View Route navigates with the selected id separately from Start Patrol', async () => {
+  getMyPatrol.mockResolvedValue({ ...record(), plannedRoute: plannedRoute() });
+  const navigation = { navigate: jest.fn() };
+  const ui = render(<PatrolDetailsScreen route={{ params: { patrolId: 'assignment' } }} navigation={navigation} />);
+  await ui.findByLabelText('View Route');
+  fireEvent.press(ui.getByLabelText('View Route'));
+  expect(navigation.navigate).toHaveBeenCalledWith('PatrolRoute', { patrolId: 'assignment' });
+  expect(startMyPatrol).not.toHaveBeenCalled();expect(completeMyPatrol).not.toHaveBeenCalled();
+  expect(ui.getByLabelText('Start Patrol')).toBeTruthy();
+});
+test('old patrol details load without a route button', async () => {
+  const ui = mount(); await ui.findByText('No Planned Route');
+  expect(ui.queryByLabelText('View Route')).toBeNull();
+  expect(ui.getByLabelText('Start Patrol')).toBeTruthy();
 });

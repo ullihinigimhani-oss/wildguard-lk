@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 jest.mock("../../src/config/database", () => ({
   user: { findUnique: jest.fn() },
   patrol: { findFirst: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
+  patrolLocation: { create: jest.fn(), createMany: jest.fn() },
 }));
 const db = require("../../src/config/database");
 const app = require("../../src/app");
@@ -35,6 +36,23 @@ test('I: Ranger B cannot view/start/continue/complete A assignment by manipulati
   await change('assignment', 'complete', 'b', { rangerId: 'a' }).expect(404);
   expect(db.patrol.updateMany).not.toHaveBeenCalled();
   expect(db.patrol.findFirst.mock.calls.every(([query]) => query.where.rangerId)).toBe(true);
+});
+test('planned route details are ordered, owner-protected and strictly read-only', async () => {
+  const points = ['START','CHECKPOINT','HIGH_RISK','OBSERVATION','END'].map((type, order) => ({ type, order, latitude:7.5+order/100, longitude:80.7, label:type, note:null }));
+  records.assignment.waypoints=points;
+  const before=JSON.stringify(records.assignment);
+  const owner=await read('assignment','a').expect(200);
+  expect(owner.body.patrol.plannedRoute).toEqual(points);
+  expect(owner.body.patrol).not.toHaveProperty('waypoints');
+  const query=db.patrol.findFirst.mock.calls[0][0];
+  expect(query.where).toEqual({id:'assignment',rangerId:'a'});
+  expect(query.select.waypoints.orderBy).toEqual({order:'asc'});
+  expect(query.select.waypoints.select).toEqual({type:true,order:true,latitude:true,longitude:true,label:true,note:true});
+  const foreign=await read('assignment','b').expect(404);
+  expect(foreign.body.patrol).toBeUndefined();
+  expect(JSON.stringify(records.assignment)).toBe(before);
+  expect(db.patrol.updateMany).not.toHaveBeenCalled();
+  expect(db.patrolLocation.create).not.toHaveBeenCalled();expect(db.patrolLocation.createMany).not.toHaveBeenCalled();
 });
 test('start and late completion use real server time, preserve schedule and are idempotent', async () => {
   const schedule = { scheduledDate: records.assignment.scheduledDate, startTime: records.assignment.startTime, endTime: records.assignment.endTime };
