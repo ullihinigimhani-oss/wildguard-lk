@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import ParkSelect from "../../components/common/ParkSelect";
 import Avatar from "../../components/common/Avatar";
 import { roleChoices, roleLabel } from "../../constants/roles";
 import { listUsers, reviewUser } from "../../services/userApi";
@@ -36,6 +37,7 @@ function UserSection({ pending = false, revision, onReview }) {
   const [message, setMessage] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [modal, setModal] = useState(null);
+  const [confirmedParkId, setConfirmedParkId] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const dialogTitle = useId();
@@ -81,6 +83,7 @@ function UserSection({ pending = false, revision, onReview }) {
   }, [modal]);
   function open(user, action, event) {
     trigger.current = event.currentTarget;
+    setConfirmedParkId(user.requestedParkId || "");
     setReason("");
     setError("");
     setModal({ user, action });
@@ -90,6 +93,14 @@ function UserSection({ pending = false, revision, onReview }) {
   }
   async function confirm() {
     if (locked.current) return;
+    if (
+      modal.action === "approve" &&
+      modal.user.role === "RANGER" &&
+      !confirmedParkId
+    ) {
+      setError("Select a confirmed park or ranger area.");
+      return;
+    }
     locked.current = true;
     setBusy(true);
     setError("");
@@ -98,11 +109,15 @@ function UserSection({ pending = false, revision, onReview }) {
         modal.user.id,
         modal.action === "approve" ? "APPROVED" : "REJECTED",
         reason.trim() || undefined,
+        ...(modal.action === "approve" && modal.user.role === "RANGER"
+          ? [confirmedParkId]
+          : []),
       );
       setMessage(
-        data.notification?.sent
-          ? "Account updated. Notification email submitted."
-          : "Account updated. Notification email could not be sent; check email configuration or delivery service.",
+        data.message ||
+          (modal.action === "approve"
+            ? "Account approved successfully."
+            : "Account rejected successfully."),
       );
       setModal(null);
       onReview();
@@ -215,6 +230,24 @@ function UserSection({ pending = false, revision, onReview }) {
                           <strong>{user.name}</strong>
                           <br />
                           {user.email}
+                          {user.role === "RANGER" && (
+                            <>
+                              <br />
+                              <span className="small muted">
+                                Requested Area:{" "}
+                                {user.requestedPark?.name || "Not provided"}
+                              </span>
+                              {user.approvalStatus === "APPROVED" && (
+                                <>
+                                  <br />
+                                  <span className="small muted">
+                                    Assigned Area:{" "}
+                                    {user.park?.name || "Not assigned"}
+                                  </span>
+                                </>
+                              )}
+                            </>
+                          )}
                         </span>
                       </div>
                     </td>
@@ -311,6 +344,14 @@ function UserSection({ pending = false, revision, onReview }) {
                 Email: modal.user.email,
                 Phone: modal.user.phone || "Not provided",
                 Role: roleLabel(modal.user.role),
+                ...(modal.user.role === "RANGER" && {
+                  "Requested Park / Ranger Area":
+                    modal.user.requestedPark?.name || "Not provided",
+                  ...(modal.user.approvalStatus === "APPROVED" && {
+                    "Assigned Park / Ranger Area":
+                      modal.user.park?.name || "Not assigned",
+                  }),
+                }),
                 Registered: new Date(modal.user.createdAt).toLocaleString(),
                 Status: modal.user.approvalStatus,
                 ...(modal.user.rejectionReason
@@ -323,6 +364,15 @@ function UserSection({ pending = false, revision, onReview }) {
                 </div>
               ))}
             </dl>
+            {modal.action === "approve" && modal.user.role === "RANGER" && (
+              <ParkSelect
+                label="Confirmed Park / Ranger Area"
+                helper="Verify the requested area or select the correct working park before approving."
+                value={confirmedParkId}
+                onChange={setConfirmedParkId}
+                disabled={busy}
+              />
+            )}
             {modal.action === "reject" && (
               <label>
                 Reason for rejection
@@ -336,11 +386,7 @@ function UserSection({ pending = false, revision, onReview }) {
               </label>
             )}
             {modal.action === "approve" && (
-              <p>
-                This account will be permitted to sign in. A notification will
-                be sent to the registered email when email delivery is
-                configured.
-              </p>
+              <p>This account will be permitted to sign in.</p>
             )}
             {error && (
               <p role="alert" className="field-error">

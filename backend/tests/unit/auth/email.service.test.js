@@ -60,3 +60,20 @@ test("provider failure is isolated", async () => {
     reason: "delivery_failed",
   });
 });
+
+test("approved Ranger email uses confirmed name without internal IDs; other roles omit area", () => {
+  const ranger = {
+    ...user,
+    park: { id: "private-park-id", name: "Wilpattu National Park" },
+    requestedPark: { name: "Yala National Park" },
+  };
+  const mail = buildDecisionEmail(ranger);
+  expect(mail.text).toContain(
+    "Assigned Park / Ranger Area:\nWilpattu National Park",
+  );
+  expect(mail.text).not.toContain("Yala National Park");
+  expect(mail.text).not.toContain("private-park-id");
+  expect(
+    buildDecisionEmail({ ...ranger, role: "RESEARCHER" }).text,
+  ).not.toContain("Assigned Park / Ranger Area");
+});

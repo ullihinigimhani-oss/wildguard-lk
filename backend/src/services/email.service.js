@@ -1,3 +1,4 @@
+// Unused adapter retained for future use; account approval/rejection never calls it.
 const labels = {
   RANGER: "Park Ranger",
   PARK_MANAGER: "Park Manager",
@@ -13,7 +14,7 @@ exports.buildDecisionEmail = (user) => {
       ? "Your WildGuard LK Account Has Been Approved"
       : "Update on Your WildGuard LK Account",
     text: approved
-      ? `Hello ${user.name},\n\nYour WildGuard LK account has been verified and approved.\n\nRole:\n${labels[user.role]}\n\nYou can now sign in to WildGuard LK using the email address and password you provided during registration.\n\nThank you for supporting wildlife conservation.\n\nWildGuard LK Team`
+      ? `Hello ${user.name},\n\nYour WildGuard LK account has been verified and approved.\n\nRole:\n${labels[user.role]}${user.role === "RANGER" && user.park?.name ? `\n\nAssigned Park / Ranger Area:\n${user.park.name}` : ""}\n\nYou can now sign in to WildGuard LK using the email address and password you provided during registration.\n\nThank you for supporting wildlife conservation.\n\nWildGuard LK Team`
       : `Hello ${user.name},\n\nThank you for registering with WildGuard LK.\n\nYour request for a ${labels[user.role]} account has been reviewed.\n\nUnfortunately, your account request was not approved at this time.${user.rejectionReason ? `\n\nReason:\n${user.rejectionReason}` : ""}\n\nWildGuard LK Team`,
   };
 };

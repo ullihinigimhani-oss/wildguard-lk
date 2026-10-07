@@ -14,6 +14,12 @@ function validateRegistration(body) {
     )
   )
     fields.role = "Select a valid role.";
+  const requestedParkId =
+    role === "RANGER" && typeof input.requestedParkId === "string"
+      ? input.requestedParkId.trim()
+      : null;
+  if (role === "RANGER" && (!requestedParkId || requestedParkId.length > 128))
+    fields.requestedParkId = "Select a valid park or ranger area.";
   if (!name || name.length > 120)
     fields.name = "Enter your full name (up to 120 characters).";
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -39,7 +45,7 @@ function validateRegistration(body) {
       registrationError: true,
       fields,
     });
-  return { name, email, password, phone: phone || null, role };
+  return { name, email, password, phone: phone || null, role, requestedParkId };
 }
 function validateLogin(body) {
   const email =

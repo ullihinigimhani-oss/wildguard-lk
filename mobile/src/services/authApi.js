@@ -31,6 +31,7 @@ export async function registerAccount({
   phone,
   password,
   role = "COMMUNITY_USER",
+  requestedParkId,
 }) {
   if (!process.env.EXPO_PUBLIC_API_BASE_URL)
     throw new Error("Public API URL is not configured");
@@ -40,6 +41,7 @@ export async function registerAccount({
     phone: phone.trim() || undefined,
     password,
     role,
+    ...(role === "RANGER" && { requestedParkId }),
   });
   if (!data.success || !data.user?.id)
     throw new Error("Registration was not confirmed");

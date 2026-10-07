@@ -24,6 +24,12 @@ export default function ProfileScreen() {
           Email: user.email,
           ...(isDemo ? { "Assigned park": user.park } : {}),
           Role: roleLabel(user.role),
+          ...(!isDemo && user.role === "RANGER"
+            ? {
+                "Assigned Park / Ranger Area":
+                  user.park?.name || "Not assigned",
+              }
+            : {}),
         }).map(([label, value]) => (
           <View key={label} style={{ paddingVertical: 8, gap: 5 }}>
             <Text style={styles.muted}>{label}</Text>

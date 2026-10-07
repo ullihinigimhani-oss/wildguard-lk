@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { publicRegistrationRoles, roleLabel } from "../../constants/roles";
+import ParkSelect from "../../components/common/ParkSelect";
 import RegistrationPhoto from "../../components/common/RegistrationPhoto";
 import Brand from "../../components/common/Brand";
 import { registerAccount } from "../../services/authApi";
@@ -22,7 +23,7 @@ export default function Register() {
   async function submit(event) {
     event.preventDefault();
     if (pending.current) return;
-    const next = validateRegistration(values);
+    const next = validateRegistration({ ...values, role });
     setErrors(next);
     setMessage("");
     if (Object.keys(next).length) {
@@ -129,6 +130,16 @@ export default function Register() {
                   ? "Community accounts can sign in immediately after registration."
                   : "Staff accounts require verification before sign-in."}
               </p>
+              {role === "RANGER" && (
+                <ParkSelect
+                  value={values.requestedParkId || ""}
+                  onChange={(requestedParkId) =>
+                    setValues({ ...values, requestedParkId })
+                  }
+                  disabled={loading}
+                  error={errors.requestedParkId}
+                />
+              )}
               <RegistrationPhoto disabled={loading} />
               <form onSubmit={submit} noValidate aria-busy={loading}>
                 {[

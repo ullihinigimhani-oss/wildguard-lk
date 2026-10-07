@@ -4,6 +4,7 @@ import {
   publicRegistrationRoles,
   roleLabel,
 } from "../../constants/registrationRoles";
+import ParkSelect from "../../components/common/ParkSelect";
 import RegistrationPhoto from "../../components/common/RegistrationPhoto";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
@@ -26,7 +27,7 @@ export default function RegisterScreen({ navigation }) {
   const pending = useRef(false);
   async function submit() {
     if (pending.current) return;
-    const next = validateRegistration(values);
+    const next = validateRegistration({ ...values, role });
     setErrors(next);
     setMessage("");
     if (Object.keys(next).length) return;
@@ -113,6 +114,16 @@ export default function RegisterScreen({ navigation }) {
           ? "Community accounts can sign in immediately after registration."
           : "Staff accounts require verification before sign-in."}
       </Text>
+      {role === "RANGER" && (
+        <ParkSelect
+          value={values.requestedParkId || ""}
+          onChange={(requestedParkId) =>
+            setValues({ ...values, requestedParkId })
+          }
+          disabled={loading}
+          error={errors.requestedParkId}
+        />
+      )}
       <RegistrationPhoto disabled={loading} />
       {[
         ["name", "Full Name", "name"],

@@ -2,13 +2,16 @@
 function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
   if (error.authError)
-    return res
-      .status(error.status)
-      .json({
-        success: false,
-        message: error.message,
-        ...(error.code === "ACCOUNT_NOT_APPROVED" && { code: error.code }),
-      });
+    return res.status(error.status).json({
+      success: false,
+      message: error.message,
+      ...(error.code === "ACCOUNT_NOT_APPROVED" && {
+        code: error.code,
+        ...(["PENDING", "REJECTED"].includes(error.approvalStatus) && {
+          approvalStatus: error.approvalStatus,
+        }),
+      }),
+    });
   if (error.registrationError && [400, 409].includes(error.status)) {
     return res
       .status(error.status)

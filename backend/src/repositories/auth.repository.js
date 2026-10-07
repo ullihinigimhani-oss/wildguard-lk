@@ -8,6 +8,10 @@ const safeSelect = {
   role: true,
   approvalStatus: true,
   profileImageUrl: true,
+  parkId: true,
+  park: { select: { id: true, name: true } },
+  requestedParkId: true,
+  requestedPark: { select: { id: true, name: true } },
 };
 exports.findByEmail = (email) =>
   db().user.findUnique({ where: { email }, select: { id: true } });
@@ -22,3 +26,6 @@ exports.findSessionUser = (id) =>
     where: { id },
     select: { ...safeSelect, isActive: true },
   });
+
+exports.findPark = (id) =>
+  db().park.findUnique({ where: { id }, select: { id: true, name: true } });

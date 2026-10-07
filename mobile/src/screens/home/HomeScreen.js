@@ -29,7 +29,9 @@ export default function HomeScreen({ navigation }) {
           {isDemo ? "ASSIGNED PARK · DEMO" : "RANGER WORKSPACE"}
         </Text>
         <Text style={{ color: "white", fontSize: 22, fontWeight: "700" }}>
-          {isDemo ? user.park : "Park assignment is not available yet"}
+          {isDemo
+            ? user.park
+            : user.park?.name || "Park assignment is not available yet"}
         </Text>
         <Text style={{ color: "#e3ecda", lineHeight: 23 }}>
           {isDemo

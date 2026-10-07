@@ -1,7 +1,6 @@
 const router = require("express").Router();
 const authenticate = require("../middleware/auth.middleware");
 const allowRoles = require("../middleware/role.middleware");
-const mail = require("../services/email.service");
 const db = () => require("../config/database");
 const staffRoles = ["RANGER", "COMMUNITY_LIAISON", "RESEARCHER"];
 const roles = [...staffRoles, "PARK_MANAGER", "COMMUNITY_USER"];
@@ -16,6 +15,10 @@ const select = {
   profileImageUrl: true,
   createdAt: true,
   rejectionReason: true,
+  requestedParkId: true,
+  requestedPark: { select: { id: true, name: true } },
+  parkId: true,
+  park: { select: { id: true, name: true } },
 };
 const fail = (status, message) =>
   Object.assign(new Error(message), { status, authError: true });
@@ -62,7 +65,7 @@ router.get("/pending", (req, res, next) => list(req, res, next, true));
 router.get("/", (req, res, next) => list(req, res, next, false));
 router.patch("/:id/approval", async (req, res, next) => {
   try {
-    const { status, reason } = req.body || {};
+    const { status, reason, parkId } = req.body || {};
     if (
       !["APPROVED", "REJECTED"].includes(status) ||
       (reason != null && (typeof reason !== "string" || reason.length > 1000))
@@ -79,6 +82,23 @@ router.patch("/:id/approval", async (req, res, next) => {
       if (!target) throw fail(404, "Account not found.");
       if (!staffRoles.includes(target.role))
         throw fail(403, "This role requires a different approval process.");
+      if (target.approvalStatus !== "PENDING")
+        throw fail(
+          409,
+          "This account has already been reviewed. Refresh the list.",
+        );
+      if (
+        status === "APPROVED" &&
+        target.role === "RANGER" &&
+        (typeof parkId !== "string" ||
+          !parkId ||
+          parkId.length > 128 ||
+          !(await tx.park.findUnique({
+            where: { id: parkId },
+            select: { id: true },
+          })))
+      )
+        throw fail(400, "Select a valid confirmed park or ranger area.");
       const result = await tx.user.updateMany({
         where: {
           id: target.id,
@@ -87,6 +107,9 @@ router.patch("/:id/approval", async (req, res, next) => {
         },
         data: {
           approvalStatus: status,
+          ...(target.role === "RANGER" && {
+            parkId: status === "APPROVED" ? parkId : null,
+          }),
           rejectionReason:
             status === "REJECTED" ? reason?.trim() || null : null,
           reviewedAt: new Date(),
@@ -100,20 +123,13 @@ router.patch("/:id/approval", async (req, res, next) => {
         );
       return tx.user.findUnique({ where: { id: target.id }, select });
     });
-    // Commit is authoritative; notification failure must never roll it back.
-    let notification;
-    try {
-      notification = await mail.sendDecisionEmail(user);
-    } catch {
-      notification = { sent: false, reason: "delivery_failed" };
-    }
     res.json({
       success: true,
       user,
-      notification,
-      message: notification.sent
-        ? "Account updated and notification sent."
-        : "Account updated successfully, but the notification email could not be sent.",
+      message:
+        status === "APPROVED"
+          ? "Account approved successfully."
+          : "Account rejected successfully.",
     });
   } catch (error) {
     next(error);

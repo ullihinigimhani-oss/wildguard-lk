@@ -1,5 +1,8 @@
 # WildGuard LK registration and access management
 
+> Current behavior: approval/rejection sends no emails and requires no RESEND_API_KEY or EMAIL_FROM. Email-related sections below document the earlier implementation and are superseded by EMAIL_NOTIFICATIONS_DISABLED.md.
+
+
 Implemented 7 October 2026. Existing backend, Neon User table, mobile login/navigation, and desktop dashboard are reused.
 
 ## 1. Files created

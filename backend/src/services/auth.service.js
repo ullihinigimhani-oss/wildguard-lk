@@ -14,17 +14,34 @@ const safeUser = ({
   role,
   approvalStatus,
   profileImageUrl,
-}) => ({ id, name, email, phone, role, approvalStatus, profileImageUrl });
+  parkId,
+  park,
+  requestedParkId,
+  requestedPark,
+}) => ({
+  id,
+  name,
+  email,
+  phone,
+  role,
+  approvalStatus,
+  profileImageUrl,
+  parkId,
+  park,
+  requestedParkId,
+  requestedPark,
+});
 function requireApproved(user) {
   if (user.approvalStatus === "APPROVED") return;
   const message =
     user.approvalStatus === "PENDING"
       ? "Your account is awaiting approval. Your account must be verified before you can access WildGuard LK."
-      : "Your account request was not approved. Please contact the conservation team for assistance.";
+      : "Your account request was not approved.";
   throw Object.assign(new Error(message), {
     status: 403,
     authError: true,
     code: "ACCOUNT_NOT_APPROVED",
+    approvalStatus: user.approvalStatus,
   });
 }
 function secret() {
@@ -85,7 +102,17 @@ exports.register = async ({
   phone,
   password,
   role = "COMMUNITY_USER",
+  requestedParkId,
 }) => {
+  if (
+    role === "RANGER" &&
+    (!requestedParkId || !(await repository.findPark(requestedParkId)))
+  )
+    throw Object.assign(new Error("Select a valid park or ranger area."), {
+      status: 400,
+      registrationError: true,
+      fields: { requestedParkId: "Select a valid park or ranger area." },
+    });
   if (await repository.findByEmail(email)) throw duplicate();
   const passwordHash = await bcrypt.hash(password, 12);
   try {
@@ -96,6 +123,7 @@ exports.register = async ({
       passwordHash,
       role,
       approvalStatus: role === "COMMUNITY_USER" ? "APPROVED" : "PENDING",
+      ...(role === "RANGER" && { requestedParkId }),
     });
     return safeUser(user);
   } catch (error) {

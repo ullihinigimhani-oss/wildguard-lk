@@ -6,6 +6,12 @@ vi.mock("../../src/services/userApi", () => ({
   listUsers: vi.fn(),
   reviewUser: vi.fn(),
 }));
+vi.mock("../../src/services/parkApi", () => ({
+  listParks: vi.fn(async () => [
+    { id: "park-a", name: "Yala National Park" },
+    { id: "park-b", name: "Wilpattu National Park" },
+  ]),
+}));
 const user = {
   id: "ranger",
   name: "Test Ranger",
@@ -13,12 +19,14 @@ const user = {
   phone: null,
   role: "RANGER",
   approvalStatus: "PENDING",
+  requestedParkId: "park-a",
+  requestedPark: { id: "park-a", name: "Yala National Park" },
   createdAt: "2026-10-07T00:00:00Z",
 };
 beforeEach(() => {
   vi.clearAllMocks();
   listUsers.mockResolvedValue({ users: [user], total: 1 });
-  reviewUser.mockResolvedValue({ success: true, notification: { sent: true } });
+  reviewUser.mockResolvedValue({ success: true });
   HTMLDialogElement.prototype.showModal = function () {
     this.open = true;
   };
@@ -37,16 +45,23 @@ test("pending list shows real account details and approval confirmation", async 
     screen.getByRole("heading", { name: "Approve this account?" }),
   ).toBeVisible();
   expect(reviewUser).not.toHaveBeenCalled();
+  await screen.findByRole("option", { name: "Yala National Park" });
   await events.click(screen.getByRole("button", { name: "Approve Account" }));
   await waitFor(() =>
-    expect(reviewUser).toHaveBeenCalledWith("ranger", "APPROVED", undefined),
+    expect(reviewUser).toHaveBeenCalledWith(
+      "ranger",
+      "APPROVED",
+      undefined,
+      "park-a",
+    ),
   );
-  expect(await screen.findByText(/Notification email submitted/)).toBeVisible();
+  expect(
+    await screen.findByText(/Account approved successfully/),
+  ).toBeVisible();
 });
-test("reject keeps optional reason and warns on email failure", async () => {
+test("reject keeps optional reason and shows success without email configuration", async () => {
   reviewUser.mockResolvedValue({
     success: true,
-    notification: { sent: false },
   });
   const events = userEvent.setup();
   render(<Users />);
@@ -67,7 +82,7 @@ test("reject keeps optional reason and warns on email failure", async () => {
     ),
   );
   expect(
-    await screen.findByText(/Notification email could not be sent/),
+    await screen.findByText(/Account rejected successfully/),
   ).toBeVisible();
 });
 test("all users exposes search and exact filters; manager has no review buttons", async () => {
@@ -103,4 +118,44 @@ test("failed API shows retry and no fabricated users", async () => {
   expect((await screen.findAllByText(/Unable to load users/))[0]).toBeVisible();
   expect(screen.queryByText(user.email)).toBeNull();
   expect(screen.getAllByRole("button", { name: "Retry" })[0]).toBeVisible();
+});
+
+test("requested area is visible and manager may choose a different confirmed park", async () => {
+  const events = userEvent.setup();
+  render(<Users />);
+  await screen.findAllByText(/Requested Area: Yala National Park/);
+  await events.click(
+    screen.getAllByRole("button", { name: "Approve", exact: true })[0],
+  );
+  expect(screen.getByText("Requested Park / Ranger Area")).toBeVisible();
+  const select = await screen.findByLabelText("Confirmed Park / Ranger Area *");
+  await screen.findByRole("option", { name: "Wilpattu National Park" });
+  expect(select).toHaveValue("park-a");
+  await events.selectOptions(select, "park-b");
+  await events.click(screen.getByRole("button", { name: "Approve Account" }));
+  await waitFor(() =>
+    expect(reviewUser).toHaveBeenCalledWith(
+      "ranger",
+      "APPROVED",
+      undefined,
+      "park-b",
+    ),
+  );
+});
+test("legacy pending ranger must select a confirmed area before review", async () => {
+  listUsers.mockResolvedValue({
+    users: [{ ...user, requestedParkId: null, requestedPark: null }],
+    total: 1,
+  });
+  const events = userEvent.setup();
+  render(<Users />);
+  await screen.findAllByText(user.email);
+  await events.click(
+    screen.getAllByRole("button", { name: "Approve", exact: true })[0],
+  );
+  await events.click(screen.getByRole("button", { name: "Approve Account" }));
+  expect(reviewUser).not.toHaveBeenCalled();
+  expect(
+    screen.getAllByText("Select a confirmed park or ranger area.")[0],
+  ).toBeVisible();
 });

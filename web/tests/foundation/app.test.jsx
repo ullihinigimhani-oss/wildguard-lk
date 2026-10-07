@@ -131,14 +131,14 @@ test("pending account message is displayed without a session", async () => {
       data: {
         message:
           "Your account is awaiting approval. Your account must be verified before you can access WildGuard LK.",
+        code: "ACCOUNT_NOT_APPROVED",
+        approvalStatus: "PENDING",
       },
     },
   });
   const user = mount();
   await submit(user);
-  expect(
-    await screen.findByText(/Your account is awaiting approval/),
-  ).toBeVisible();
+  expect(await screen.findByText("Account Pending Approval")).toBeVisible();
   expect(sessionStorage.length).toBe(0);
 });
 test("ranger cannot open manager users route", async () => {
@@ -173,4 +173,42 @@ test("approved manager /users renders inside existing dashboard layout", async (
   expect(screen.getByText("Park Manager", { selector: "small" })).toBeVisible();
   expect(screen.queryByText("COMING SOON")).toBeNull();
   expect(await screen.findAllByText("No matching users.")).toHaveLength(2);
+});
+
+test("rejected account shows backend rejection message without a session", async () => {
+  api.post.mockRejectedValue({
+    response: {
+      status: 403,
+      data: {
+        message: "Your account request was not approved.",
+        code: "ACCOUNT_NOT_APPROVED",
+        approvalStatus: "REJECTED",
+      },
+    },
+  });
+  const user = mount();
+  await submit(user);
+  expect(await screen.findByText("Account Not Approved")).toBeVisible();
+  expect(sessionStorage.length).toBe(0);
+});
+
+test("a new failed login clears the previous approval notice and preserves credential errors", async () => {
+  api.post
+    .mockRejectedValueOnce({
+      response: {
+        status: 403,
+        data: { code: "ACCOUNT_NOT_APPROVED", approvalStatus: "PENDING" },
+      },
+    })
+    .mockRejectedValueOnce({ response: { status: 401 } });
+  const user = mount();
+  await submit(user);
+  await screen.findByText("Account Pending Approval");
+  await user.type(
+    screen.getByLabelText("Password", { exact: true }),
+    "Testing123!",
+  );
+  await user.click(screen.getByRole("button", { name: "Log in" }));
+  expect(await screen.findByText("Invalid email or password.")).toBeVisible();
+  expect(screen.queryByText("Account Pending Approval")).toBeNull();
 });

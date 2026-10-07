@@ -1414,3 +1414,39 @@ td small {
 .registration-photo > strong {
   flex-basis: 100%;
 }
+
+.park-select select {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #cbd8cf;
+  border-radius: 8px;
+  background: white;
+  color: #173e30;
+  margin: 10px 0;
+}
+.park-select input {
+  width: 100%;
+}
+.user-dialog .park-select {
+  margin: 18px 0;
+}
+
+.login-approval-status {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid #c4d4bd;
+  border-radius: 14px;
+  background: #edf2e6;
+  color: #244c37;
+}
+.login-approval-status h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+.login-approval-status p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #465c4d;
+}

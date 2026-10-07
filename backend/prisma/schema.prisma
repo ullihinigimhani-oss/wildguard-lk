@@ -84,7 +84,10 @@ model User {
   reviewedById String?
 
   parkId String?
-  park   Park?   @relation(fields: [parkId], references: [id])
+  park   Park?   @relation("AssignedPark", fields: [parkId], references: [id])
+
+  requestedParkId String?
+  requestedPark Park? @relation("RequestedPark", fields: [requestedParkId], references: [id])
 
   assignedPatrols Patrol[] @relation("AssignedRanger")
   createdPatrols  Patrol[] @relation("CreatedByManager")
@@ -98,6 +101,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@index([parkId])
+  @@index([requestedParkId])
   @@index([role])
   @@index([approvalStatus, role, createdAt])
 }
@@ -108,7 +112,8 @@ model Park {
   location    String?
   description String?
 
-  users       User[]
+  users       User[] @relation("AssignedPark")
+  requestedUsers User[] @relation("RequestedPark")
   patrols     Patrol[]
   incidents   Incident[]
   riskZones   RiskZone[]

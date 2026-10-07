@@ -14,6 +14,7 @@ export async function registerAccount({
   phone,
   password,
   role = "COMMUNITY_USER",
+  requestedParkId,
 }) {
   const { data } = await api.post("/auth/register", {
     name: name.trim(),
@@ -21,6 +22,7 @@ export async function registerAccount({
     phone: phone.trim() || undefined,
     password,
     role,
+    ...(role === "RANGER" && { requestedParkId }),
   });
   if (!data.success || !data.user?.id)
     throw new Error("Registration was not confirmed");

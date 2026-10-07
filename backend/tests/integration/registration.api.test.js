@@ -1,6 +1,7 @@
 const request = require("supertest");
 const bcrypt = require("bcryptjs");
 jest.mock("../../src/config/database", () => ({
+  park: { findUnique: jest.fn() },
   user: { findUnique: jest.fn(), create: jest.fn() },
 }));
 const prisma = require("../../src/config/database");
@@ -12,6 +13,10 @@ const valid = {
   password: "Test1234",
 };
 beforeEach(() => {
+  prisma.park.findUnique.mockResolvedValue({
+    id: "park-a",
+    name: "Yala National Park",
+  });
   prisma.user.findUnique.mockReset().mockResolvedValue(null);
   prisma.user.create
     .mockReset()
@@ -74,6 +79,7 @@ test.each(["RANGER", "COMMUNITY_LIAISON", "RESEARCHER"])(
       .send({
         ...valid,
         role,
+        ...(role === "RANGER" && { requestedParkId: "park-a" }),
         approvalStatus: "APPROVED",
         profileImageUrl: "file:///private",
       })
@@ -149,3 +155,50 @@ test("public PARK_MANAGER registration is rejected without creating an account",
   expect(prisma.user.create).not.toHaveBeenCalled();
   expect(prisma.user.findUnique).not.toHaveBeenCalled();
 });
+
+test.each([undefined, "", "missing-park", 123])(
+  "ranger registration requires a real requested park (%s)",
+  async (requestedParkId) => {
+    prisma.park.findUnique.mockImplementation(async ({ where }) =>
+      where.id === "park-a"
+        ? { id: "park-a", name: "Yala National Park" }
+        : null,
+    );
+    const { body } = await request(app)
+      .post("/api/auth/register")
+      .send({ ...valid, role: "RANGER", requestedParkId })
+      .expect(400);
+    expect(body.errors.requestedParkId).toBeTruthy();
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  },
+);
+test("requested park stays unverified and assignment/status injection is ignored", async () => {
+  const { body } = await request(app)
+    .post("/api/auth/register")
+    .send({
+      ...valid,
+      role: "RANGER",
+      requestedParkId: "park-a",
+      parkId: "park-b",
+      assignedAreaId: "park-b",
+      approvalStatus: "APPROVED",
+    })
+    .expect(201);
+  const data = prisma.user.create.mock.calls[0][0].data;
+  expect(data.requestedParkId).toBe("park-a");
+  expect(data.parkId).toBeUndefined();
+  expect(data.approvalStatus).toBe("PENDING");
+  expect(body.user.requestedParkId).toBe("park-a");
+});
+test.each(["COMMUNITY_LIAISON", "RESEARCHER", "COMMUNITY_USER"])(
+  "%s does not gain an assignment from a submitted ranger field",
+  async (role) => {
+    await request(app)
+      .post("/api/auth/register")
+      .send({ ...valid, role, requestedParkId: "park-a", parkId: "park-b" })
+      .expect(201);
+    const data = prisma.user.create.mock.calls[0][0].data;
+    expect(data.requestedParkId).toBeUndefined();
+    expect(data.parkId).toBeUndefined();
+  },
+);

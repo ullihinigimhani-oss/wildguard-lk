@@ -3,6 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import Register from "../../src/pages/Register/Register";
 import RegistrationPhoto from "../../src/components/common/RegistrationPhoto";
+vi.mock("../../src/services/parkApi", () => ({
+  listParks: vi.fn(async () => [{ id: "park-a", name: "Yala National Park" }]),
+}));
 test("role selection is required, single choice, and editable", async () => {
   const user = userEvent.setup();
   render(

@@ -17,6 +17,11 @@ beforeEach(() => {
     assets: [{ uri: "file:///temporary/photo.jpg" }],
   });
 });
+jest.mock("../../src/services/parkApi", () => ({
+  listParks: jest.fn(async () => [
+    { id: "park-a", name: "Yala National Park" },
+  ]),
+}));
 test("role is selected before form and can be changed", () => {
   const ui = render(<RegisterScreen navigation={{ navigate: jest.fn() }} />);
   expect(

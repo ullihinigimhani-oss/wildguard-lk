@@ -14,6 +14,12 @@ export default function Profile() {
           Name: user.name,
           Email: user.email,
           Role: roleLabel(user.role),
+          ...(user.role === "RANGER"
+            ? {
+                "Assigned Park / Ranger Area":
+                  user.park?.name || "Not assigned",
+              }
+            : {}),
           "Approval status": user.approvalStatus || "APPROVED",
           Phone: user.phone || "Not provided",
         }).map(([label, value]) => (
