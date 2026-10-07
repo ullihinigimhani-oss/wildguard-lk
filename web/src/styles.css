@@ -1513,6 +1513,18 @@ td small {
 .patrol-success .patrol-details {
   margin: 12px 0 0;
 }
+
+/* Map container styles */
+.map-container {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: white;
+}
+.map-container .leaflet-container {
+  height: 600px;
+  width: 100%;
+}
 .ranger-select select {
   width: 100%;
   padding: 14px;
