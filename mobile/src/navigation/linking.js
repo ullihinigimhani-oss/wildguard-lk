@@ -51,6 +51,7 @@ export function createLinking({ user, isAuthenticated, isDemo, hasCompletedOnboa
       }
       if (!signedIn && !isDemo) return stateFor("Login");
       if (Object.hasOwn(rangerPaths, name) && !ranger && !isDemo) return stateFor(destination);
+      if (ranger && !isDemo && ["Alerts", "Sync"].includes(name)) return stateFor("Home");
       return parsed;
     },
   };

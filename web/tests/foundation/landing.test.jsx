@@ -105,7 +105,7 @@ test("a demo session is not authorization for operations", () => {
 test("authenticated users keep the existing protected navigation", () => {
   session.user = demoUser;
   session.isAuthenticated = true;
-  mount("/patrols");
+  mount("/map");
   expect(screen.getByText("COMING SOON")).toBeVisible();
   expect(
     screen.queryByRole("heading", { name: "Choose Your Role" }),

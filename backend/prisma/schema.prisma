@@ -31,6 +31,20 @@ enum PatrolStatus {
   CANCELLED
 }
 
+enum PatrolType {
+  ROUTINE
+  ANTI_POACHING
+  WILDLIFE_MONITORING
+  CONFLICT_RESPONSE
+  SPECIAL
+}
+
+enum PatrolPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum IncidentStatus {
   PENDING
   UNDER_REVIEW
@@ -135,6 +149,12 @@ model Patrol {
   startTime     DateTime?
   endTime       DateTime?
   status        PatrolStatus @default(SCHEDULED)
+
+  patrolType   PatrolType   @default(ROUTINE)
+  priority     PatrolPriority @default(MEDIUM)
+  startLocation String?
+  latitude      Float?
+  longitude     Float?
 
   parkId String
   park   Park   @relation(fields: [parkId], references: [id])
