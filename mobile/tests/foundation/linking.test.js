@@ -20,11 +20,15 @@ test.each(['COMMUNITY_USER','PARK_MANAGER','COMMUNITY_LIAISON','RESEARCHER'])('%
  expect(selected(linking.getStateFromPath('/'))).toBe('Profile');
  expect(getPathFromState(linking.getStateFromPath('/account'),linking.config)).toBe('/account');
 });
-test.each(Object.entries(rangerPaths))('verified ranger can load %s at /%s',(name,path)=>{
+test.each(Object.entries(rangerPaths).filter(([name]) => !['Alerts', 'Sync'].includes(name)))('verified ranger can load %s at /%s',(name,path)=>{
  const linking=createLinking({user:{id:'u1',role:'RANGER'},isAuthenticated:true});
  const state=linking.getStateFromPath('/'+path);
  expect(selected(state)).toBe(name);
  expect(getPathFromState(state,linking.config)).toBe('/'+path);
+});
+test.each(['ranger/alerts', 'ranger/sync'])('removed prototype route /%s returns to Dashboard', path => {
+ const linking = createLinking({ user: { id: 'u1', role: 'RANGER' }, isAuthenticated: true });
+ expect(selected(linking.getStateFromPath('/' + path))).toBe('Home');
 });
 test('demo links stay separate and never authenticate a user',()=>{
  const linking=createLinking({isDemo:true});

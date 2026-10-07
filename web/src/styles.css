@@ -1450,3 +1450,70 @@ td small {
   line-height: 1.6;
   color: #465c4d;
 }
+
+.patrol-panel {
+  padding: 28px;
+  min-width: 0;
+}
+.patrol-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 20px;
+  margin-top: 18px;
+}
+.patrol-form .patrol-span {
+  grid-column: 1 / -1;
+}
+.patrol-form .registration-field {
+  margin: 14px 0;
+}
+.patrol-form input:not([type="checkbox"]),
+.patrol-form select,
+.patrol-form textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #cbd8cf;
+  border-radius: 8px;
+  background: white;
+  color: #173e30;
+  font-size: 13px;
+  font-family: inherit;
+  min-height: 44px;
+}
+.patrol-form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+.patrol-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 10px 0 4px;
+}
+.patrol-success {
+  margin: 18px 0;
+}
+.patrol-success .patrol-details {
+  margin: 12px 0 0;
+}
+.ranger-select select {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #cbd8cf;
+  border-radius: 8px;
+  background: white;
+  color: #173e30;
+  margin: 10px 0;
+}
+.ranger-select input {
+  width: 100%;
+}
+@media (max-width: 700px) {
+  .patrol-panel {
+    padding: 18px;
+  }
+  .patrol-form {
+    grid-template-columns: 1fr;
+  }
+}

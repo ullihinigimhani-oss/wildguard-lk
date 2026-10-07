@@ -6,8 +6,23 @@ import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
 import { useAuth } from "../../hooks/useAuth";
 import { styles } from "../../constants/theme";
+import { rangerStyles as ui } from "../../constants/rangerTheme";
 export default function ProfileScreen() {
   const { user, logout, isDemo } = useAuth();
+  if (!isDemo && user.role === "RANGER") return <Screen>
+    <Text style={styles.eyebrow}>YOUR ACCOUNT</Text>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+      <Avatar user={user} size={56} /><View style={{ flex: 1, gap: 3 }}>
+        <Text accessibilityRole="header" style={ui.section}>{user.name}</Text><Text style={styles.muted}>Park Ranger</Text>
+      </View>
+    </View>
+    <View style={ui.card}>
+      {Object.entries({ Email: user.email, "Assigned Park / Ranger Area": user.park?.name || "Not assigned", "Approval status": user.approvalStatus }).map(([label, value], index) => <View key={label} style={{ gap: 5, paddingTop: index ? 12 : 0, borderTopWidth: index ? 1 : 0, borderColor: "#dce4d7" }}>
+        <Text style={styles.muted}>{label}</Text><Text style={styles.text}>{value}</Text>
+      </View>)}
+    </View>
+    <Button title="Logout" secondary onPress={logout} />
+  </Screen>;
   return (
     <Screen>
       <Avatar user={user} />
@@ -28,6 +43,7 @@ export default function ProfileScreen() {
             ? {
                 "Assigned Park / Ranger Area":
                   user.park?.name || "Not assigned",
+                "Approval status": user.approvalStatus,
               }
             : {}),
         }).map(([label, value]) => (

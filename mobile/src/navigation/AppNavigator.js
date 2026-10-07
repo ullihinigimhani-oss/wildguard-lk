@@ -4,6 +4,10 @@ import { useAuth } from "../hooks/useAuth";
 import { authenticatedDestination } from "../constants/roles";
 import AuthNavigator from "./AuthNavigator";
 import HomeScreen from "../screens/home/HomeScreen";
+import DemoHomeScreen from "../screens/home/DemoHomeScreen";
+import MyPatrolScreen from "../screens/patrol/MyPatrolScreen";
+import RangerIncidentScreen from "../screens/incident/RangerIncidentScreen";
+import RangerShell from "./RangerShell";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import AlertsScreen from "../screens/alerts/AlertsScreen";
 import SyncScreen from "../screens/placeholders/SyncScreen";
@@ -15,6 +19,15 @@ export default function AppNavigator() {
   const destination = isAuthenticated ? authenticatedDestination(user) : null;
   if (!isDemo && !destination) return <AuthNavigator />;
   const rangerArea = isDemo || destination === "Home";
+  if (!isDemo && destination === "Home") return (
+    <Stack.Navigator key={`${user.id}:ranger`} initialRouteName="Home" screenOptions={{ headerShown: false, animation: "none" }}>
+      {[["Home", "Dashboard", HomeScreen], ["Patrol", "My Patrol", MyPatrolScreen], ["Incident", "Report Incident", RangerIncidentScreen], ["Profile", "Profile", ProfileScreen]].map(([name, title, Component]) => (
+        <Stack.Screen key={name} name={name} options={{ title, headerBackVisible: false }}>
+          {props => <RangerShell {...props}><Component {...props} /></RangerShell>}
+        </Stack.Screen>
+      ))}
+    </Stack.Navigator>
+  );
   return (
     <Stack.Navigator
       key={isDemo ? "demo" : `${user.id}:${user.role}`}
@@ -23,7 +36,7 @@ export default function AppNavigator() {
     >
       {rangerArea && <><Stack.Screen
         name="Home"
-        component={HomeScreen}
+        component={DemoHomeScreen}
         options={{ title: isDemo ? "WildGuard LK · Demo" : "WildGuard LK" }}
       />
       <Stack.Screen name="Patrol" options={{ title: "My Patrol" }}>
