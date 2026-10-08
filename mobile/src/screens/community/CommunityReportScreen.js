@@ -54,6 +54,8 @@ export default function CommunityReportScreen({ navigation, route }) {
   const [species, setSpecies] = useState("");
   const [description, setDescription] = useState("");
   const [manualLocation, setManualLocation] = useState("");
+  const [villageArea, setVillageArea] = useState("");
+  const [landmarkDescription, setLandmarkDescription] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
 
@@ -63,6 +65,11 @@ export default function CommunityReportScreen({ navigation, route }) {
 
   function selectSpecies(s) {
     setSpecies(s);
+  }
+
+  function getEffectiveManualLocation() {
+    if (manualLocation.trim()) return manualLocation.trim();
+    return [villageArea.trim(), landmarkDescription.trim()].filter(Boolean).join(" - ");
   }
 
   function validate() {
@@ -82,7 +89,8 @@ export default function CommunityReportScreen({ navigation, route }) {
       errs.description = "Description must not exceed 2000 characters.";
     }
 
-    const hasManualLoc = Boolean(manualLocation.trim());
+    const effectiveLoc = getEffectiveManualLocation();
+    const hasManualLoc = Boolean(effectiveLoc);
     const latTrim = latitude.trim();
     const lonTrim = longitude.trim();
     const hasLat = latTrim !== "";
@@ -134,12 +142,13 @@ export default function CommunityReportScreen({ navigation, route }) {
     try {
       const latTrim = latitude.trim();
       const lonTrim = longitude.trim();
+      const effectiveLoc = getEffectiveManualLocation();
 
       const payload = {
         reportType,
         species: species.trim() || undefined,
         description: description.trim(),
-        manualLocation: manualLocation.trim() || undefined,
+        manualLocation: effectiveLoc || undefined,
         latitude: latTrim ? parseFloat(latTrim) : undefined,
         longitude: lonTrim ? parseFloat(lonTrim) : undefined,
         reporterName: user?.name || undefined,
@@ -170,6 +179,8 @@ export default function CommunityReportScreen({ navigation, route }) {
     setSpecies("");
     setDescription("");
     setManualLocation("");
+    setVillageArea("");
+    setLandmarkDescription("");
     setLatitude("");
     setLongitude("");
     setErrors({});
@@ -388,9 +399,13 @@ export default function CommunityReportScreen({ navigation, route }) {
       {/* 4. Location */}
       <LocationPicker
         manualLocation={manualLocation}
+        villageArea={villageArea}
+        landmarkDescription={landmarkDescription}
         latitude={latitude}
         longitude={longitude}
         onChangeManualLocation={setManualLocation}
+        onChangeVillageArea={setVillageArea}
+        onChangeLandmarkDescription={setLandmarkDescription}
         onChangeLatitude={setLatitude}
         onChangeLongitude={setLongitude}
         error={errors.latitude || errors.longitude || errors.manualLocation || errors.location}
