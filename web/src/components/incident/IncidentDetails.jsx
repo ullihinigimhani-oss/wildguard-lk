@@ -7,6 +7,7 @@ import {
 import { Status, time } from "./incidentPresentation";
 import PrivateEvidence from "./PrivateEvidence";
 import IncidentLocation from "./IncidentLocation";
+import IncidentStatusForm from "./IncidentStatusForm";
 export default function IncidentDetails({ id, patrolId }) {
   const [incident, setIncident] = useState(null),
     [error, setError] = useState(""),
@@ -94,6 +95,11 @@ export default function IncidentDetails({ id, patrolId }) {
           <h3>Description</h3>
           <p className="incident-description">{incident.description || "—"}</p>
           <h3>Incident location</h3>
+          {incident.manualLocation && (
+            <p className="incident-manual-location">
+              {incident.manualLocation}
+            </p>
+          )}
           <IncidentLocation
             latitude={incident.latitude}
             longitude={incident.longitude}
@@ -109,10 +115,10 @@ export default function IncidentDetails({ id, patrolId }) {
             ))}
           </div>
           {!incident.evidence?.length && <p>No evidence attached.</p>}
-          <p>
-            This report is read-only. Manager review actions are not available
-            yet.
-          </p>
+          <IncidentStatusForm
+            incident={incident}
+            onSaved={(updated) => setIncident({ ...incident, ...updated })}
+          />
         </>
       )}
     </section>

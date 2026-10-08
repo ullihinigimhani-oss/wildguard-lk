@@ -1,6 +1,7 @@
 const service = require("../services/incident.service");
 const {
   validateIncident,
+  validateStatus,
   validateFilters,
   id,
   onlyKeys
@@ -27,6 +28,13 @@ exports.details = endpoint(async req => ({
 }));
 exports.edit = endpoint(async req => ({
   incident: await service.edit(id(req.params.incidentId, "incidentId"), validateIncident(req.body, true), req.user)
+}));
+exports.updateStatus = endpoint(async req => ({
+  incident: await service.updateStatus(
+    id(req.params.incidentId, "incidentId"),
+    validateStatus(req.body),
+    req.user,
+  )
 }));
 exports.withdraw = endpoint(async req => {
   onlyKeys(req.body ?? {}, []);
