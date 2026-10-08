@@ -6,7 +6,17 @@ const notFound = (message = "Alert not found.") =>
 const badRequest = (message = "Invalid alert parameters.") =>
   Object.assign(new Error(message), { status: 400, authError: true });
 
-// Standardized safety guidance based on risk levels for Sri Lankan wildlife
+const forbidden = (message = "You do not have permission to perform this action.") =>
+  Object.assign(new Error(message), { status: 403, authError: true });
+
+const AUTHORIZED_ROLES = ["COMMUNITY_LIAISON", "PARK_MANAGER"];
+
+function assertAuthorizedRole(user) {
+  if (!user || !user.role || !AUTHORIZED_ROLES.includes(user.role)) {
+    throw forbidden("Only authorized community liaisons or park managers can perform this operation.");
+  }
+}
+
 // Standardized safety guidance based on risk levels for Sri Lankan wildlife
 function getSafetyInstructions(riskLevel, species, zoneName) {
   const areaNotice = zoneName
@@ -135,6 +145,20 @@ function formatAlert(alert, user = null) {
       ? acknowledgements.filter((ack) => Boolean(ack.acknowledgedAt)).length
       : 0,
     safetyInstructions: getSafetyInstructions(alert.riskLevel, alert.animal?.species, zoneName),
+    responseNote: alert.responseNote || null,
+    respondedAt: alert.respondedAt || null,
+    respondedById: alert.respondedById || null,
+    responder: alert.responder
+      ? {
+          id: alert.responder.id,
+          name: alert.responder.name,
+          role: alert.responder.role,
+        }
+      : null,
+    forwardedTo: alert.forwardedTo || null,
+    forwardedAt: alert.forwardedAt || null,
+    isResponded: Boolean(alert.respondedAt || alert.responseNote),
+    isForwarded: Boolean(alert.forwardedTo),
   };
 }
 
@@ -295,4 +319,203 @@ exports.updateAlertStatus = async (alertId, status) => {
 
   const resolvedAt = status.toUpperCase() === "RESOLVED" ? new Date() : null;
   return repository.updateAlertStatus(alertId, status.toUpperCase(), resolvedAt);
+};
+
+exports.getAlertsRequiringAttention = async (query = {}, user = null) => {
+  assertAuthorizedRole(user);
+  const { parkId, page = 1, pageSize = 20 } = query;
+
+  const result = await repository.listAlertsRequiringAttention({
+    parkId: typeof parkId === "string" ? parkId.trim() : undefined,
+    page: Math.max(1, parseInt(page, 10) || 1),
+    pageSize: Math.min(50, Math.max(1, parseInt(pageSize, 10) || 20)),
+  });
+
+  const alerts = result.alerts.map((a) => formatAlert(a, user));
+  return {
+    alerts,
+    total: result.total,
+    page: result.page,
+    pageSize: result.pageSize,
+  };
+};
+
+exports.respondToAlert = async (alertId, body = {}, user = null) => {
+  assertAuthorizedRole(user);
+
+  if (!alertId || typeof alertId !== "string" || !alertId.trim()) {
+    throw badRequest("Invalid alert ID format.");
+  }
+
+  const alert = await repository.findAlertById(alertId.trim());
+  if (!alert) throw notFound();
+
+  if (alert.status === "RESOLVED" || alert.resolvedAt) {
+    throw badRequest("Cannot respond to a resolved alert.");
+  }
+
+  const ageMs = Date.now() - new Date(alert.generatedAt || alert.createdAt || Date.now()).getTime();
+  if (ageMs > 72 * 60 * 60 * 1000) {
+    throw badRequest("Cannot respond to an expired alert.");
+  }
+
+  const { status, responseNote } = body || {};
+
+  let targetStatus = alert.status === "ACTIVE" ? "ACKNOWLEDGED" : alert.status;
+  if (status) {
+    const normalizedStatus = String(status).trim().toUpperCase();
+    if (alert.status === "ACKNOWLEDGED" && normalizedStatus === "ACTIVE") {
+      throw badRequest("Cannot revert an acknowledged alert to active.");
+    }
+    if (!["ACKNOWLEDGED", "RESOLVED"].includes(normalizedStatus)) {
+      throw badRequest("Invalid status transition. Allowed response states are ACKNOWLEDGED or RESOLVED.");
+    }
+    targetStatus = normalizedStatus;
+  }
+
+  let trimmedNote;
+  if (responseNote !== undefined && responseNote !== null) {
+    if (typeof responseNote !== "string") {
+      throw badRequest("Response note must be a string.");
+    }
+    trimmedNote = responseNote.trim();
+    if (trimmedNote.length < 5 || trimmedNote.length > 1000) {
+      throw badRequest("Response note must be between 5 and 1000 characters.");
+    }
+  }
+
+  if (trimmedNote === undefined && !status) {
+    throw badRequest("A response note or status update is required.");
+  }
+
+  // Duplicate response prevention
+  if (
+    alert.status === targetStatus &&
+    (trimmedNote === undefined || alert.responseNote === trimmedNote) &&
+    alert.respondedById === user.id
+  ) {
+    return {
+      success: true,
+      message: "Response already recorded.",
+      alreadyResponded: true,
+      alert: formatAlert(alert, user),
+    };
+  }
+
+  const resolvedAt = targetStatus === "RESOLVED" ? new Date() : null;
+  const updatedAlert = await repository.respondToAlert(alert.id, {
+    status: targetStatus,
+    responseNote: trimmedNote !== undefined ? trimmedNote : alert.responseNote,
+    respondedById: user.id,
+    resolvedAt,
+  });
+
+  return {
+    success: true,
+    message: "Operational response recorded successfully.",
+    alert: formatAlert(updatedAlert, user),
+  };
+};
+
+exports.forwardAlert = async (alertId, body = {}, user = null) => {
+  assertAuthorizedRole(user);
+
+  if (!alertId || typeof alertId !== "string" || !alertId.trim()) {
+    throw badRequest("Invalid alert ID format.");
+  }
+
+  const alert = await repository.findAlertById(alertId.trim());
+  if (!alert) throw notFound();
+
+  if (alert.status === "RESOLVED" || alert.resolvedAt) {
+    throw badRequest("Cannot forward a resolved alert.");
+  }
+
+  const ageMs = Date.now() - new Date(alert.generatedAt || alert.createdAt || Date.now()).getTime();
+  if (ageMs > 72 * 60 * 60 * 1000) {
+    throw badRequest("Cannot forward an expired alert.");
+  }
+
+  const { forwardTo, note } = body || {};
+  if (!forwardTo || typeof forwardTo !== "string") {
+    throw badRequest("Invalid forward target. Permitted targets: RANGER, PARK_MANAGER.");
+  }
+
+  const target = forwardTo.trim().toUpperCase();
+  if (!["RANGER", "PARK_MANAGER"].includes(target)) {
+    throw badRequest("Invalid forward target. Permitted targets: RANGER, PARK_MANAGER.");
+  }
+
+  let trimmedNote;
+  if (note !== undefined && note !== null) {
+    if (typeof note !== "string") {
+      throw badRequest("Forwarding note must be a string.");
+    }
+    trimmedNote = note.trim();
+    if (trimmedNote.length < 5 || trimmedNote.length > 1000) {
+      throw badRequest("Forwarding note must be between 5 and 1000 characters.");
+    }
+  }
+
+  // Duplicate forward prevention
+  if (
+    alert.forwardedTo === target &&
+    (trimmedNote === undefined || alert.responseNote === trimmedNote)
+  ) {
+    return {
+      success: true,
+      message: `Alert has already been forwarded to ${target}.`,
+      alreadyForwarded: true,
+      alert: formatAlert(alert, user),
+    };
+  }
+
+  const targetStatus = alert.status === "ACTIVE" ? "ACKNOWLEDGED" : alert.status;
+  const updatedAlert = await repository.respondToAlert(alert.id, {
+    status: targetStatus,
+    responseNote: trimmedNote !== undefined ? trimmedNote : alert.responseNote,
+    respondedById: user.id,
+    forwardedTo: target,
+  });
+
+  const formatted = formatAlert(updatedAlert, user);
+  const handoff = {
+    alertId: updatedAlert.id,
+    status: updatedAlert.status,
+    handoffTarget: target,
+    forwardedAt: updatedAlert.forwardedAt || new Date(),
+    forwardedBy: {
+      id: user.id,
+      name: user.name || "Community Liaison",
+      role: user.role,
+    },
+    urgency:
+      updatedAlert.riskLevel === "CRITICAL"
+        ? "IMMEDIATE"
+        : updatedAlert.riskLevel === "HIGH"
+        ? "HIGH"
+        : "STANDARD",
+    riskLevel: updatedAlert.riskLevel,
+    affectedArea: formatted.affectedArea,
+    animal: updatedAlert.animal
+      ? {
+          id: updatedAlert.animal.id,
+          species: updatedAlert.animal.species,
+          animalCode: updatedAlert.animal.animalCode,
+          name: updatedAlert.animal.name,
+        }
+      : null,
+    responseNote: updatedAlert.responseNote,
+    recommendedAction:
+      target === "RANGER"
+        ? "Mobilize ground patrol to secure community perimeter and verify animal bearing."
+        : "Review community safety perimeter advisory and assess managerial escalation.",
+  };
+
+  return {
+    success: true,
+    message: `Alert forwarded to ${target} successfully.`,
+    alert: formatted,
+    handoff,
+  };
 };

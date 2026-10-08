@@ -41,6 +41,18 @@ const alertSelect = {
       acknowledgedAt: true,
     },
   },
+  responseNote: true,
+  respondedAt: true,
+  respondedById: true,
+  responder: {
+    select: {
+      id: true,
+      name: true,
+      role: true,
+    },
+  },
+  forwardedTo: true,
+  forwardedAt: true,
   createdAt: true,
   updatedAt: true,
 };
@@ -188,6 +200,52 @@ exports.updateAlertStatus = async (id, status, resolvedAt = null) => {
     where: { id },
     data: {
       status,
+      ...(resolvedAt && { resolvedAt }),
+    },
+    select: alertSelect,
+  });
+};
+
+exports.listAlertsRequiringAttention = async ({ parkId, page = 1, pageSize = 20 } = {}) => {
+  const where = {
+    status: { in: ["ACTIVE", "ACKNOWLEDGED"] },
+    ...(parkId && {
+      riskZone: { parkId },
+    }),
+  };
+
+  const skip = (Number(page) - 1) * Number(pageSize);
+  const take = Number(pageSize);
+
+  const [alerts, total] = await Promise.all([
+    db().alert.findMany({
+      where,
+      select: alertSelect,
+      orderBy: [{ riskLevel: "desc" }, { generatedAt: "desc" }],
+      skip,
+      take,
+    }),
+    db().alert.count({ where }),
+  ]);
+
+  return { alerts, total, page: Number(page), pageSize: Number(pageSize) };
+};
+
+exports.respondToAlert = async (id, { status, responseNote, respondedById, forwardedTo, resolvedAt = null }) => {
+  const now = new Date();
+  return db().alert.update({
+    where: { id },
+    data: {
+      ...(status && { status }),
+      ...(responseNote !== undefined && { responseNote }),
+      ...(respondedById && {
+        respondedById,
+        respondedAt: now,
+      }),
+      ...(forwardedTo && {
+        forwardedTo,
+        forwardedAt: now,
+      }),
       ...(resolvedAt && { resolvedAt }),
     },
     select: alertSelect,

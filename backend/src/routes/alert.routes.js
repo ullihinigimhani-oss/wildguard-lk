@@ -26,16 +26,25 @@ router.get("/unread-count", optionalAuth, controller.getUnreadCount);
 // 3. Mark all active alerts as read (requires login)
 router.post("/read-all", authenticate, controller.markAllAsRead);
 
-// 4. View alert details & safety instructions
+// 4. View alerts requiring operational attention (Liaison or Manager)
+router.get("/attention", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.getAlertsRequiringAttention);
+
+// 5. View alert details & safety instructions
 router.get("/:id", optionalAuth, controller.getAlertById);
 
-// 5. Mark individual alert as read (requires login)
+// 6. Mark individual alert as read (requires login)
 router.post("/:id/read", authenticate, controller.markAsRead);
 
-// 6. Acknowledge alert (requires login)
+// 7. Acknowledge alert (requires login)
 router.post("/:id/acknowledge", authenticate, controller.acknowledgeAlert);
 
-// 7. Update alert status (Liaison or Manager)
+// 8. Operational response: acknowledge responsibility, add response note, update permitted states (Liaison or Manager)
+router.post("/:id/respond", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.respondToAlert);
+
+// 9. Forward alert requiring Ranger / Manager action (Liaison or Manager)
+router.post("/:id/forward", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.forwardAlert);
+
+// 10. Update alert status (Liaison or Manager)
 router.patch("/:id/status", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.updateStatus);
 
 module.exports = router;

@@ -112,6 +112,7 @@ model User {
   communityReports CommunityReport[]
 
   alertAcknowledgements AlertAcknowledgement[]
+  respondedAlerts       Alert[]                @relation("AlertResponses")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -416,6 +417,16 @@ model Alert {
   generatedAt DateTime  @default(now())
   resolvedAt  DateTime?
 
+  // Operational liaison / authorized response
+  responseNote  String?
+  respondedById String?
+  respondedAt   DateTime?
+  responder     User?     @relation("AlertResponses", fields: [respondedById], references: [id])
+
+  // Ranger / Manager operational handoff
+  forwardedTo String?
+  forwardedAt DateTime?
+
   animalId String
   animal   Animal @relation(fields: [animalId], references: [id])
 
@@ -430,6 +441,7 @@ model Alert {
   @@index([animalId])
   @@index([riskZoneId])
   @@index([status])
+  @@index([respondedById])
 }
 
 model AlertAcknowledgement {

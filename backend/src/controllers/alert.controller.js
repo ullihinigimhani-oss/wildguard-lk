@@ -72,3 +72,34 @@ exports.updateStatus = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getAlertsRequiringAttention = async (req, res, next) => {
+  try {
+    const result = await service.getAlertsRequiringAttention(req.query, req.user);
+    res.set("Cache-Control", "no-store").json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.respondToAlert = async (req, res, next) => {
+  try {
+    const result = await service.respondToAlert(req.params.id, req.body, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.forwardAlert = async (req, res, next) => {
+  try {
+    const result = await service.forwardAlert(req.params.id, req.body, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+

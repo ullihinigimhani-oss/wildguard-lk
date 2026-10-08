@@ -45,6 +45,14 @@ beforeEach(() => {
       approvalStatus: "APPROVED",
       isActive: true,
     },
+    manager: {
+      id: "manager",
+      name: "Park Manager",
+      email: "manager@example.test",
+      role: "PARK_MANAGER",
+      approvalStatus: "APPROVED",
+      isActive: true,
+    },
   };
 
   db.user.findUnique.mockImplementation(async ({ where }) => accounts[where.id] || null);
@@ -431,4 +439,310 @@ describe("Safety Alert APIs", () => {
       expect(db.alert.update).toHaveBeenCalled();
     });
   });
+
+  describe("GET /api/alerts/attention (Alerts Requiring Operational Attention)", () => {
+    test("rejects unauthenticated request with 401", async () => {
+      await request(app).get("/api/alerts/attention").expect(401);
+    });
+
+    test("forbids COMMUNITY_USER from viewing operational attention alerts with 403", async () => {
+      await request(app)
+        .get("/api/alerts/attention")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(403);
+    });
+
+    test("allows COMMUNITY_LIAISON to view alerts requiring attention", async () => {
+      const res = await request(app)
+        .get("/api/alerts/attention")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.alerts)).toBe(true);
+      expect(res.body.alerts).toHaveLength(2);
+      expect(res.body.total).toBe(2);
+      expect(res.headers["cache-control"]).toBe("no-store");
+    });
+
+    test("allows PARK_MANAGER to view alerts requiring attention", async () => {
+      const res = await request(app)
+        .get("/api/alerts/attention")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.alerts).toHaveLength(2);
+    });
+  });
+
+  describe("POST /api/alerts/:id/respond (Operational Alert Response)", () => {
+    test("rejects unauthenticated request with 401", async () => {
+      await request(app)
+        .post("/api/alerts/alert-1/respond")
+        .send({ responseNote: "Community perimeter notified and flares deployed." })
+        .expect(401);
+    });
+
+    test("forbids COMMUNITY_USER from responding to alerts with 403", async () => {
+      const res = await request(app)
+        .post("/api/alerts/alert-1/respond")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .send({ responseNote: "Community perimeter notified." })
+        .expect(403);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("permission");
+    });
+
+    test("returns 404 when alert does not exist", async () => {
+      db.alert.findUnique.mockResolvedValue(null);
+
+      await request(app)
+        .post("/api/alerts/missing/respond")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ responseNote: "Perimeter check conducted." })
+        .expect(404);
+    });
+
+    test("rejects response when alert is already RESOLVED with 400", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "RESOLVED",
+        resolvedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/respond")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ responseNote: "Attempting to respond to resolved alert." })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Cannot respond to a resolved alert.");
+    });
+
+    test("rejects response when alert is expired (>72 hours) with 400", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "ACTIVE",
+        generatedAt: new Date(Date.now() - 80 * 60 * 60 * 1000),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/respond")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ responseNote: "Attempting to respond to old alert." })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Cannot respond to an expired alert.");
+    });
+
+    test("rejects response note shorter than 5 characters with 400", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "ACTIVE",
+        generatedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/respond")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ responseNote: "ok" })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("between 5 and 1000 characters");
+    });
+
+    test("rejects invalid status transitions with 400", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "ACKNOWLEDGED",
+        generatedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/respond")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ status: "ACTIVE" })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("Cannot revert an acknowledged alert to active");
+    });
+
+    test("allows COMMUNITY_LIAISON to acknowledge responsibility and record response note", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "ACTIVE",
+        riskLevel: "CRITICAL",
+        message: "Elephant herd near border.",
+        generatedAt: new Date(),
+        animal: { species: "Elephas maximus" },
+        riskZone: { name: "Sector 3 Buffer", park: { name: "Yala" } },
+      });
+
+      const now = new Date();
+      db.alert.update.mockResolvedValue({
+        id: "alert-1",
+        status: "ACKNOWLEDGED",
+        riskLevel: "CRITICAL",
+        message: "Elephant herd near border.",
+        generatedAt: new Date(),
+        responseNote: "Liaison established contact with village committee; flares distributed.",
+        respondedById: "liaison",
+        respondedAt: now,
+        responder: { id: "liaison", name: "Liaison Officer", role: "COMMUNITY_LIAISON" },
+        animal: { species: "Elephas maximus" },
+        riskZone: { name: "Sector 3 Buffer", park: { name: "Yala" } },
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/respond")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({
+          responseNote: "Liaison established contact with village committee; flares distributed.",
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toBe("Operational response recorded successfully.");
+      expect(res.body.alert.status).toBe("ACKNOWLEDGED");
+      expect(res.body.alert.responseNote).toContain("flares distributed");
+      expect(res.body.alert.responder.name).toBe("Liaison Officer");
+      expect(res.body.alert.isResponded).toBe(true);
+      expect(db.alert.update).toHaveBeenCalled();
+    });
+
+    test("detects duplicate response without redundant update", async () => {
+      const existingNote = "Liaison established contact with village committee; flares distributed.";
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "ACKNOWLEDGED",
+        responseNote: existingNote,
+        respondedById: "liaison",
+        generatedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/respond")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ responseNote: existingNote })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.alreadyResponded).toBe(true);
+      expect(res.body.message).toBe("Response already recorded.");
+    });
+  });
+
+  describe("POST /api/alerts/:id/forward (Handoff / Forward to Ranger or Manager)", () => {
+    test("rejects unauthenticated request with 401", async () => {
+      await request(app)
+        .post("/api/alerts/alert-1/forward")
+        .send({ forwardTo: "RANGER" })
+        .expect(401);
+    });
+
+    test("forbids COMMUNITY_USER from forwarding alerts with 403", async () => {
+      await request(app)
+        .post("/api/alerts/alert-1/forward")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .send({ forwardTo: "RANGER" })
+        .expect(403);
+    });
+
+    test("rejects invalid forward target with 400", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "ACTIVE",
+        generatedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/forward")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ forwardTo: "POLICE" })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("Permitted targets: RANGER, PARK_MANAGER");
+    });
+
+    test("forwards alert to RANGER with clear handoff payload without duplicating Ranger dispatch", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "ACTIVE",
+        riskLevel: "CRITICAL",
+        message: "Elephant herd spotted near northern boundary.",
+        generatedAt: new Date(),
+        animal: { id: "anim-1", species: "Elephas maximus", animalCode: "ELE-01", name: "Raja" },
+        riskZone: { name: "Sector 3 Buffer", park: { name: "Yala" } },
+      });
+
+      const now = new Date();
+      db.alert.update.mockResolvedValue({
+        id: "alert-1",
+        status: "ACKNOWLEDGED",
+        riskLevel: "CRITICAL",
+        message: "Elephant herd spotted near northern boundary.",
+        generatedAt: new Date(),
+        responseNote: "Escalated to Ranger patrol for immediate ground containment.",
+        respondedById: "liaison",
+        respondedAt: now,
+        forwardedTo: "RANGER",
+        forwardedAt: now,
+        responder: { id: "liaison", name: "Liaison Officer", role: "COMMUNITY_LIAISON" },
+        animal: { id: "anim-1", species: "Elephas maximus", animalCode: "ELE-01", name: "Raja" },
+        riskZone: { name: "Sector 3 Buffer", park: { name: "Yala" } },
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/forward")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({
+          forwardTo: "RANGER",
+          note: "Escalated to Ranger patrol for immediate ground containment.",
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toBe("Alert forwarded to RANGER successfully.");
+      expect(res.body.alert.forwardedTo).toBe("RANGER");
+      expect(res.body.alert.isForwarded).toBe(true);
+
+      // Verify clear handoff integration contract
+      expect(res.body.handoff).toBeDefined();
+      expect(res.body.handoff.alertId).toBe("alert-1");
+      expect(res.body.handoff.handoffTarget).toBe("RANGER");
+      expect(res.body.handoff.urgency).toBe("IMMEDIATE");
+      expect(res.body.handoff.riskLevel).toBe("CRITICAL");
+      expect(res.body.handoff.affectedArea).toContain("Sector 3 Buffer");
+      expect(res.body.handoff.forwardedBy.role).toBe("COMMUNITY_LIAISON");
+      expect(res.body.handoff.recommendedAction).toContain("Mobilize ground patrol");
+    });
+
+    test("detects duplicate forward if already forwarded to same target", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "ACKNOWLEDGED",
+        forwardedTo: "RANGER",
+        responseNote: "Already escalated to Ranger.",
+        generatedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/forward")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ forwardTo: "RANGER", note: "Already escalated to Ranger." })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.alreadyForwarded).toBe(true);
+      expect(res.body.message).toContain("already been forwarded to RANGER");
+    });
+  });
 });
+
