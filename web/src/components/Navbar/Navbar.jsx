@@ -22,13 +22,15 @@ export default function Navbar({ title, open, onToggle }) {
         </div>
       </div>
       <div className="topbar-actions">
-        <Link
-          className="notification-button"
-          to="/alerts"
-          aria-label="Notifications"
-        >
-          ♧
-        </Link>
+        {user.role !== 'RESEARCHER' && (
+          <Link
+            className="notification-button"
+            to="/alerts"
+            aria-label="Notifications"
+          >
+            ♧
+          </Link>
+        )}
         <Link
           to="/profile"
           className="user-link"
@@ -41,7 +43,19 @@ export default function Navbar({ title, open, onToggle }) {
             <small>{user.email}</small>
           </span>
         </Link>
-        <button className="text-button" onClick={logout}>
+        <button 
+          className="text-button" 
+          onClick={logout}
+          style={{
+            background: '#e74c3c',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            fontWeight: '600'
+          }}
+        >
           Logout
         </button>
       </div>
