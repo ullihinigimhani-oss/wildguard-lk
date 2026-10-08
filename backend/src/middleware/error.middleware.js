@@ -1,6 +1,8 @@
 // Never expose database errors, request contents, or stack traces to clients.
 function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
+  if (error.incidentError && [404, 409, 503].includes(error.status))
+    return res.status(error.status).json({ success: false, code: error.code, message: error.message });
   if (
     error.navigationError &&
     [400, 404, 409, 422, 429, 502, 503, 504].includes(error.status)
