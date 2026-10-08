@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "../../components/common/Typography";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
 import PatrolLoadState from "../../components/PatrolLoadState";

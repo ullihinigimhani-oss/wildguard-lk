@@ -1,10 +1,14 @@
 import Users from "../pages/Users/Users";
 import Register from "../pages/Register/Register";
 import PatrolManagement from "../pages/PatrolManagement/PatrolManagement";
+import EditPatrol from "../pages/PatrolManagement/EditPatrol";
 import CreatePatrol from "../pages/PatrolManagement/CreatePatrol";
 import PatrolDetails from "../pages/PatrolManagement/PatrolDetails";
+import RangerMonitoring from "../pages/RangerMonitoring/RangerMonitoring";
+import RangerTrack from "../pages/RangerMonitoring/RangerTrack";
 import Reporting from "../pages/Reporting/Reporting";
 import FieldMap from "../pages/FieldMap/FieldMap";
+import WildlifeMonitoring from "../pages/WildlifeMonitoring/WildlifeMonitoring";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import OperationsLayout from "../layouts/OperationsLayout";
@@ -43,6 +47,9 @@ export default function AppRoutes() {
             <Route path="/users" element={<Users />} />
             <Route path="/patrols" element={<PatrolManagement />} />
             <Route path="/patrols/new" element={<CreatePatrol />} />
+            <Route path="/patrols/live" element={<RangerMonitoring />} />
+            <Route path="/patrols/:id/track" element={<RangerTrack />} />
+            <Route path="/patrols/:id/edit" element={<EditPatrol />} />
             <Route path="/patrols/:id" element={<PatrolDetails />} />
             <Route
               path="/incidents"
@@ -70,7 +77,7 @@ export default function AppRoutes() {
             {modules
               .filter(
                 (item) =>
-                  !["users", "patrols", "incidents", "community-reports", "reporting", "map"].includes(
+                  !["users", "patrols", "incidents", "community-reports", "reporting", "map", "wildlife"].includes(
                     item.path,
                   ),
               )
@@ -82,6 +89,7 @@ export default function AppRoutes() {
                 />
               ))}
             <Route path="/map" element={<FieldMap />} />
+            <Route path="/wildlife" element={<WildlifeMonitoring />} />
           </Route>
         </Route>
       </Route>

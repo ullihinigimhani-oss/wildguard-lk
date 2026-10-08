@@ -47,7 +47,7 @@ test('planned route details are ordered, owner-protected and strictly read-only'
   const query=db.patrol.findFirst.mock.calls[0][0];
   expect(query.where).toEqual({id:'assignment',rangerId:'a'});
   expect(query.select.waypoints.orderBy).toEqual({order:'asc'});
-  expect(query.select.waypoints.select).toEqual({type:true,order:true,latitude:true,longitude:true,label:true,note:true});
+  expect(query.select.waypoints.select).toEqual({id:true,type:true,order:true,latitude:true,longitude:true,label:true,note:true});
   const foreign=await read('assignment','b').expect(404);
   expect(foreign.body.patrol).toBeUndefined();
   expect(JSON.stringify(records.assignment)).toBe(before);
@@ -115,10 +115,10 @@ test('cancelled and completed assignments cannot be restarted', async () => {
   await change('assignment', 'start').expect(409);
   expect(db.patrol.updateMany).not.toHaveBeenCalled();
 });
-test('all assigned records remain visible without allowing workflow changes to cancelled patrols', async () => {
+test('cancelled assignments are excluded from actionable lists without allowing workflow changes', async () => {
   records.assignment.status = 'CANCELLED';
   const res = await request(app).get('/api/patrols/mine').set('Authorization', authorization('a')).expect(200);
-  expect(res.body.patrols[0].status).toBe('CANCELLED');
+  expect(res.body.patrols).toEqual([]);
   expect(db.patrol.findMany.mock.calls[0][0].where).toEqual({ rangerId: 'a' });
 });
 test('database failures are sanitized', async () => {

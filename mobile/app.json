@@ -6,8 +6,29 @@
     "orientation": "default",
     "userInterfaceStyle": "light",
     "scheme": "wildguard-lk",
-    "ios": { "supportsTablet": true },
-    "android": { "package": "lk.wildguard.prototype" },
-    "web": { "favicon": "./assets/images/wildguard-logo.png" }
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow WildGuard LK to use your location during active patrol navigation.",
+          "locationAlwaysPermission": false,
+          "locationAlwaysAndWhenInUsePermission": false,
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ],
+      "expo-font"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "lk.wildguard.prototype"
+    },
+    "web": {
+      "favicon": "./assets/images/wildguard-logo.png"
+    }
   }
 }

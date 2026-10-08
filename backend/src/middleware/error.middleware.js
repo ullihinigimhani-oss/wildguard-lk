@@ -1,8 +1,28 @@
 // Never expose database errors, request contents, or stack traces to clients.
 function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
+  if (error.incidentError && [404, 409, 503].includes(error.status))
+    return res.status(error.status).json({ success: false, code: error.code, message: error.message });
+  if (
+    error.navigationError &&
+    [400, 404, 409, 422, 429, 502, 503, 504].includes(error.status)
+  ) {
+    if (error.retryAfterSeconds)
+      res.set("Retry-After", String(error.retryAfterSeconds));
+    return res.status(error.status).json({
+      success: false,
+      code: error.code,
+      message: error.message,
+      ...(Array.isArray(error.riskZones) && { riskZones: error.riskZones }),
+      ...(error.retryAfterSeconds && {
+        retryAfterSeconds: error.retryAfterSeconds,
+      }),
+    });
+  }
   if (error.patrolError && [404, 409].includes(error.status))
-    return res.status(error.status).json({ success: false, message: error.message });
+    return res
+      .status(error.status)
+      .json({ success: false, message: error.message });
   if (error.authError)
     return res.status(error.status).json({
       success: false,

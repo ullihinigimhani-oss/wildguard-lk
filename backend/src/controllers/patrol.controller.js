@@ -15,6 +15,18 @@ exports.getById = async (req, res, next) => {
     res.set("Cache-Control", "no-store").json({ success: true, patrol });
   } catch (error) { next(error); }
 };
+exports.live = async (req, res, next) => {
+  try {
+    const { rangers, freshnessSeconds } = await service.getLiveRangers();
+    res.set("Cache-Control", "no-store").json({ success: true, rangers, freshnessSeconds });
+  } catch (error) { next(error); }
+};
+exports.trail = async (req, res, next) => {
+  try {
+    const locations = await service.getPatrolTrail(req.params.id);
+    res.set("Cache-Control", "no-store").json({ success: true, locations });
+  } catch (error) { next(error); }
+};
 function rangerAction(method) {
   return async (req, res, next) => {
     try {
@@ -54,4 +66,17 @@ exports.create = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+exports.update = async (req, res, next) => {
+  try {
+    const patrol = await service.updatePatrol(req.params.id, validatePatrolCreation(req.body));
+    res.set("Cache-Control", "no-store").json({ success: true, patrol });
+  } catch (error) { next(error); }
+};
+exports.cancel = async (req, res, next) => {
+  try {
+    const patrol = await service.cancelPatrol(req.params.id);
+    res.set("Cache-Control", "no-store").json({ success: true, patrol });
+  } catch (error) { next(error); }
 };

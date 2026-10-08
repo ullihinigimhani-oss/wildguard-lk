@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Image, Platform, Text, View } from "react-native";
+import { Image, Platform, View } from "react-native";
+import { Text } from "./Typography";
 import * as ImagePicker from "expo-image-picker";
 import Button from "./Button";
 import { styles } from "../../constants/theme";

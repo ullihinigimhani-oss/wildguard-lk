@@ -1,7 +1,9 @@
 import PatrolRouteScreen from "../screens/patrol/PatrolRouteScreen";
+import LivePatrolNavigationScreen from "../screens/patrol/LivePatrolNavigationScreen";
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../hooks/useAuth";
+import { useFontStyle } from "../components/common/Typography";
 import { authenticatedDestination } from "../constants/roles";
 import AuthNavigator from "./AuthNavigator";
 import HomeScreen from "../screens/home/HomeScreen";
@@ -9,6 +11,9 @@ import DemoHomeScreen from "../screens/home/DemoHomeScreen";
 import MyPatrolScreen from "../screens/patrol/MyPatrolScreen";
 import PatrolDetailsScreen from "../screens/patrol/PatrolDetailsScreen";
 import RangerIncidentScreen from "../screens/incident/RangerIncidentScreen";
+import ReportIncidentScreen from "../screens/incident/ReportIncidentScreen";
+import MyIncidentReportsScreen from "../screens/incident/MyIncidentReportsScreen";
+import IncidentDetailsScreen from "../screens/incident/IncidentDetailsScreen";
 import RangerShell from "./RangerShell";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import AlertsScreen from "../screens/alerts/AlertsScreen";
@@ -25,6 +30,7 @@ import PlaceholderScreen from "../screens/placeholders/PlaceholderScreen";
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
+  const headerFont = useFontStyle({ fontWeight: "700" });
   const { user, isDemo, isAuthenticated } = useAuth();
   if (!user) return <AuthNavigator />;
   const destination = isAuthenticated ? authenticatedDestination(user) : null;
@@ -37,7 +43,11 @@ export default function AppNavigator() {
       <Stack.Navigator
         key={`${user.id}:ranger`}
         initialRouteName="Home"
-        screenOptions={{ headerShown: false, animation: "none" }}
+        screenOptions={{
+          headerShown: false,
+          animation: "none",
+          headerTitleStyle: headerFont,
+        }}
       >
         {[
           ["Home", "Dashboard", HomeScreen],
@@ -53,12 +63,42 @@ export default function AppNavigator() {
             )}
           </Stack.Screen>
         ))}
+        {[
+          ["IncidentCreate", "Report Incident", ReportIncidentScreen],
+          ["IncidentReports", "My Incident Reports", MyIncidentReportsScreen],
+          ["IncidentDetails", "Incident Details", IncidentDetailsScreen],
+          ["IncidentEdit", "Edit Incident", ReportIncidentScreen],
+        ].map(([name, title, component]) => (
+          <Stack.Screen
+            key={name}
+            name={name}
+            component={component}
+            getId={({ params }) => params?.incidentId || params?.patrolId}
+            options={{
+              headerShown: true,
+              title,
+              headerTintColor: "#174D3A",
+              headerShadowVisible: false,
+              headerStyle: { backgroundColor: "#F5F6F0" },
+            }}
+          />
+        ))}
         <Stack.Screen
           name="PatrolDetails"
           component={PatrolDetailsScreen}
           options={{
             headerShown: true,
             title: "Patrol Details",
+            headerTintColor: "#245b44",
+            headerShadowVisible: false,
+          }}
+        />
+        <Stack.Screen
+          name="PatrolNavigation"
+          component={LivePatrolNavigationScreen}
+          options={{
+            headerShown: true,
+            title: "Patrol Navigation",
             headerTintColor: "#245b44",
             headerShadowVisible: false,
           }}
@@ -155,7 +195,11 @@ export default function AppNavigator() {
     <Stack.Navigator
       key={isDemo ? "demo" : `${user.id}:${user.role}`}
       initialRouteName={rangerArea ? "Home" : "Profile"}
-      screenOptions={{ headerTintColor: "#245b44", headerShadowVisible: false }}
+      screenOptions={{
+        headerTintColor: "#245b44",
+        headerShadowVisible: false,
+        headerTitleStyle: headerFont,
+      }}
     >
       {rangerArea && (
         <>

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text, TextInput } from "../../components/common/Typography";
 import {
   publicRegistrationRoles,
   roleLabel,

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text, TextInput } from "./Typography";
 import { listParks } from "../../services/parkApi";
 import { styles, colors } from "../../constants/theme";
 import Button from "./Button";

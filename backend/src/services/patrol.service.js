@@ -1,5 +1,6 @@
 const repository = require("../repositories/patrol.repository");
 const { localDateKey, scheduleDateKey } = require("../../../shared/patrolLifecycle");
+const { NAVIGATION } = require("../../../shared/patrolNavigation");
 const patrolError = (status, message) => Object.assign(new Error(message), { status, patrolError: true });
 exports.getRangerPatrol = async (id, rangerId) => {
   const patrol = await repository.findRangerPatrol(id, rangerId);
@@ -21,7 +22,7 @@ async function transition(id, rangerId, action) {
   }
   const result = await repository.transitionRangerPatrol(id, rangerId, from, {
     status: to, ...(starting ? { actualStartTime: now } : { actualEndTime: now }),
-  });
+  }, patrol.updatedAt);
   const updated = await exports.getRangerPatrol(id, rangerId);
   if (!result.count && updated.status !== to) throw patrolError(409, "This patrol changed. Refresh it and try again.");
   return updated;
@@ -37,7 +38,7 @@ const invalid = (fields) =>
 const httpError = (status, message) =>
   Object.assign(new Error(message), { status, authError: true });
 exports.getAssignableRangers = () => repository.findAssignableRangers();
-exports.getRangerPatrols = (rangerId) => repository.findRangerPatrols(rangerId);
+exports.getRangerPatrols = async (rangerId) => (await repository.findRangerPatrols(rangerId)).filter(patrol => patrol.status !== "CANCELLED");
 exports.listPatrols = (filters) => {
   const where = {};
   if (filters.status) where.status = filters.status;
@@ -57,6 +58,24 @@ exports.getPatrol = async (id) => {
   if (!patrol) throw httpError(404, "Patrol not found.");
   return patrol;
 };
+// GPS samples older than sampleMaxAgeMs are rejected at ingest, so anything
+// beyond that window is definitively not fresh. It also allows one missed
+// update: a stationary Ranger reports roughly every trailIntervalMs (60s).
+exports.liveFreshnessSeconds = Math.floor(NAVIGATION.sampleMaxAgeMs / 1000);
+exports.getLiveRangers = async () => {
+  const patrols = await repository.findLivePatrols();
+  const rangers = await Promise.all(
+    patrols.map(async (patrol) => ({
+      ...patrol,
+      location: await repository.findLatestLocation(patrol.id),
+    })),
+  );
+  return { rangers, freshnessSeconds: exports.liveFreshnessSeconds };
+};
+exports.getPatrolTrail = async (id) => {
+  await exports.getPatrol(id);
+  return repository.findPatrolTrail(id);
+};
 exports.createPatrol = async (input, createdById) => {
   const park = await repository.findPark(input.parkId);
   if (!park)
@@ -72,4 +91,24 @@ exports.createPatrol = async (input, createdById) => {
   )
     throw invalid({ assigned_ranger: "Select an approved ranger." });
   return repository.createPatrol({ ...input, status: "SCHEDULED", createdById });
+};
+
+exports.updatePatrol = async (id, input) => {
+  const patrol = await exports.getPatrol(id);
+  if (patrol.status !== "SCHEDULED") throw patrolError(409, "Only scheduled patrols can be edited.");
+  const park = await repository.findPark(input.parkId);
+  if (!park) throw invalid({ park_ranger_area: "Select a valid park or ranger area." });
+  const ranger = await repository.findRanger(input.rangerId);
+  if (!ranger || ranger.role !== "RANGER" || ranger.approvalStatus !== "APPROVED" || !ranger.isActive)
+    throw invalid({ assigned_ranger: "Select an approved ranger." });
+  // Unassigned approved Rangers are eligible for any park; assigned Rangers
+  // must match the patrol park. This preserves the existing global pool.
+  if (ranger.parkId && ranger.parkId !== input.parkId)
+    throw invalid({ assigned_ranger: "This ranger is assigned to a different park." });
+  return repository.updateScheduledPatrol(id, input);
+};
+exports.cancelPatrol = async id => {
+  const patrol = await exports.getPatrol(id);
+  if (patrol.status !== "SCHEDULED") throw patrolError(409, "Only scheduled patrols can be cancelled.");
+  return repository.updateScheduledPatrol(id, { status: "CANCELLED" });
 };

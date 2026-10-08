@@ -222,6 +222,7 @@ model PatrolWaypoint {
 
 model Incident {
   id           String @id @default(cuid())
+  title        String?
   incidentType String
   description  String
 
@@ -234,6 +235,7 @@ model Incident {
 
   occurredAt DateTime?
   reportedAt DateTime  @default(now())
+  withdrawnAt DateTime?
 
   reporterId String
   reporter   User   @relation(fields: [reporterId], references: [id])
@@ -261,6 +263,7 @@ model IncidentEvidence {
   fileUrl  String
   fileType String
   caption  String?
+  metadata Json?
 
   incidentId String
   incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)

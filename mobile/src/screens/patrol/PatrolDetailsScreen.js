@@ -1,7 +1,12 @@
 import PlannedRouteSummary from "../../components/patrol/PlannedRouteSummary";
+import {
+  clearNavigationSession,
+  sessionKey,
+} from "../../utils/navigationSession";
 import { readPlannedRoute } from "../../utils/plannedPatrolRoute";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "../../components/common/Typography";
 import { useFocusEffect } from "@react-navigation/native";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
@@ -92,6 +97,10 @@ export default function PatrolDetailsScreen({ route, navigation }) {
       if (attempt === generation.current) {
         setState({ patrol, loading: false, error: null });
         setConfirming(false);
+        if (action === "complete" && patrol.status === "COMPLETED")
+          clearNavigationSession(sessionKey(user.id, patrol));
+        if (action === "start" && patrol.status === "IN_PROGRESS")
+          navigation?.navigate("PatrolNavigation", { patrolId: id });
       }
     } catch (error) {
       if (attempt === generation.current) {
@@ -190,6 +199,38 @@ export default function PatrolDetailsScreen({ route, navigation }) {
               title="Start Patrol"
               onPress={() => update("start")}
               loading={busy}
+            />
+          )}
+          {display.active && (
+            <Button
+              title="Open Navigation"
+              secondary
+              disabled={busy}
+              onPress={() =>
+                navigation.navigate("PatrolNavigation", { patrolId: id })
+              }
+            />
+          )}
+          {display.active && (
+            <Button
+              title="Report Incident"
+              secondary
+              disabled={busy}
+              onPress={() =>
+                navigation.navigate("IncidentCreate", { patrolId: id })
+              }
+            />
+          )}
+          {(display.active ||
+            display.completed ||
+            patrol.status === "CANCELLED") && (
+            <Button
+              title="My Incident Reports"
+              secondary
+              disabled={busy}
+              onPress={() =>
+                navigation.navigate("IncidentReports", { patrolId: id })
+              }
             />
           )}
           {display.active &&

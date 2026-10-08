@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { listAssignableRangers, listPatrols } from "../../services/patrolApi";
+import { cancelPatrol, listAssignableRangers, listPatrols } from "../../services/patrolApi";
+import { useAuth } from "../../hooks/useAuth";
+import LiveTrackingAction from "../../components/patrol/LiveTrackingAction";
+import PatrolActionIcon from "../../components/patrol/PatrolActionIcon";
 import {
   patrolPriorities,
   patrolStatuses,
@@ -29,12 +32,32 @@ const formatTime = (value) =>
       })
     : "—";
 export default function PatrolManagement() {
+  const { user } = useAuth() || {};
+  const canMonitor = user?.role === "PARK_MANAGER";
   const [filters, setFilters] = useState(initialFilters);
   const [rangers, setRangers] = useState([]);
   const [result, setResult] = useState({ patrols: [], total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [pollError, setPollError] = useState("");
+  
+  const [cancelling, setCancelling] = useState(null);
+  const [cancelPending, setCancelPending] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const cancelInFlight = useRef(false);
+  async function confirmCancel() {
+    if (!cancelling || cancelInFlight.current) return;
+    cancelInFlight.current = true; setCancelPending(true); setCancelError("");
+    try {
+      await cancelPatrol(cancelling.id);
+      setCancelling(null); setRefresh(n => n + 1);
+    } catch (error) {
+      setCancelError(error.response?.data?.message || "Unable to cancel this patrol. Please try again.");
+      setRefresh(n => n + 1);
+    } finally { cancelInFlight.current = false; setCancelPending(false); }
+  }
+  const inFlight = useRef(null);
   const hasFilters = Boolean(
     filters.search ||
       filters.status ||
@@ -58,22 +81,40 @@ export default function PatrolManagement() {
   }, [refresh]);
   useEffect(() => {
     let current = true;
+    let timer;
     setLoading(true);
     setError("");
-    const timer = setTimeout(
-      () =>
-        listPatrols({ ...filters })
-          .then((data) => {
-            if (current) setResult(data);
-          })
-          .catch(() => {
-            if (current) setError("Unable to load patrols. Please try again.");
-          })
-          .finally(() => {
-            if (current) setLoading(false);
-          }),
-      200,
-    );
+    setPollError("");
+    async function fetchList(background = false) {
+      // Filter changes also wait for the preceding request to settle.
+      if (inFlight.current) await inFlight.current.catch(() => {});
+      if (!current) return;
+      const request = listPatrols({ ...filters });
+      inFlight.current = request;
+      try {
+        const data = await request;
+        if (current) {
+          setResult(data);
+          setError("");
+          setPollError("");
+        }
+      } catch {
+        if (current) {
+          if (background)
+            setPollError(
+              "Unable to refresh patrols. Showing the last loaded list; retrying automatically.",
+            );
+          else setError("Unable to load patrols. Please try again.");
+        }
+      } finally {
+        if (inFlight.current === request) inFlight.current = null;
+        if (current) {
+          setLoading(false);
+          timer = setTimeout(() => fetchList(true), 15000);
+        }
+      }
+    }
+    timer = setTimeout(() => fetchList(), 200);
     return () => {
       current = false;
       clearTimeout(timer);
@@ -89,9 +130,16 @@ export default function PatrolManagement() {
             patrol for full details.
           </p>
         </div>
-        <Link className="button primary" to="/patrols/new">
-          Create Patrol
-        </Link>
+        <div className="patrol-list-heading-actions">
+          {canMonitor && (
+            <Link className="button secondary" to="/patrols/live">
+              Live Ranger Monitoring
+            </Link>
+          )}
+          <Link className="button primary" to="/patrols/new">
+            Create Patrol
+          </Link>
+        </div>
       </div>
       <div className="users-filters">
         <label>
@@ -180,6 +228,22 @@ export default function PatrolManagement() {
           {error}
         </p>
       )}
+      {pollError && (
+        <p role="alert" className="field-error">
+          {pollError}
+        </p>
+      )}
+      
+      {cancelling && <div role="dialog" aria-modal="false" aria-labelledby="cancel-patrol-title" className="demo-notice">
+        <h3 id="cancel-patrol-title">Cancel this patrol?</h3>
+        <p><strong>{cancelling.routeName}</strong></p>
+        <p>This patrol will be removed from the Ranger's upcoming patrol list. This action cannot be undone from this screen.</p>
+        {cancelError && <p role="alert">{cancelError}</p>}
+        <div className="patrol-actions">
+          <button className="button secondary" disabled={cancelPending} onClick={() => setCancelling(null)}>Keep Patrol</button>
+          <button className="button danger" disabled={cancelPending} onClick={confirmCancel}>{cancelPending ? "Cancelling…" : "Confirm Cancellation"}</button>
+        </div>
+      </div>}
       {loading ? (
         <p role="status">Loading patrols…</p>
       ) : error ? (
@@ -207,7 +271,7 @@ export default function PatrolManagement() {
                     "Status",
                     "Actions",
                   ].map((heading) => (
-                    <th key={heading}>{heading}</th>
+                    <th key={heading} className={heading === "Actions" ? "patrol-actions-cell" : undefined}>{heading}</th>
                   ))}
                 </tr>
               </thead>
@@ -245,13 +309,30 @@ export default function PatrolManagement() {
                         {patrolStatusLabel(patrol.status)}
                       </span>
                     </td>
-                    <td>
-                      <Link
-                        className="text-button"
-                        to={`/patrols/${patrol.id}`}
-                      >
-                        View
-                      </Link>
+                    <td className="patrol-actions-cell">
+                      <div className="users-actions patrol-actions-row">
+                        <Link
+                          className="patrol-action patrol-action-view"
+                          to={`/patrols/${patrol.id}`}
+                        >
+                          <PatrolActionIcon kind="view" />View
+                        </Link>
+                        {patrol.status === "SCHEDULED" && <>
+                          <Link className="patrol-action patrol-action-edit" to={`/patrols/${patrol.id}/edit`}><PatrolActionIcon kind="edit" />Edit</Link>
+                          <button type="button" className="patrol-action patrol-action-cancel" onClick={() => { setCancelling(patrol); setCancelError(""); }}><PatrolActionIcon kind="cancel" />Cancel</button>
+                        </>}
+                        {patrol.status === "IN_PROGRESS" && (
+                          <LiveTrackingAction patrolId={patrol.id} />
+                        )}
+                        {patrol.status === "COMPLETED" && (
+                          <Link
+                            className="patrol-action live-tracking-action"
+                            to={`/patrols/${patrol.id}/track`}
+                          >
+                            <PatrolActionIcon kind="tracking" />Route history
+                          </Link>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
