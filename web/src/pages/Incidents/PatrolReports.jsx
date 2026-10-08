@@ -127,6 +127,8 @@ export default function PatrolReports() {
                     detailsPath={(item) =>
                       `/incidents/patrol/${encodeURIComponent(patrolId)}/${encodeURIComponent(item.id)}${context}`
                     }
+                    statusEditor
+                    onStatusSaved={refresh}
                   />
                 </section>
                 <Pagination

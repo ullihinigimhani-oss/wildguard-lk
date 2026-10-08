@@ -14,7 +14,7 @@ router.use(authenticate);
 router.get(
   "/:incidentId/evidence/uploads/:uploadId",
   allowRoles("RANGER"),
-  evidence.uploadStatus,
+  evidence.uploadStatus, 
 );
 router.post(
   "/:incidentId/evidence",

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Keyboard, Modal, View } from "react-native";
+import { Keyboard, Modal, View, useWindowDimensions } from "react-native";
 import { useIsFocused, usePreventRemove } from "@react-navigation/native";
 import { Text } from "../../components/common/Typography";
 import Screen from "../../components/common/Screen";
@@ -43,6 +43,7 @@ import {
 
 // Save the incident once, then upload private evidence against its confirmed ID.
 export default function ReportIncidentScreen({ route, navigation }) {
+  const { width, fontScale } = useWindowDimensions();
   const { user } = useAuth(),
     focused = useIsFocused();
   const incidentId = route.params?.incidentId,
@@ -327,6 +328,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
       {initial !== null && (
         <>
           <Text style={ui.section}>Incident type *</Text>
+          <View style={{ gap: 10 }}>
           {INCIDENT_TYPES.map((type) => (
             <SelectCard
               key={type.code}
@@ -334,8 +336,10 @@ export default function ReportIncidentScreen({ route, navigation }) {
               selected={form.incidentType === type.code}
               onPress={() => change("incidentType", type.code)}
               disabled={busy || !eligible || !!savedIncident}
+              style={{ padding: width < 350 || fontScale > 1.3 ? 16 : 18 }}
             />
           ))}
+          </View>
           {errors.incidentType && (
             <Text accessibilityRole="alert" style={ui.error}>
               {errors.incidentType}

@@ -100,3 +100,54 @@
   display: inline-flex;
   align-items: center;
 }
+
+.incident-status-form {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+.incident-status-form h3 {
+  margin: 0;
+}
+.incident-status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.incident-status-row label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.incident-status-form select {
+  padding: 10px 12px;
+  border: 1px solid #cbd8cf;
+  border-radius: 8px;
+  background: white;
+  color: #173e30;
+  font-size: 13px;
+  font-family: inherit;
+  min-height: 42px;
+}
+.incident-status-form.compact {
+  gap: 8px;
+  margin-top: 10px;
+}
+.incident-status-form.compact select,
+.incident-status-form.compact .button {
+  width: 100%;
+  box-sizing: border-box;
+}
+.incident-status-form .button {
+  white-space: nowrap;
+}
+.incident-table.has-status-editor {
+  min-width: 1140px;
+}
+.incident-table.has-status-editor th:last-child {
+  width: 210px;
+}
+.incident-manual-location {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}

@@ -9,8 +9,8 @@ export const incidentTypes = {
 export const incidentStatuses = {
   PENDING: "Pending",
   UNDER_REVIEW: "Under review",
-  RESPONDING: "Responding",
-  RESOLVED: "Resolved",
+  VERIFIED: "Verified",
+  REJECTED: "Rejected",
 };
 export async function listIncidents(filters, signal) {
   const allowed = [
@@ -88,6 +88,31 @@ export async function getEvidenceAccess(incidentId, evidenceId, signal) {
     uri: api.defaults.baseURL.replace(/\/$/, "") + data.access.path,
     expiresAt: data.access.expiresAt,
   };
+}
+// Park Manager review. The server owns the status vocabulary and rejects any
+// value outside the existing Incident lifecycle.
+export async function updateIncidentStatus(id, status) {
+  const { data } = await api.patch(
+    `/incidents/${pathId(id)}/status`,
+    { status },
+  );
+  if (!data?.success || !data.incident?.id)
+    throw new Error("Incident status unavailable.");
+  return data.incident;
+}
+export function statusErrorMessage(error) {
+  const field = error?.response?.data?.errors?.status;
+  if (field) return field;
+  const message = error?.response?.data?.message;
+  if (typeof message === "string" && message.trim()) return message;
+  const status = error?.response?.status;
+  return status === 401
+    ? "Your session expired. Sign in again."
+    : status === 403
+      ? "You do not have permission to change incident status."
+      : status === 404
+        ? "This incident is no longer available."
+        : "Status could not be saved. Please retry.";
 }
 export function incidentError(error) {
   const status = error?.response?.status;

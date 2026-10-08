@@ -50,7 +50,7 @@ exports.start = (req, res, next) => {
     : "invalid";
   const started = Date.now();
   let stage = "request_received",
-    code;
+    code, durationMs;
   const log = (httpStatus) => {
     console.info(
       JSON.stringify({
@@ -64,13 +64,15 @@ exports.start = (req, res, next) => {
           fileSize: req.file.size,
         }),
         elapsedMs: Date.now() - started,
+        ...(Number.isFinite(durationMs) && { durationMs }),
       }),
     );
   };
   req.evidenceTrace = {
     requestId,
-    stage: (value) => {
+    stage: (value, duration) => {
       stage = value;
+      durationMs = duration;
       log();
     },
     fail: (error, status) => {

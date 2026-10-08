@@ -25,11 +25,6 @@ jest.mock("@expo/vector-icons/Feather", () => {
   return (props) => <View {...props} />;
 });
 jest.mock(
-  "react-native-webview",
-  () => ({ WebView: require("react-native").View }),
-  { virtual: true },
-);
-jest.mock(
   "@expo/vector-icons/Ionicons",
   () => {
     const React = require("react");

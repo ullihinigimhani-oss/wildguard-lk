@@ -4,7 +4,7 @@ const TYPES = {
   WILDLIFE_CONFLICT: "Wildlife Conflict",
   ANIMAL_CARCASS: "Animal Carcass"
 };
-const STATUSES = ["PENDING", "UNDER_REVIEW", "RESPONDING", "RESOLVED"];
+const STATUSES = ["PENDING", "UNDER_REVIEW", "RESPONDING", "RESOLVED", "VERIFIED", "REJECTED"];
 const incidentError = (status, code, message) => Object.assign(new Error(message), {
   status,
   code,
@@ -137,6 +137,14 @@ function validateIncident(body, patch = false) {
   if (!patch) result.evidence = body.evidence === undefined ? [] : validateEvidence(body.evidence);
   return result;
 }
+function validateStatus(body) {
+  onlyKeys(body, ["status"]);
+  if (typeof body.status !== "string" || !STATUSES.includes(body.status))
+    throw invalid({
+      status: "Select a supported incident status."
+    });
+  return body.status;
+}
 function validateFilters(query, manager = false) {
   onlyKeys(query, manager ? ["page", "patrolId", "rangerId", "parkId", "incidentType", "status", "from", "to", "includeWithdrawn"] : ["page", "includeWithdrawn"]);
   const page = query.page === undefined ? "1" : query.page;
@@ -188,6 +196,7 @@ module.exports = {
   STATUSES,
   incidentError,
   validateIncident,
+  validateStatus,
   validateFilters,
   validateMetadata,
   validateEvidence,

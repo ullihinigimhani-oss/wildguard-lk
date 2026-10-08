@@ -145,3 +145,21 @@ exports.updateStatus = async (id, status, user) => {
 
 // Repeat withdrawal returns 409 consistently; the original timestamp is retained.
 exports.withdraw = (id, user) => mutate(id, null, user);
+// Park Manager review. Read scope, status vocabulary and persistence are all
+// server-side; the client only proposes a status value.
+exports.updateStatus = async (id, status, user) => {
+  const existing = await repository.findIncident(id, user);
+  if (!existing)
+    throw incidentError(
+      404,
+      "INCIDENT_UNAVAILABLE",
+      "This incident is not available.",
+    );
+  if (existing.withdrawnAt)
+    throw incidentError(
+      409,
+      "INCIDENT_WITHDRAWN",
+      "This report has been withdrawn and cannot be updated.",
+    );
+  return present(await repository.setStatus(id, status));
+};

@@ -1,6 +1,7 @@
 const service = require("../services/incident.service");
 const {
   validateIncident,
+  validateStatus,
   validateFilters,
   id,
   onlyKeys
@@ -31,20 +32,27 @@ exports.edit = endpoint(async req => ({
 }));
 exports.updateStatus = async (req, res, next) => {
   try {
-    console.log('updateStatus called with:', req.params, req.body);
     const { incidentId } = req.params;
-    const { markAsDone } = req.body;
+    const { markAsDone, status } = req.body;
     const db = require("../config/database");
-    console.log('Attempting to update incident:', incidentId, 'with markAsDone:', markAsDone);
-    const result = await db.incident.update({
-      where: { id: incidentId },
-      data: { markAsDone }
-    });
-    console.log('Update successful:', result);
-    res.json({ success: true, message: 'Incident marked as done successfully' });
+
+    // Handle markAsDone for ranger feature
+    if (markAsDone !== undefined) {
+      const result = await db.incident.update({
+        where: { id: incidentId },
+        data: { markAsDone }
+      });
+      res.json({ success: true, message: 'Incident marked as done successfully' });
+    }
+    // Handle status for manager review feature
+    else if (status !== undefined) {
+      const incident = await service.updateStatus(incidentId, status, req.user);
+      res.json({ success: true, incident });
+    }
+    else {
+      res.status(400).json({ success: false, message: 'Either markAsDone or status must be provided' });
+    }
   } catch (error) {
-    console.error('updateStatus error:', error);
-    console.error('Error details:', error.message, error.code);
     next(error);
   }
 };
