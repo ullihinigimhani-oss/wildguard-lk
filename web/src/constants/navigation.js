@@ -3,7 +3,7 @@ export const modules = [
   ["patrols", "Patrol Management", "↗", ["PARK_MANAGER", "RANGER", "COMMUNITY_LIAISON"]],
   ["incidents", "Incidents", "◇", ["PARK_MANAGER", "RANGER", "COMMUNITY_LIAISON"]],
   ["map", "Field Map", "⌖", ["PARK_MANAGER", "RANGER", "COMMUNITY_LIAISON", "RESEARCHER"]],
-  ["community-reports", "Community Reports", "◎", ["COMMUNITY_LIAISON", "PARK_MANAGER"]],
+  ["community-reports", "Community Reports", "◎", ["PARK_MANAGER"]],
   ["wildlife", "Wildlife Monitoring", "♧", ["PARK_MANAGER", "RANGER", "COMMUNITY_LIAISON", "RESEARCHER"]],
   ["alerts", "Alerts", "△", ["PARK_MANAGER", "RANGER", "COMMUNITY_LIAISON"]],
   ["camera-traps", "Camera Traps", "▣", ["PARK_MANAGER", "RANGER", "COMMUNITY_LIAISON"]],

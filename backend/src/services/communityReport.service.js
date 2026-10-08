@@ -2,6 +2,7 @@ const repository = require("../repositories/communityReport.repository");
 const {
   validateCommunityReportCreation,
   validateReportStatusUpdate,
+  validateListQuery,
 } = require("../validators/communityReport.validator");
 
 const notFound = (message = "Community report not found.") =>
@@ -102,15 +103,20 @@ exports.getReportDetails = async (id, user = null) => {
 };
 
 exports.listReportsForLiaison = async (query = {}, user = null) => {
-  const { status, reportType, search, page = 1, pageSize = 20 } = query;
-  const filterStatus = status && status !== "ALL" ? String(status).toUpperCase() : undefined;
-  const filterType = reportType && reportType !== "ALL" ? String(reportType).toUpperCase() : undefined;
+  const validated = validateListQuery(query);
+  const pageSizeInput = query.pageSize === undefined ? 20 : Number(query.pageSize);
+  const pageSize =
+    Number.isInteger(pageSizeInput) && pageSizeInput >= 1
+      ? Math.min(50, pageSizeInput)
+      : 20;
   const result = await repository.listAllReports({
-    status: filterStatus,
-    reportType: filterType,
-    search: typeof search === "string" ? search.slice(0, 120) : undefined,
-    page: Math.max(1, parseInt(page, 10) || 1),
-    pageSize: Math.min(50, Math.max(1, parseInt(pageSize, 10) || 20)),
+    status: validated.status,
+    reportType: validated.reportType,
+    search: validated.search,
+    from: validated.from,
+    to: validated.to,
+    page: validated.page,
+    pageSize,
   });
 
   return {
@@ -166,13 +172,15 @@ exports.escalateReport = async (id, user, options = {}) => {
   const report = await repository.findReportById(id);
   if (!report) throw notFound();
 
-  // If report is PENDING, transition it to RESPONSE_IN_PROGRESS via UNDER_REVIEW or direct escalation
+  // If report is PENDING, transition it to VERIFIED via UNDER_REVIEW, otherwise
+  // mark it VERIFIED directly. Verified is the terminal confirmed state; the
+  // resolved/legacy RESPONSE_IN_PROGRESS status no longer exists.
   let updatedReport = report;
-  if (report.status !== "RESPONSE_IN_PROGRESS") {
+  if (report.status !== "VERIFIED") {
     if (report.status === "PENDING") {
       await repository.updateReportStatus(id, "UNDER_REVIEW");
     }
-    updatedReport = await repository.updateReportStatus(id, "RESPONSE_IN_PROGRESS");
+    updatedReport = await repository.updateReportStatus(id, "VERIFIED");
   }
 
   // Integration point payload for incident / management response

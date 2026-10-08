@@ -245,7 +245,7 @@ describe("Task 6: Anonymous Community Reporting APIs", () => {
           reportType: "WILDLIFE_SIGHTING",
           description: "Elephant herd",
           isAnonymous: false,
-          status: "RESOLVED",
+          status: "VERIFIED",
           reporterId: "comm-user-1",
           reporterName: "Kamal Perera",
           reporterPhone: "0711112233",
