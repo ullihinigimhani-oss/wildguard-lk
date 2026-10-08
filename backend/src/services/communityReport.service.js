@@ -161,3 +161,50 @@ exports.updateReportStatus = async (id, newStatus, user) => {
   const updated = await repository.updateReportStatus(id, validatedStatus);
   return sanitizeReport(updated, user);
 };
+
+exports.escalateReport = async (id, user, options = {}) => {
+  const report = await repository.findReportById(id);
+  if (!report) throw notFound();
+
+  // If report is PENDING, transition it to RESPONSE_IN_PROGRESS via UNDER_REVIEW or direct escalation
+  let updatedReport = report;
+  if (report.status !== "RESPONSE_IN_PROGRESS") {
+    if (report.status === "PENDING") {
+      await repository.updateReportStatus(id, "UNDER_REVIEW");
+    }
+    updatedReport = await repository.updateReportStatus(id, "RESPONSE_IN_PROGRESS");
+  }
+
+  // Integration point payload for incident / management response
+  const escalation = {
+    reportId: report.id,
+    reportType: report.reportType,
+    species: report.species || null,
+    description: report.description,
+    location: {
+      manualLocation: report.manualLocation || null,
+      latitude: report.latitude || null,
+      longitude: report.longitude || null,
+    },
+    evidence: (report.evidence || []).map((e) => ({
+      fileUrl: e.fileUrl,
+      fileType: e.fileType,
+    })),
+    submittedAt: report.submittedAt,
+    escalatedAt: new Date().toISOString(),
+    escalatedBy: {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+    },
+    status: "ESCALATED_FOR_RESPONSE",
+    urgency: options.urgency || (report.reportType === "HUMAN_WILDLIFE_CONFLICT" ? "HIGH" : "MEDIUM"),
+    notes: options.notes ? String(options.notes).slice(0, 500) : null,
+    source: "COMMUNITY_REPORT",
+  };
+
+  return {
+    report: sanitizeReport(updatedReport, user),
+    escalation,
+  };
+};

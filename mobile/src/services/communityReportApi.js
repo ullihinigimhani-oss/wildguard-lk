@@ -39,3 +39,9 @@ export async function updateReportStatus(id, status, signal) {
   if (!data.success) throw new Error(data.message || "Could not update report status.");
   return data;
 }
+
+export async function escalateReport(id, payload = {}, signal) {
+  const { data } = await api.post(`/community-reports/${id}/escalate`, payload, { signal });
+  if (!data.success) throw new Error(data.message || "Could not escalate report.");
+  return data;
+}

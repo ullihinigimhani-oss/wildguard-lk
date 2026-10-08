@@ -256,6 +256,53 @@ describe("Community Report APIs", () => {
 
       expect(res.body.success).toBe(true);
     });
+    test("filters reports by status, reportType, and search query", async () => {
+      db.communityReport.findMany.mockResolvedValue([
+        { id: "rep-search-1", reportType: "HUMAN_WILDLIFE_CONFLICT", status: "UNDER_REVIEW" },
+      ]);
+      db.communityReport.count.mockResolvedValue(1);
+
+      const res = await request(app)
+        .get("/api/community-reports?status=UNDER_REVIEW&reportType=HUMAN_WILDLIFE_CONFLICT&search=elephant")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.reports).toHaveLength(1);
+      expect(db.communityReport.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: "UNDER_REVIEW",
+            reportType: "HUMAN_WILDLIFE_CONFLICT",
+            OR: expect.any(Array),
+          }),
+        })
+      );
+    });
+
+    test("redacts anonymous reporter personal identity when listed for liaison", async () => {
+      db.communityReport.findMany.mockResolvedValue([
+        {
+          id: "rep-anon-list",
+          reportType: "SUSPICIOUS_ACTIVITY",
+          isAnonymous: true,
+          reporterName: "Secret Person",
+          reporterPhone: "0771234567",
+          status: "PENDING",
+        },
+      ]);
+      db.communityReport.count.mockResolvedValue(1);
+
+      const res = await request(app)
+        .get("/api/community-reports")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.reports[0].isAnonymous).toBe(true);
+      expect(res.body.reports[0].reporterName).toBeNull();
+      expect(res.body.reports[0].reporterPhone).toBeNull();
+    });
   });
 
   describe("PATCH /api/community-reports/:id/status (Status Transitions)", () => {
@@ -285,6 +332,62 @@ describe("Community Report APIs", () => {
       );
     });
 
+    test("allows COMMUNITY_LIAISON to transition UNDER_REVIEW to RESPONSE_IN_PROGRESS", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-1",
+        status: "UNDER_REVIEW",
+      });
+      db.communityReport.update.mockResolvedValue({
+        id: "rep-1",
+        status: "RESPONSE_IN_PROGRESS",
+      });
+
+      const res = await request(app)
+        .patch("/api/community-reports/rep-1/status")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ status: "RESPONSE_IN_PROGRESS" })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.report.status).toBe("RESPONSE_IN_PROGRESS");
+    });
+
+    test("allows COMMUNITY_LIAISON to flag invalid/duplicate report as REJECTED", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-dup",
+        status: "PENDING",
+      });
+      db.communityReport.update.mockResolvedValue({
+        id: "rep-dup",
+        status: "REJECTED",
+      });
+
+      const res = await request(app)
+        .patch("/api/community-reports/rep-dup/status")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ status: "REJECTED" })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.report.status).toBe("REJECTED");
+    });
+
+    test("rejects arbitrary status strings with 400", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-1",
+        status: "PENDING",
+      });
+
+      const res = await request(app)
+        .patch("/api/community-reports/rep-1/status")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ status: "ARBITRARY_STATUS" })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toMatch(/Select a valid report status/);
+    });
+
     test("rejects invalid status transition PENDING to RESOLVED with 400", async () => {
       db.communityReport.findUnique.mockResolvedValue({
         id: "rep-1",
@@ -308,6 +411,63 @@ describe("Community Report APIs", () => {
         .set("Authorization", `Bearer ${token("community-user-1")}`)
         .send({ status: "UNDER_REVIEW" })
         .expect(403);
+    });
+  });
+
+  describe("POST /api/community-reports/:id/escalate (Operational Escalation)", () => {
+    test("allows COMMUNITY_LIAISON to escalate report to operational response", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-esc-1",
+        reportType: "HUMAN_WILDLIFE_CONFLICT",
+        species: "Wild Elephant",
+        description: "Elephant broke farm boundary fence",
+        manualLocation: "Post 12",
+        status: "PENDING",
+        isAnonymous: false,
+        evidence: [],
+      });
+      db.communityReport.update
+        .mockResolvedValueOnce({ id: "rep-esc-1", status: "UNDER_REVIEW" })
+        .mockResolvedValueOnce({
+          id: "rep-esc-1",
+          reportType: "HUMAN_WILDLIFE_CONFLICT",
+          species: "Wild Elephant",
+          description: "Elephant broke farm boundary fence",
+          manualLocation: "Post 12",
+          status: "RESPONSE_IN_PROGRESS",
+          isAnonymous: false,
+          evidence: [],
+        });
+
+      const res = await request(app)
+        .post("/api/community-reports/rep-esc-1/escalate")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ urgency: "HIGH", notes: "Immediate dispatch needed" })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toMatch(/escalated to operational response/);
+      expect(res.body.escalation).toBeDefined();
+      expect(res.body.escalation.reportId).toBe("rep-esc-1");
+      expect(res.body.escalation.urgency).toBe("HIGH");
+      expect(res.body.escalation.notes).toBe("Immediate dispatch needed");
+      expect(res.body.escalation.escalatedBy.role).toBe("COMMUNITY_LIAISON");
+      expect(res.body.report.status).toBe("RESPONSE_IN_PROGRESS");
+    });
+
+    test("forbids COMMUNITY_USER from escalating report with 403", async () => {
+      await request(app)
+        .post("/api/community-reports/rep-esc-1/escalate")
+        .set("Authorization", `Bearer ${token("community-user-1")}`)
+        .send({})
+        .expect(403);
+    });
+
+    test("rejects unauthenticated requests to escalate with 401", async () => {
+      await request(app)
+        .post("/api/community-reports/rep-esc-1/escalate")
+        .send({})
+        .expect(401);
     });
   });
 
