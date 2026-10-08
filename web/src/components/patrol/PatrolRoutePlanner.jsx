@@ -14,6 +14,8 @@ export default function PatrolRoutePlanner({
   disabled = false,
   error,
   readOnly = false,
+  validation,
+  canValidate = false,
 }) {
   const [type, setType] = useState("START"),
     [selectedId, setSelectedId] = useState(null);
@@ -149,7 +151,9 @@ export default function PatrolRoutePlanner({
         </p>
       )}
       <div className="route-workspace">
-        <PatrolMap
+      <PatrolMap
+        walkingRoute={validation?.route}
+        invalidIndex={validation?.invalidIndex}
           points={points}
           selectedId={selectedId}
           disabled={disabled}
@@ -342,6 +346,14 @@ export default function PatrolRoutePlanner({
         </details>
       )}
       <div className="route-summary">
+        {validation && <div className="route-validation">
+          <button type="button" className="button secondary" disabled={disabled || validation.loading || !canValidate} onClick={validation.validate}>
+            {validation.loading ? 'Validating walking route…' : 'Validate walking route'}
+          </button>
+          {validation.route && <p role="status">Walking route verified · {(validation.route.distanceMeters / 1000).toFixed(2)} km · {Math.ceil(validation.route.durationSeconds / 60)} min. Green line shows the verified walking route.</p>}
+          {validation.error && <p role="alert" className="field-error">{validation.error}</p>}
+          {!validation.route && !validation.loading && !validation.error && <p role="status">Validate the complete walking route before saving. Dashed lines are unverified waypoint connections.</p>}
+        </div>}
         <h4>Route Summary</h4>
         <dl>
           <div>

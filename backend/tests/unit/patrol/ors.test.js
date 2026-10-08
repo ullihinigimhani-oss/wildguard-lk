@@ -2,6 +2,7 @@ jest.mock("../../../src/config/environment", () => ({
   ORS_API_KEY: "isolated-test-key-not-real",
   ORS_BASE_URL: "https://api.heigit.org",
 }));
+jest.mock('../../../src/services/riskZone.service', () => ({ forPark: jest.fn().mockResolvedValue([]) }));
 let ors;
 const input = () => ({
   rangerId: "a",
@@ -454,4 +455,12 @@ test.each([[true,0,"PATROL_POINT_UNMAPPED"],[false,0,"CURRENT_LOCATION_UNMAPPED"
 test("provider parameter error is distinct from disconnected network",async()=>{
  fetch.mockResolvedValue({ok:false,status:400,json:async()=>({error:{code:2003,message:"private"}})});
  await expect(ors.walkingRoute(input())).rejects.toMatchObject({code:"ROUTING_REQUEST_INVALID"});
+});
+test('manager preview and subsequent identical save reuse a verified complete ORS response', async () => {
+  fetch.mockResolvedValue({ok:true,status:200,json:async()=>fullData()});
+  const validator = require('../../../src/services/patrolRouteValidation.service');
+  const route = await validator.validate('park',fullInput().waypoints,'manager');
+  expect(route.geometry.coordinates).toHaveLength(5);
+  await expect(validator.validate('park',fullInput().waypoints,'manager')).resolves.toEqual(route);
+  expect(fetch).toHaveBeenCalledTimes(1);
 });
