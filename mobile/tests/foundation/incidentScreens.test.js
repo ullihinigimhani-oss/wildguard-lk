@@ -8,6 +8,26 @@ import Reports from "../../src/screens/incident/MyIncidentReportsScreen";
 import useRangerPatrols from "../../src/hooks/useRangerPatrols";
 import useForegroundLocation from "../../src/hooks/useForegroundLocation";
 import { getMyPatrol } from "../../src/services/patrolApi";
+import * as picker from "expo-image-picker";
+import * as documents from "expo-document-picker";
+import { File } from "expo-file-system";
+import { uploadIncidentEvidence } from "../../src/services/incidentEvidenceApi";
+jest.mock("expo-image-picker", () => ({
+  requestCameraPermissionsAsync: jest.fn(),
+  requestMediaLibraryPermissionsAsync: jest.fn(),
+  launchCameraAsync: jest.fn(),
+  launchImageLibraryAsync: jest.fn(),
+}));
+jest.mock("expo-document-picker", () => ({ getDocumentAsync: jest.fn() }));
+jest.mock("expo-file-system", () => ({
+  Paths: { document: "file:///owned/" },
+  File: jest.fn(() => ({ exists: true, size: 1000 })),
+}));
+jest.mock("../../src/services/incidentEvidenceApi", () => ({
+  ...jest.requireActual("../../src/services/incidentEvidenceApi"),
+  uploadIncidentEvidence: jest.fn(),
+}));
+jest.setTimeout(15000);
 import {
   createIncident,
   editIncident,
@@ -77,6 +97,42 @@ beforeEach(() => {
   jest.resetAllMocks();
   mockFocused = true;
   mockPrevent = null;
+  File.mockImplementation((parent, name) => ({
+    uri: name ? parent + name : parent,
+    exists: true,
+    size: 1000,
+    copy: async (destination) => {
+      destination.size = 1000;
+    },
+    delete: jest.fn(),
+  }));
+  picker.requestCameraPermissionsAsync.mockResolvedValue({ granted: true });
+  picker.requestMediaLibraryPermissionsAsync.mockResolvedValue({
+    granted: true,
+  });
+  picker.launchImageLibraryAsync.mockResolvedValue({
+    canceled: false,
+    assets: [
+      {
+        uri: "file:///a.jpg",
+        fileName: "a.jpg",
+        mimeType: "image/jpeg",
+        fileSize: 1000,
+      },
+    ],
+  });
+  picker.launchCameraAsync.mockResolvedValue({
+    canceled: false,
+    assets: [
+      {
+        uri: "file:///a.jpg",
+        fileName: "a.jpg",
+        mimeType: "image/jpeg",
+        fileSize: 1000,
+      },
+    ],
+  });
+  uploadIncidentEvidence.mockResolvedValue({ id: "e" });
   getMyPatrol.mockResolvedValue(patrol);
   getIncident.mockResolvedValue(incident);
   createIncident.mockResolvedValue(incident);
@@ -167,7 +223,7 @@ test("no active patrol blocks create but completed report history remains access
     patrolId: "p",
   });
 });
-test("type selection, required validation and disabled evidence without permissions", async () => {
+test("type selection, required validation and optional evidence picker without early permissions", async () => {
   const { ui } = await form();
   fireEvent.press(ui.getByLabelText("Submit Incident"));
   expect(ui.getByText("Select an incident type.")).toBeTruthy();
@@ -176,16 +232,178 @@ test("type selection, required validation and disabled evidence without permissi
   expect(
     ui.getByLabelText("Animal Carcass").props.accessibilityState.checked,
   ).toBe(true);
-  expect(ui.getByText(/Evidence uploads will be available/)).toBeTruthy();
-  for (const title of [
-    "Take Photo",
-    "Choose from Gallery",
-    "Camera Trap Evidence",
-  ])
-    expect(ui.getByLabelText(title).props.accessibilityState.disabled).toBe(
-      true,
-    );
+  expect(ui.getByLabelText("Choose from Gallery")).toBeTruthy();
+  expect(ui.queryByLabelText("Manage Evidence")).toBeNull();
   expect(useForegroundLocation).toHaveBeenLastCalledWith(false);
+});
+
+async function selectEvidence(ui, count = 1) {
+  picker.launchImageLibraryAsync.mockResolvedValue({
+    canceled: false,
+    assets: Array.from({ length: count }, (_, index) => ({
+      uri: `file:///${index}.jpg`,
+      fileName: `${index}.jpg`,
+      mimeType: "image/jpeg",
+      fileSize: 1000,
+    })),
+  });
+  fireEvent.press(ui.getByLabelText("Choose from Gallery"));
+  await ui.findByLabelText("Selected evidence: 0.jpg");
+}
+test("pre-submit evidence selection, removal, field edits and validation preserve a guarded draft", async () => {
+  const { ui } = await form();
+  await selectEvidence(ui, 2);
+  expect(createIncident).not.toHaveBeenCalled();
+  expect(uploadIncidentEvidence).not.toHaveBeenCalled();
+  fireEvent.changeText(ui.getByLabelText("Incident title *"), "Draft");
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  expect(ui.getByLabelText("Selected evidence: 0.jpg")).toBeTruthy();
+  fireEvent.press(ui.getByLabelText("Remove selection: 1.jpg"));
+  expect(ui.queryByLabelText("Selected evidence: 1.jpg")).toBeNull();
+  act(() => mockPrevent({ data: { action: { type: "GO_BACK" } } }));
+  fireEvent.press(ui.getByLabelText("Keep Editing"));
+  expect(ui.getByLabelText("Selected evidence: 0.jpg")).toBeTruthy();
+});
+test("five-item limit disables selection and rejects oversized picker batches", async () => {
+  const { ui } = await form();
+  await selectEvidence(ui, 5);
+  expect(
+    ui.getByLabelText("Take Photo").props.accessibilityState.disabled,
+  ).toBe(true);
+  fireEvent.press(ui.getByLabelText("Remove selection: 4.jpg"));
+  picker.launchImageLibraryAsync.mockResolvedValue({
+    canceled: false,
+    assets: [0, 1].map((index) => ({
+      uri: `file:///extra${index}.jpg`,
+      fileName: `extra${index}.jpg`,
+      fileSize: 1000,
+    })),
+  });
+  fireEvent.press(ui.getByLabelText("Choose from Gallery"));
+  await ui.findByText(/Maximum five evidence items/);
+  expect(ui.queryByLabelText("Selected evidence: extra0.jpg")).toBeNull();
+});
+test("creation precedes sequential uploads and prevents duplicate submissions", async () => {
+  let finish;
+  createIncident.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const { ui, navigation } = await form();
+  fill(ui);
+  await selectEvidence(ui, 2);
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  await waitFor(() => expect(createIncident).toHaveBeenCalledTimes(1));
+  expect(uploadIncidentEvidence).not.toHaveBeenCalled();
+  expect(ui.getByText("Saving incident...")).toBeTruthy();
+  await act(async () => finish(incident));
+  await waitFor(() =>
+    expect(navigation.replace).toHaveBeenCalledWith("IncidentDetails", {
+      incidentId: "i",
+      confirmation: "created",
+    }),
+  );
+  expect(uploadIncidentEvidence.mock.calls.map((call) => call[1].name)).toEqual(
+    ["0.jpg", "1.jpg"],
+  );
+  expect(getIncident).toHaveBeenCalledWith("i");
+});
+test("partial failure retains incident and retries only failed evidence with the same identity", async () => {
+  uploadIncidentEvidence
+    .mockResolvedValueOnce({ id: "e1" })
+    .mockRejectedValueOnce({ response: { status: 503 } })
+    .mockResolvedValue({ id: "e2" });
+  const { ui, navigation } = await form();
+  fill(ui);
+  await selectEvidence(ui, 2);
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  await ui.findByText("Incident saved, but some evidence failed.");
+  expect(navigation.replace).not.toHaveBeenCalled();
+  expect(ui.getAllByText("Evidence saved")).toHaveLength(1);
+  fireEvent.press(ui.getByLabelText("View Saved Incident"));
+  expect(ui.getByText("Discard unsaved changes?")).toBeTruthy();
+  fireEvent.press(ui.getByLabelText("Keep Editing"));
+  expect(ui.getByLabelText("Selected evidence: 1.jpg")).toBeTruthy();
+  const key = uploadIncidentEvidence.mock.calls[1][1].uploadKey;
+  fireEvent.press(ui.getByLabelText("Retry Failed Uploads"));
+  await waitFor(() => expect(navigation.replace).toHaveBeenCalled());
+  expect(createIncident).toHaveBeenCalledTimes(1);
+  expect(uploadIncidentEvidence).toHaveBeenCalledTimes(3);
+  expect(uploadIncidentEvidence.mock.calls[2][0]).toBe("i");
+  expect(uploadIncidentEvidence.mock.calls[2][1].uploadKey).toBe(key);
+  expect(
+    uploadIncidentEvidence.mock.calls.filter(
+      (call) => call[1].name === "0.jpg",
+    ),
+  ).toHaveLength(1);
+});
+test("creation failure preserves selections; unavailable iOS files require reselection before saving", async () => {
+  createIncident.mockRejectedValue({ response: { status: 503 } });
+  const { ui } = await form();
+  fill(ui);
+  await selectEvidence(ui);
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  await waitFor(() => expect(createIncident).toHaveBeenCalledTimes(1));
+  await waitFor(() =>
+    expect(
+      ui.getByLabelText("Submit Incident").props.accessibilityState.disabled,
+    ).toBe(false),
+  );
+  expect(ui.getByLabelText("Selected evidence: 0.jpg")).toBeTruthy();
+  File.mockImplementation(() => ({ exists: false, size: 0 }));
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  await ui.findByText(/unavailable.*select it again/);
+  expect(createIncident).toHaveBeenCalledTimes(1);
+});
+test("editing shows existing evidence separately and uploads only newly selected files", async () => {
+  getIncident.mockResolvedValue({
+    ...incident,
+    evidenceCount: 4,
+    evidence: [1, 2, 3, 4].map((id) => ({
+      id: `existing${id}`,
+      originalFileName: `saved${id}.jpg`,
+    })),
+  });
+  const { ui, navigation } = await form(true);
+  expect(ui.getByText("Already uploaded")).toBeTruthy();
+  await selectEvidence(ui);
+  expect(
+    ui.getByLabelText("Take Photo").props.accessibilityState.disabled,
+  ).toBe(true);
+  fireEvent.press(ui.getByLabelText("Save Changes"));
+  await waitFor(() => expect(navigation.replace).toHaveBeenCalled());
+  expect(editIncident).not.toHaveBeenCalled();
+  expect(createIncident).not.toHaveBeenCalled();
+  expect(uploadIncidentEvidence).toHaveBeenCalledTimes(1);
+  expect(uploadIncidentEvidence.mock.calls[0][1].name).toBe("0.jpg");
+});
+test("camera capture and manual trap evidence validate metadata before incident creation", async () => {
+  const { ui } = await form();
+  fill(ui);
+  fireEvent.press(ui.getByLabelText("Take Photo"));
+  await ui.findByLabelText("Selected evidence: a.jpg");
+  expect(picker.requestCameraPermissionsAsync).toHaveBeenCalledTimes(1);
+  documents.getDocumentAsync.mockResolvedValue({
+    canceled: false,
+    assets: [
+      {
+        uri: "file:///trap.mov",
+        name: "trap.mov",
+        mimeType: "video/quicktime",
+        size: 1000,
+      },
+    ],
+  });
+  fireEvent.press(ui.getByLabelText("Import Camera Trap Evidence"));
+  await ui.findByLabelText("Camera trap ID: trap.mov");
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  await ui.findByText(/Enter the camera trap ID/);
+  expect(createIncident).not.toHaveBeenCalled();
+  fireEvent.changeText(ui.getByLabelText("Camera trap ID: trap.mov"), "Trap-1");
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  await waitFor(() => expect(uploadIncidentEvidence).toHaveBeenCalledTimes(2));
 });
 test("text-only create waits for backend, prevents double taps, uses numeric GPS and confirmed ID", async () => {
   let resolve;
@@ -570,4 +788,26 @@ test("incident-only edit leaves precise occurrence timestamp and other fields in
   await waitFor(() =>
     expect(editIncident).toHaveBeenCalledWith("i", { title: "Revised title" }),
   );
+});
+
+test("details navigates eligible owner to evidence for the saved incident and hides upload after completion", async () => {
+  const navigation = nav();
+  const ui = render(
+    <Details route={{ params: { incidentId: "i" } }} navigation={navigation} />,
+  );
+  await ui.findByLabelText("Add Evidence");
+  fireEvent.press(ui.getByLabelText("Add Evidence"));
+  expect(navigation.navigate).toHaveBeenCalledWith("IncidentEvidence", {
+    incidentId: "i",
+  });
+  ui.unmount();
+  getIncident.mockResolvedValue({
+    ...incident,
+    patrol: { ...patrol, status: "COMPLETED" },
+  });
+  const completed = render(
+    <Details route={{ params: { incidentId: "i" } }} navigation={nav()} />,
+  );
+  await completed.findByText("Read-only report");
+  expect(completed.queryByLabelText("Add Evidence")).toBeNull();
 });

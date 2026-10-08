@@ -11,7 +11,7 @@ const summarySelect = {
   title: true,
   incidentType: true,
   description: true,
-  occurredAt: true,
+  occurredAt: true, 
   reportedAt: true,
   latitude: true,
   longitude: true,
@@ -19,6 +19,7 @@ const summarySelect = {
   status: true,
   syncStatus: true,
   withdrawnAt: true,
+  markAsDone: true,
   reporterId: true,
   parkId: true,
   patrolId: true,
@@ -101,7 +102,8 @@ exports.findIncident = (id, user) => db().incident.findFirst({
   select: detailSelect
 });
 exports.listIncidents = (where, page) => db().$transaction(async tx => {
-  const [incidents, total] = await Promise.all([tx.incident.findMany({
+  // An interactive transaction owns one pg client: issue queries sequentially.
+  const incidents = await tx.incident.findMany({
     where,
     select: summarySelect,
     take: 25,
@@ -116,9 +118,10 @@ exports.listIncidents = (where, page) => db().$transaction(async tx => {
     }, {
       id: "desc"
     }]
-  }), tx.incident.count({
+  });
+  const total = await tx.incident.count({
     where
-  })]);
+  });
   return {
     incidents,
     total,
@@ -172,5 +175,38 @@ exports.update = async (tx, id, patrolId, reporterId, data) => {
       reporterId
     },
     select: detailSelect
+  });
+};
+
+// Manager review does not touch Patrol, Reporter ownership or the active-patrol
+// lock: a review can happen after the patrol has finished. The guard repeats the
+// withdrawn check so a report withdrawn mid-request is never re-stated.
+exports.setStatus = async (id, status) => db().$transaction(async tx => {
+  const result = await tx.incident.updateMany({
+    where: {
+      id,
+      withdrawnAt: null
+    },
+    data: {
+      status
+    }
+  });
+  if (!result.count) throw incidentError(409, "INCIDENT_CHANGED", "This incident changed. Refresh and try again.");
+  return tx.incident.findFirst({
+    where: {
+      id
+    },
+    select: detailSelect
+  });
+}, {
+  isolationLevel: "ReadCommitted",
+  maxWait: 5000,
+  timeout: 10000
+});
+
+exports.updateStatus = async (id, status) => {
+  return db().incident.update({
+    where: { id },
+    data: { status }
   });
 };

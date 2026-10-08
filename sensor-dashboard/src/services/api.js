@@ -25,4 +25,9 @@ export const updateAnimal = async (id, data) => {
   return response.data;
 };
 
+export const deleteAnimal = async (id) => {
+  const response = await api.delete(`/sensors/animals/${id}`);
+  return response.data;
+};
+
 export default api;

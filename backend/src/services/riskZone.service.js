@@ -3,6 +3,8 @@ const {
   zonePolygon,
   withinLimits,
 } = require("../../../shared/riskGeometry");
+const repository = require('../repositories/riskZone.repository');
+
 const fail = (code, message, riskZones) =>
   Object.assign(new Error(message), {
     navigationError: true,
@@ -75,4 +77,24 @@ exports.forPark = async (parkId) => {
       publicZones,
     );
   return publicZones;
+};
+
+exports.createRiskZone = async (data) => {
+  return await repository.createRiskZone(data);
+};
+
+exports.getAllRiskZones = async () => {
+  return await repository.getAllRiskZones();
+};
+
+exports.getRiskZoneById = async (id) => {
+  return await repository.getRiskZoneById(id);
+};
+
+exports.updateRiskZone = async (id, data) => {
+  return await repository.updateRiskZone(id, data);
+};
+
+exports.deleteRiskZone = async (id) => {
+  return await repository.deleteRiskZone(id);
 };

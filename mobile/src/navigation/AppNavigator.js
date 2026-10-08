@@ -1,6 +1,7 @@
 import PatrolRouteScreen from "../screens/patrol/PatrolRouteScreen";
 import LivePatrolNavigationScreen from "../screens/patrol/LivePatrolNavigationScreen";
 import React from "react";
+import { RangerVisualContext, fieldColors } from "../constants/fieldTheme";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../hooks/useAuth";
 import { useFontStyle } from "../components/common/Typography";
@@ -14,6 +15,7 @@ import RangerIncidentScreen from "../screens/incident/RangerIncidentScreen";
 import ReportIncidentScreen from "../screens/incident/ReportIncidentScreen";
 import MyIncidentReportsScreen from "../screens/incident/MyIncidentReportsScreen";
 import IncidentDetailsScreen from "../screens/incident/IncidentDetailsScreen";
+import IncidentEvidenceScreen from "../screens/incident/IncidentEvidenceScreen";
 import RangerShell from "./RangerShell";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import AlertsScreen from "../screens/alerts/AlertsScreen";
@@ -40,6 +42,7 @@ export default function AppNavigator() {
   // Authenticated Ranger Stack
   if (!isDemo && destination === "Home") {
     return (
+      <RangerVisualContext.Provider value={true}>
       <Stack.Navigator
         key={`${user.id}:ranger`}
         initialRouteName="Home"
@@ -47,6 +50,8 @@ export default function AppNavigator() {
           headerShown: false,
           animation: "none",
           headerTitleStyle: headerFont,
+          headerTintColor: fieldColors.forest,
+          headerStyle: { backgroundColor: fieldColors.background },
         }}
       >
         {[
@@ -68,6 +73,7 @@ export default function AppNavigator() {
           ["IncidentReports", "My Incident Reports", MyIncidentReportsScreen],
           ["IncidentDetails", "Incident Details", IncidentDetailsScreen],
           ["IncidentEdit", "Edit Incident", ReportIncidentScreen],
+          ["IncidentEvidence", "Incident Evidence", IncidentEvidenceScreen],
         ].map(([name, title, component]) => (
           <Stack.Screen
             key={name}
@@ -77,9 +83,9 @@ export default function AppNavigator() {
             options={{
               headerShown: true,
               title,
-              headerTintColor: "#174D3A",
+              headerTintColor: fieldColors.forest,
               headerShadowVisible: false,
-              headerStyle: { backgroundColor: "#F5F6F0" },
+              headerStyle: { backgroundColor: fieldColors.background },
             }}
           />
         ))}
@@ -89,7 +95,7 @@ export default function AppNavigator() {
           options={{
             headerShown: true,
             title: "Patrol Details",
-            headerTintColor: "#245b44",
+            headerTintColor: fieldColors.forest,
             headerShadowVisible: false,
           }}
         />
@@ -99,7 +105,7 @@ export default function AppNavigator() {
           options={{
             headerShown: true,
             title: "Patrol Navigation",
-            headerTintColor: "#245b44",
+            headerTintColor: fieldColors.forest,
             headerShadowVisible: false,
           }}
         />
@@ -109,11 +115,12 @@ export default function AppNavigator() {
           options={{
             headerShown: true,
             title: "Patrol Route",
-            headerTintColor: "#245b44",
+            headerTintColor: fieldColors.forest,
             headerShadowVisible: false,
           }}
         />
       </Stack.Navigator>
+      </RangerVisualContext.Provider>
     );
   }
 

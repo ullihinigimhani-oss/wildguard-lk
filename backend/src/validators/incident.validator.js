@@ -4,7 +4,7 @@ const TYPES = {
   WILDLIFE_CONFLICT: "Wildlife Conflict",
   ANIMAL_CARCASS: "Animal Carcass"
 };
-const STATUSES = ["PENDING", "UNDER_REVIEW", "RESPONDING", "RESOLVED"];
+const STATUSES = ["PENDING", "UNDER_REVIEW", "RESPONDING", "RESOLVED", "VERIFIED", "REJECTED"];
 const incidentError = (status, code, message) => Object.assign(new Error(message), {
   status,
   code,
@@ -103,7 +103,7 @@ function validateEvidence(evidence) {
     };
   });
 }
-const fields = ["title", "incidentType", "description", "occurredAt", "latitude", "longitude", "manualLocation"];
+const fields = ["title", "incidentType", "description", "occurredAt", "latitude", "longitude", "manualLocation", "status"];
 function validateIncident(body, patch = false) {
   onlyKeys(body, patch ? fields : [...fields, "evidence"]);
   if (patch && !Object.keys(body).length) throw invalid({
@@ -116,6 +116,12 @@ function validateIncident(body, patch = false) {
       incidentType: "Select a supported incident type."
     });
     result.incidentType = body.incidentType;
+  }
+  if (patch && body.status !== undefined) {
+    if (!STATUSES.includes(body.status)) throw invalid({
+      status: "Select a supported incident status."
+    });
+    result.status = body.status;
   }
   if (!patch || body.occurredAt !== undefined) result.occurredAt = dateTime(body.occurredAt, "occurredAt");
   // GPS values must be supplied together; no coercion, nulls or invented values.
@@ -130,6 +136,14 @@ function validateIncident(body, patch = false) {
   if (body.manualLocation !== undefined) result.manualLocation = body.manualLocation === null ? null : text(body.manualLocation, "manualLocation", 0, 200);
   if (!patch) result.evidence = body.evidence === undefined ? [] : validateEvidence(body.evidence);
   return result;
+}
+function validateStatus(body) {
+  onlyKeys(body, ["status"]);
+  if (typeof body.status !== "string" || !STATUSES.includes(body.status))
+    throw invalid({
+      status: "Select a supported incident status."
+    });
+  return body.status;
 }
 function validateFilters(query, manager = false) {
   onlyKeys(query, manager ? ["page", "patrolId", "rangerId", "parkId", "incidentType", "status", "from", "to", "includeWithdrawn"] : ["page", "includeWithdrawn"]);
@@ -182,6 +196,7 @@ module.exports = {
   STATUSES,
   incidentError,
   validateIncident,
+  validateStatus,
   validateFilters,
   validateMetadata,
   validateEvidence,

@@ -4,16 +4,12 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text, TextInput } from "../common/Typography";
 import Button from "../common/Button";
 import { statusTitle } from "../../utils/incident";
+import { fieldColors as c, fieldCard } from "../../constants/fieldTheme";
+import { ScreenHeader } from "../common/FieldUI";
 
 export const palette = {
-  forest: "#174D3A",
-  deep: "#103B2E",
-  background: "#F5F6F0",
-  sage: "#DCE9DD",
-  text: "#20372E",
-  muted: "#5F7066",
-  danger: "#B63B3B",
-  border: "#DCE3D9",
+  ...c,
+  deep: c.forest,
   white: "#FFFFFF",
 };
 export const ui = StyleSheet.create({
@@ -45,8 +41,9 @@ export const ui = StyleSheet.create({
     color: palette.forest,
   },
   card: {
+    ...fieldCard,
     padding: 20,
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.white,
@@ -56,12 +53,12 @@ export const ui = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 14,
     minHeight: 52,
     fontSize: 15,
     color: palette.text,
-    backgroundColor: palette.white,
+    backgroundColor: palette.background,
   },
   error: { fontSize: 13, lineHeight: 21, color: palette.danger },
   badge: {
@@ -71,21 +68,14 @@ export const ui = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: palette.sage,
   },
-  selected: { borderColor: palette.forest, backgroundColor: "#EDF4EC" },
+  selected: { borderColor: palette.forest, backgroundColor: palette.sage },
 });
 export function IncidentButton(props) {
-  return <Button color={palette.forest} {...props} />;
+  const icons = { "Take Photo": "camera", "Choose from Gallery": "image", "Import Camera Trap Evidence": "upload", "Choose Photo from Gallery": "image", "Choose Video from Gallery": "video", "Import Camera Trap Photo/Video": "upload", "Report New Incident": "plus", "My Incident Reports": "file-text", "Use Current GPS Location": "crosshair" };
+  return <Button color={palette.forest} icon={icons[props.title]} {...props} />;
 }
 export function Heading({ title, description }) {
-  return (
-    <View style={{ gap: 8 }}>
-      <Text style={ui.eyebrow}>WILDGUARD LK · FIELD OPERATIONS</Text>
-      <Text accessibilityRole="header" style={ui.heading}>
-        {title}
-      </Text>
-      {description && <Text style={ui.body}>{description}</Text>}
-    </View>
-  );
+  return <ScreenHeader title={title} description={description} icon="flag" />;
 }
 export function State({ loading, error, retry }) {
   return (
@@ -153,6 +143,7 @@ export function SelectCard({
   selected,
   onPress,
   disabled,
+  style,
 }) {
   return (
     <Pressable
@@ -165,10 +156,13 @@ export function SelectCard({
         ui.card,
         selected && ui.selected,
         pressed && { opacity: 0.75 },
+        style,
       ]}
     >
       <View style={ui.row}>
-        <Ionicons name={icon} size={24} color={palette.forest} />
+        <View style={{ width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: selected ? palette.white : palette.sage }}>
+          <Ionicons accessible={false} name={icon} size={24} color={palette.forest} />
+        </View>
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={ui.title}>{title}</Text>
           <Text style={ui.muted}>{description}</Text>
@@ -182,29 +176,28 @@ export function SelectCard({
     </Pressable>
   );
 }
-export function EvidenceUnavailable() {
+export function EvidenceEntry({ incidentId, navigation, disabled }) {
   return (
     <View style={ui.card}>
       <Text style={ui.section}>Evidence</Text>
       <Text style={ui.muted}>
-        Evidence uploads will be available after secure media storage is
-        connected. Text-only reports can be submitted now.
+        Save the incident first, then add private photos, videos or manually
+        imported camera trap media from Incident Details. Upload failures do not
+        discard the incident.
       </Text>
-      {[
-        ["camera-outline", "Take Photo"],
-        ["images-outline", "Choose from Gallery"],
-        ["videocam-outline", "Camera Trap Evidence"],
-      ].map(([icon, title]) => (
-        <View key={title} style={ui.row}>
-          <Ionicons name={icon} size={20} color={palette.muted} />
-          <View style={{ flex: 1 }}>
-            <IncidentButton title={title} secondary disabled />
-          </View>
-        </View>
-      ))}
+      {incidentId && (
+        <IncidentButton
+          title="Manage Evidence"
+          secondary
+          disabled={disabled}
+          onPress={() =>
+            navigation.navigate("IncidentEvidence", { incidentId })
+          }
+        />
+      )}
       <Text style={ui.muted}>
-        Future evidence support: multiple photos and videos, camera trap ID,
-        capture date/time and notes.
+        Maximum five items per incident. Photos up to 10 MB; videos up to 50 MB.
+        Text-only reporting remains available.
       </Text>
     </View>
   );

@@ -50,6 +50,8 @@ enum IncidentStatus {
   UNDER_REVIEW
   RESPONDING
   RESOLVED
+  VERIFIED
+  REJECTED
 }
 
 enum CommunityReportStatus {
@@ -237,6 +239,8 @@ model Incident {
   reportedAt DateTime  @default(now())
   withdrawnAt DateTime?
 
+  markAsDone Boolean @default(false)
+
   reporterId String
   reporter   User   @relation(fields: [reporterId], references: [id])
 
@@ -256,6 +260,7 @@ model Incident {
   @@index([patrolId])
   @@index([incidentType])
   @@index([status])
+  @@index([markAsDone])
 }
 
 model IncidentEvidence {

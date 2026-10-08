@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshControl, View } from "react-native";
 import { Text } from "../../components/common/Typography";
 import Screen from "../../components/common/Screen";
+import EvidenceMedia from "../../components/incident/EvidenceMedia";
 import { useAuth } from "../../hooks/useAuth";
 import useIncidentResource from "../../hooks/useIncidentResource";
 import { getIncident, withdrawIncident } from "../../services/incidentApi";
@@ -136,7 +137,8 @@ export default function IncidentDetailsScreen({ route, navigation }) {
             </Text>
             {!shown.evidence?.length && (
               <Text style={ui.muted}>
-                No evidence attached. Secure uploads are not available yet.
+                No evidence attached. Add photos or videos while this pending
+                report is on an active patrol.
               </Text>
             )}
             {shown.evidence?.map((item) => (
@@ -147,11 +149,21 @@ export default function IncidentDetailsScreen({ route, navigation }) {
                   <Field key={key} label={key} value={String(value)} />
                 ))}
                 <Field label="Added" value={readableTime(item.createdAt)} />
+                <EvidenceMedia incidentId={shown.id} evidence={item} />
               </View>
             ))}
           </View>
           {editable ? (
             <>
+              <IncidentButton
+                title="Add Evidence"
+                disabled={busy}
+                onPress={() =>
+                  navigation.navigate("IncidentEvidence", {
+                    incidentId: shown.id,
+                  })
+                }
+              />
               <IncidentButton
                 title="Edit Incident"
                 disabled={busy}

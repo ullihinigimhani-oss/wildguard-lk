@@ -64,6 +64,10 @@ const withdraw = (who = "a", body = {}) => request(app).post("/api/incidents/i-1
 const details = (who = "a") => request(app).get("/api/incidents/i-1").set("Authorization", token(who));
 const list = (who = "a", query = {}) => request(app).get("/api/patrols/patrol/incidents").set("Authorization", token(who)).query(query);
 const managerList = (who = "manager", query = {}) => request(app).get("/api/incidents").set("Authorization", token(who)).query(query);
+const review = (status, who = "manager", incidentId = "i-1", extra) => request(app).patch(`/api/incidents/${incidentId}/status`).set("Authorization", token(who)).send({
+  status,
+  ...extra
+});
 const complete = () => request(app).post("/api/patrols/mine/patrol/complete").set("Authorization", token("a"));
 const deferred = () => {
   let resolve;
@@ -370,7 +374,7 @@ test("invalid input and mass assignment never write", async () => {
   }, {
     reporterId: "b"
   }, {
-    status: "RESOLVED"
+    status: "VERIFIED"
   }, {
     occurredAt: "invalid"
   }]) await create(payload(change)).expect(400);
@@ -455,7 +459,7 @@ test("safe editing preserves ownership, status and evidence; withdrawal retains 
   await details().expect(200);
   expect((await list().expect(200)).body.incidents).toEqual([]);
 });
-test.each(["UNDER_REVIEW", "RESPONDING", "RESOLVED"])("%s incidents are locked even on active patrols", async status => {
+test.each(["UNDER_REVIEW", "VERIFIED", "REJECTED"])("%s incidents are locked even on active patrols", async status => {
   seed().status = status;
   await patch().expect(409);
   await withdraw().expect(409);
@@ -540,8 +544,8 @@ test("unconfigured storage rejects evidence without fake rows; reads support mul
   };
   const unavailable = await create(payload({
     evidence: [media, media]
-  })).expect(503);
-  expect(unavailable.body.code).toBe("EVIDENCE_STORAGE_UNAVAILABLE");
+  })).expect(409);
+  expect(unavailable.body.code).toBe("EVIDENCE_UPLOAD_REQUIRED");
   expect(incidents.size).toBe(0);
   await create(payload({
     evidence: [{
@@ -571,7 +575,7 @@ test("unconfigured storage rejects evidence without fake rows; reads support mul
   expect(response.body.incident.evidenceCount).toBe(2);
   expect(response.body.incident.evidence).toHaveLength(2);
   expect(response.body.incident.evidence[0]).toMatchObject({
-    fileUrl: "https://media.example/video.mp4",
+    fileUrl: null,
     metadata: {
       source: "CAMERA_TRAP"
     }
@@ -631,4 +635,116 @@ test.each(["create", "edit", "withdraw"])("%s mutation holding the row lock comm
   expect(patrol.status).toBe("COMPLETED");
   await patch().expect(409);
   await withdraw().expect(409);
+});
+
+test("Park Manager reviews a Ranger incident end to end and the status persists", async () => {
+  await create(payload(), "a").expect(201);
+  evidence.push({
+    id: "e-1",
+    incidentId: "i-1",
+    fileUrl: "https://media.example/snare.jpg",
+    fileType: "PHOTO",
+    caption: "Snare photo",
+    metadata: {
+      source: "PHONE_CAMERA",
+      originalFileName: "snare.jpg",
+      mimeType: "image/jpeg",
+      fileSize: 2048
+    },
+    createdAt: new Date("2026-01-01T04:10:00Z")
+  });
+  const listed = await managerList().expect(200);
+  expect(listed.body.incidents).toHaveLength(1);
+  expect(listed.body.incidents[0]).toMatchObject({
+    id: "i-1",
+    status: "PENDING",
+    reporter: {
+      id: "a",
+      name: "a"
+    },
+    evidenceCount: 1
+  });
+  const updated = await review("UNDER_REVIEW").expect(200);
+  expect(updated.body.incident).toMatchObject({
+    id: "i-1",
+    status: "UNDER_REVIEW",
+    patrolId: "patrol",
+    reporter: {
+      id: "a"
+    },
+    evidenceCount: 1
+  });
+  expect(updated.body.incident.evidence[0]).toMatchObject({
+    id: "e-1",
+    fileType: "PHOTO",
+    caption: "Snare photo",
+    fileUrl: null,
+    metadata: {
+      source: "PHONE_CAMERA",
+      originalFileName: "snare.jpg"
+    }
+  });
+  expect(db.incident.updateMany).toHaveBeenCalledWith({
+    where: {
+      id: "i-1",
+      withdrawnAt: null
+    },
+    data: {
+      status: "UNDER_REVIEW"
+    }
+  });
+  expect((await details("manager")).body.incident.status).toBe("UNDER_REVIEW");
+  expect((await managerList()).body.incidents[0].status).toBe("UNDER_REVIEW");
+  expect((await details("a")).body.incident.status).toBe("UNDER_REVIEW");
+});
+test.each(["RESPONDING", "RESOLVED", "in review", "IN_REVIEW", "", "PENDING,UNDER_REVIEW"])("unsupported status %s is rejected without writing", async status => {
+  await create(payload(), "a").expect(201);
+  const response = await review(status);
+  expect(response.status).toBe(400);
+  expect(response.body.errors.status).toBeTruthy();
+  expect(db.incident.updateMany).not.toHaveBeenCalled();
+  expect(incidents.get("i-1").status).toBe("PENDING");
+});
+test("manager status update rejects unknown fields and never writes them", async () => {
+  await create(payload(), "a").expect(201);
+  await review("VERIFIED", "manager", "i-1", {
+    reporterId: "b"
+  }).expect(400);
+  await review("VERIFIED", "manager", "i-1", {
+    withdrawnAt: "forged"
+  }).expect(400);
+  await request(app).patch("/api/incidents/i-1/status").set("Authorization", token("manager")).expect(400);
+  expect(db.incident.updateMany).not.toHaveBeenCalled();
+  expect(incidents.get("i-1").status).toBe("PENDING");
+});
+test("only approved Park Managers may change incident status", async () => {
+  await create(payload(), "a").expect(201);
+  for (const who of ["a", "b", "other"]) await review("UNDER_REVIEW", who).expect(403);
+  await request(app).patch("/api/incidents/i-1/status").send({
+    status: "UNDER_REVIEW"
+  }).expect(401);
+  await review("UNDER_REVIEW", "manager", "missing-id").expect(404);
+  expect(db.incident.updateMany).not.toHaveBeenCalled();
+  expect(incidents.get("i-1").status).toBe("PENDING");
+});
+test("withdrawn reports stay read-only for review", async () => {
+  await create(payload(), "a").expect(201);
+  await withdraw("a").expect(200);
+  await review("VERIFIED").expect(409);
+  expect(incidents.get("i-1").status).toBe("PENDING");
+});
+test("review still works after the patrol finishes while Ranger edits stay locked", async () => {
+  await create(payload(), "a").expect(201);
+  await complete().expect(200);
+  expect(patrol.status).toBe("COMPLETED");
+  await patch().expect(409);
+  await review("VERIFIED").expect(200);
+  expect((await details("manager")).body.incident.status).toBe("VERIFIED");
+  expect((await details("a")).body.incident.status).toBe("VERIFIED");
+});
+test("status changes follow the existing Incident lifecycle values only", async () => {
+  await create(payload(), "a").expect(201);
+  for (const status of ["UNDER_REVIEW", "VERIFIED", "REJECTED"]) await review(status).expect(200);
+  expect(incidents.get("i-1").status).toBe("REJECTED");
+  expect((await details("manager")).body.incident.status).toBe("REJECTED");
 });
