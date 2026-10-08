@@ -2,20 +2,22 @@ jest.mock(
   "react-native-safe-area-context",
   () => require("react-native-safe-area-context/jest/mock").default,
 );
-jest.mock("react-native-webview", () => ({
-  WebView: require("react-native").View,
-}));
+jest.mock("react-native-webview", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  const MockWebView = React.forwardRef((props, ref) => <View {...props} ref={ref} />);
+  return {
+    __esModule: true,
+    default: MockWebView,
+    WebView: MockWebView,
+  };
+});
 
 jest.mock("@expo/vector-icons/Feather", () => {
   const React = require("react");
   const { View } = require("react-native");
   return (props) => <View {...props} />;
 });
-jest.mock(
-  "react-native-webview",
-  () => ({ WebView: require("react-native").View }),
-  { virtual: true },
-);
 jest.mock(
   "@expo/vector-icons/Ionicons",
   () => {
