@@ -51,10 +51,8 @@ export default function CommunityReportStatusForm({ report, onSaved }) {
     }
   };
   return (
-    <section className="panel">
-      <div className="panel-heading">
-        <h3>Review status</h3>
-      </div>
+    <div className="community-status-form">
+      <h3>Review status</h3>
       <div className="community-status-row">
         <label htmlFor={id}>Update report status</label>
         <select
@@ -82,6 +80,6 @@ export default function CommunityReportStatusForm({ report, onSaved }) {
         lifecycle.
       </p>
       {feedback && <p role={feedback.type}>{feedback.text}</p>}
-    </section>
+    </div>
   );
 }

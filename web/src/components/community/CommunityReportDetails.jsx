@@ -37,100 +37,117 @@ export default function CommunityReportDetails({ id }) {
     };
   }, [id, revision]);
 
-  if (loading) return <p role="status">Loading report…</p>;
-  if (error)
-    return (
-      <div role="alert">
-        {error}
-        <button
-          className="button"
-          onClick={() => setRevision((value) => value + 1)}
-        >
-          Retry report
-        </button>
-      </div>
-    );
-  if (!report)
-    return <p role="alert">Community report unavailable.</p>;
-
-  const location =
-    report.manualLocation ||
-    (report.latitude != null && report.longitude != null
-      ? `${report.latitude}, ${report.longitude}`
-      : "Not recorded");
   return (
-    <div className="community-details">
-      <section className="panel">
-        <div className="panel-heading">
-          <h3>{reportTypes[report.reportType] || report.reportType}</h3>
-          <span className={`badge ${reportStatusClass[report.status] || ""}`}>
-            {reportStatuses[report.status] || report.status}
-          </span>
+    <section
+      className="panel community-details"
+      aria-label="Community report details"
+    >
+      <div className="panel-heading">
+        <h2
+          tabIndex={-1}
+          ref={(element) => element?.focus({ preventScroll: true })}
+        >
+          Community report details
+        </h2>
+      </div>
+      {loading && <p role="status">Loading report…</p>}
+      {error && (
+        <div role="alert">
+          {error}
+          <button
+            className="button"
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            Retry details
+          </button>
         </div>
-        <dl className="community-facts">
-          <div>
-            <dt>Reference</dt>
-            <dd>{report.id}</dd>
-          </div>
-          <div>
-            <dt>Submitted</dt>
-            <dd>{time(report.submittedAt)}</dd>
-          </div>
-          <div>
-            <dt>Species</dt>
-            <dd>{report.species || "Not recorded"}</dd>
-          </div>
-          <div>
-            <dt>Location</dt>
-            <dd>{location}</dd>
-          </div>
-          <div>
-            <dt>Reporter</dt>
-            <dd>
-              {report.isAnonymous
-                ? "Anonymous community member"
-                : report.reporterName || report.reporter?.name || "Community Member"}
-            </dd>
-          </div>
-          <div>
-            <dt>Contact</dt>
-            <dd>{report.isAnonymous ? "Withheld" : report.reporterPhone || "Not provided"}</dd>
-          </div>
-        </dl>
-        <h4>Description</h4>
-        <p className="community-description">{report.description}</p>
-      </section>
-      <CommunityReportStatusForm report={report} onSaved={setReport} />
-      {report.evidence?.length ? (
-        <section className="panel" aria-label="Evidence">
-          <div className="panel-heading">
-            <h3>Evidence ({report.evidence.length})</h3>
-          </div>
-          <div className="community-evidence-grid">
-            {report.evidence.map((item) => {
-              const src = mediaUrl(item.fileUrl);
-              const isVideo = String(item.fileType || "").startsWith("video");
-              return (
-                <div key={item.id} className="community-evidence">
-                  {src &&
-                    (isVideo ? (
-                      <video controls src={src} aria-label={`Evidence video ${item.id}`} />
-                    ) : (
-                      <img src={src} alt={`Evidence ${item.id}`} />
-                    ))}
-                  <a href={src} target="_blank" rel="noreferrer">
-                    Open evidence <span className="muted small">{item.id}</span>
-                  </a>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : (
-        <p className="muted small">
-          No evidence files were attached to this report.
-        </p>
       )}
-    </div>
+      {!report && !loading && !error && (
+        <p role="alert">Community report unavailable.</p>
+      )}
+      {report && (
+        <>
+          <div className="community-title-row">
+            <h3>{reportTypes[report.reportType] || report.reportType}</h3>
+            <span
+              className={`badge ${reportStatusClass[report.status] || ""}`}
+            >
+              {reportStatuses[report.status] || report.status}
+            </span>
+          </div>
+          <dl className="community-facts">
+            <div>
+              <dt>Reference</dt>
+              <dd>{report.id}</dd>
+            </div>
+            <div>
+              <dt>Submitted</dt>
+              <dd>{time(report.submittedAt)}</dd>
+            </div>
+            <div>
+              <dt>Species</dt>
+              <dd>{report.species || "Not recorded"}</dd>
+            </div>
+            <div>
+              <dt>Reporter</dt>
+              <dd>
+                {report.isAnonymous
+                  ? "Anonymous community member"
+                  : report.reporterName ||
+                    report.reporter?.name ||
+                    "Community Member"}
+              </dd>
+            </div>
+            <div>
+              <dt>Contact</dt>
+              <dd>
+                {report.isAnonymous
+                  ? "Withheld"
+                  : report.reporterPhone || "Not provided"}
+              </dd>
+            </div>
+          </dl>
+          <h3>Description</h3>
+          <p className="community-description">{report.description}</p>
+          <h3>Location</h3>
+          <p className="community-manual-location">
+            {report.manualLocation ||
+              (report.latitude != null && report.longitude != null
+                ? `${report.latitude}, ${report.longitude}`
+                : "Not recorded")}
+          </p>
+          <h3>Evidence ({report.evidence?.length || 0})</h3>
+          {report.evidence?.length ? (
+            <div className="community-evidence-grid">
+              {report.evidence.map((item) => {
+                const src = mediaUrl(item.fileUrl);
+                const isVideo = String(item.fileType || "").startsWith("video");
+                return (
+                  <div key={item.id} className="community-evidence">
+                    {src &&
+                      (isVideo ? (
+                        <video
+                          controls
+                          src={src}
+                          aria-label={`Evidence video ${item.id}`}
+                        />
+                      ) : (
+                        <img src={src} alt={`Evidence ${item.id}`} />
+                      ))}
+                    <a href={src} target="_blank" rel="noreferrer">
+                      Open evidence{" "}
+                      <span className="muted small">{item.id}</span>
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p>No evidence attached.</p>
+          )}
+          <CommunityReportStatusForm report={report} onSaved={setReport} />
+        </>
+      )}
+    </section>
   );
 }

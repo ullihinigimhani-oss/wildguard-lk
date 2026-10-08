@@ -20,6 +20,15 @@
 .community-details .panel-heading {
   padding: 0;
 }
+.community-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.community-title-row h3 {
+  margin: 0;
+}
 .community-facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -35,6 +44,10 @@
 }
 .community-description {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.community-manual-location {
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
 .community-evidence-grid {
@@ -87,6 +100,14 @@
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+}
+.community-status-form {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+.community-status-form h3 {
+  margin: 0;
 }
 .community-status-row {
   display: flex;

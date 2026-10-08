@@ -64,12 +64,18 @@ export default function CommunityReports() {
       <QueryState query={query} />
       {query.authorized && !query.loading && !query.error && (
         <>
-          {!items.length ? (
-            <p className="community-empty">
-              No community reports match these filters.
-            </p>
-          ) : (
-            <>
+          <section className="panel" aria-label="Community reports">
+            <div className="panel-heading">
+              <h3>Community Reports</h3>
+              <span className="badge badge-scheduled">
+                {total} {total === 1 ? "report" : "reports"}
+              </span>
+            </div>
+            {!items.length ? (
+              <p className="community-empty">
+                No community reports match these filters.
+              </p>
+            ) : (
               <div className="table-scroll">
                 <table className="community-table">
                   <thead>
@@ -120,16 +126,16 @@ export default function CommunityReports() {
                   </tbody>
                 </table>
               </div>
-              {total > size && (
-                <Pagination
-                  label="Community report pagination"
-                  page={page}
-                  total={total}
-                  size={size}
-                  change={(value) => update({ page: value }, false)}
-                />
-              )}
-            </>
+            )}
+          </section>
+          {total > size && (
+            <Pagination
+              label="Community report pagination"
+              page={page}
+              total={total}
+              size={size}
+              change={(value) => update({ page: value }, false)}
+            />
           )}
         </>
       )}
