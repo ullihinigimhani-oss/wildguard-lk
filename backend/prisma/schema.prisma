@@ -433,8 +433,9 @@ model Alert {
 }
 
 model AlertAcknowledgement {
-  id             String   @id @default(cuid())
-  acknowledgedAt DateTime @default(now())
+  id             String    @id @default(cuid())
+  readAt         DateTime? @default(now())
+  acknowledgedAt DateTime?
 
   alertId String
   alert   Alert  @relation(fields: [alertId], references: [id], onDelete: Cascade)

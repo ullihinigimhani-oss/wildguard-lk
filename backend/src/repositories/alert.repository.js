@@ -37,6 +37,7 @@ const alertSelect = {
   acknowledgements: {
     select: {
       userId: true,
+      readAt: true,
       acknowledgedAt: true,
     },
   },
@@ -81,6 +82,7 @@ exports.findAlertById = async (id) => {
 };
 
 exports.acknowledgeAlert = async (alertId, userId) => {
+  const now = new Date();
   return db().alertAcknowledgement.upsert({
     where: {
       alertId_userId: {
@@ -91,14 +93,45 @@ exports.acknowledgeAlert = async (alertId, userId) => {
     create: {
       alertId,
       userId,
+      readAt: now,
+      acknowledgedAt: now,
     },
     update: {
-      acknowledgedAt: new Date(),
+      acknowledgedAt: now,
     },
     select: {
       id: true,
       alertId: true,
       userId: true,
+      readAt: true,
+      acknowledgedAt: true,
+    },
+  });
+};
+
+exports.markAsRead = async (alertId, userId) => {
+  const now = new Date();
+  return db().alertAcknowledgement.upsert({
+    where: {
+      alertId_userId: {
+        alertId,
+        userId,
+      },
+    },
+    create: {
+      alertId,
+      userId,
+      readAt: now,
+      acknowledgedAt: null,
+    },
+    update: {
+      readAt: now,
+    },
+    select: {
+      id: true,
+      alertId: true,
+      userId: true,
+      readAt: true,
       acknowledgedAt: true,
     },
   });
@@ -137,10 +170,11 @@ exports.markAllAsRead = async (userId) => {
         create: {
           alertId: a.id,
           userId,
-          acknowledgedAt: now,
+          readAt: now,
+          acknowledgedAt: null,
         },
         update: {
-          acknowledgedAt: now,
+          readAt: now,
         },
       })
     )

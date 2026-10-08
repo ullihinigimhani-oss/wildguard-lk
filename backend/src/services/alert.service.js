@@ -65,9 +65,19 @@ function formatAlert(alert, user = null) {
   const userAck = user
     ? alert.acknowledgements?.find((ack) => ack.userId === user.id)
     : null;
-  const isAcknowledged = Boolean(userAck);
-  const isRead = isAcknowledged;
-  const readAt = userAck?.acknowledgedAt || null;
+  const isAcknowledged = Boolean(userAck?.acknowledgedAt);
+  const acknowledgedAt = userAck?.acknowledgedAt || null;
+  const isRead = Boolean(userAck?.readAt || userAck?.acknowledgedAt);
+  const readAt = userAck?.readAt || userAck?.acknowledgedAt || null;
+
+  // Expected lifecycle for user interaction:
+  // RECEIVED -> READ -> ACKNOWLEDGED
+  let userState = "RECEIVED";
+  if (isAcknowledged) {
+    userState = "ACKNOWLEDGED";
+  } else if (isRead) {
+    userState = "READ";
+  }
 
   const species = alert.animal?.name || alert.animal?.species;
   const zoneName = alert.riskZone?.name;
@@ -117,9 +127,13 @@ function formatAlert(alert, user = null) {
     isResolved,
     isExpired,
     isAcknowledged,
+    acknowledgedAt,
     isRead,
     readAt,
-    acknowledgementCount: acknowledgements ? acknowledgements.length : 0,
+    userState,
+    acknowledgementCount: acknowledgements
+      ? acknowledgements.filter((ack) => Boolean(ack.acknowledgedAt)).length
+      : 0,
     safetyInstructions: getSafetyInstructions(alert.riskLevel, alert.animal?.species, zoneName),
   };
 }
@@ -188,14 +202,18 @@ exports.markAsRead = async (alertId, user) => {
   const alert = await repository.findAlertById(alertId.trim());
   if (!alert) throw notFound();
 
-  const receipt = await repository.acknowledgeAlert(alertId.trim(), user.id);
+  const receipt = await repository.markAsRead(alertId.trim(), user.id);
+  const isAcknowledged = Boolean(receipt.acknowledgedAt);
   return {
     success: true,
     message: "Alert marked as read.",
     alertId: alertId.trim(),
     userId: user.id,
     isRead: true,
-    readAt: receipt.acknowledgedAt,
+    readAt: receipt.readAt || receipt.acknowledgedAt || new Date(),
+    isAcknowledged,
+    acknowledgedAt: receipt.acknowledgedAt || null,
+    userState: isAcknowledged ? "ACKNOWLEDGED" : "READ",
   };
 };
 
@@ -218,14 +236,50 @@ exports.acknowledgeAlert = async (alertId, user) => {
   const alert = await repository.findAlertById(alertId.trim());
   if (!alert) throw notFound();
 
+  const status = alert.status || "ACTIVE";
+  if (status === "RESOLVED" || alert.resolvedAt) {
+    throw badRequest("Acknowledgement is not applicable for resolved alerts.");
+  }
+
+  if (status !== "ACTIVE") {
+    throw badRequest("Acknowledgement is not applicable for inactive alerts.");
+  }
+
+  const ageMs = Date.now() - new Date(alert.generatedAt || alert.createdAt || Date.now()).getTime();
+  if (ageMs > 72 * 60 * 60 * 1000) {
+    throw badRequest("Acknowledgement is not applicable for expired alerts.");
+  }
+
+  // Prevent duplicate acknowledgement
+  const existingAck = alert.acknowledgements?.find((ack) => ack.userId === user.id);
+  if (existingAck?.acknowledgedAt) {
+    return {
+      success: true,
+      message: "Alert has already been acknowledged.",
+      alertId: alert.id,
+      userId: user.id,
+      isAcknowledged: true,
+      acknowledgedAt: existingAck.acknowledgedAt,
+      isRead: true,
+      readAt: existingAck.readAt || existingAck.acknowledgedAt,
+      userState: "ACKNOWLEDGED",
+      alreadyAcknowledged: true,
+      acknowledgement: existingAck,
+    };
+  }
+
   const acknowledgement = await repository.acknowledgeAlert(alertId.trim(), user.id);
   return {
     success: true,
     message: "Alert acknowledged successfully.",
-    alertId: alertId.trim(),
+    alertId: alert.id,
     userId: user.id,
+    isAcknowledged: true,
+    acknowledgedAt: acknowledgement.acknowledgedAt,
     isRead: true,
-    readAt: acknowledgement.acknowledgedAt,
+    readAt: acknowledgement.readAt || acknowledgement.acknowledgedAt,
+    userState: "ACKNOWLEDGED",
+    alreadyAcknowledged: false,
     acknowledgement,
   };
 };

@@ -307,13 +307,15 @@ describe("Safety Alert APIs", () => {
       expect(db.alertAcknowledgement.upsert).not.toHaveBeenCalled();
     });
 
-    test("records alert acknowledgement for authenticated user", async () => {
-      db.alert.findUnique.mockResolvedValue({ id: "alert-1" });
+    test("records alert acknowledgement for authenticated user and sets state to ACKNOWLEDGED", async () => {
+      const now = new Date();
+      db.alert.findUnique.mockResolvedValue({ id: "alert-1", status: "ACTIVE", acknowledgements: [] });
       db.alertAcknowledgement.upsert.mockResolvedValue({
         id: "ack-1",
         alertId: "alert-1",
         userId: "user-1",
-        acknowledgedAt: new Date(),
+        readAt: now,
+        acknowledgedAt: now,
       });
 
       const res = await request(app)
@@ -323,12 +325,76 @@ describe("Safety Alert APIs", () => {
 
       expect(res.body.success).toBe(true);
       expect(res.body.message).toBe("Alert acknowledged successfully.");
+      expect(res.body.isAcknowledged).toBe(true);
+      expect(res.body.acknowledgedAt).toBeDefined();
       expect(res.body.isRead).toBe(true);
+      expect(res.body.userState).toBe("ACKNOWLEDGED");
+      expect(res.body.alreadyAcknowledged).toBe(false);
       expect(db.alertAcknowledgement.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { alertId_userId: { alertId: "alert-1", userId: "user-1" } },
         })
       );
+    });
+
+    test("prevents duplicate acknowledgement and preserves original timestamp", async () => {
+      const existingTime = new Date("2026-10-08T10:00:00.000Z");
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "ACTIVE",
+        acknowledgements: [{ userId: "user-1", readAt: existingTime, acknowledgedAt: existingTime }],
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/acknowledge")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toBe("Alert has already been acknowledged.");
+      expect(res.body.alreadyAcknowledged).toBe(true);
+      expect(res.body.isAcknowledged).toBe(true);
+      expect(res.body.acknowledgedAt).toBe(existingTime.toISOString());
+      expect(res.body.userState).toBe("ACKNOWLEDGED");
+      // Verify upsert was not called again since alert was already acknowledged
+      expect(db.alertAcknowledgement.upsert).not.toHaveBeenCalled();
+    });
+
+    test("rejects acknowledgement when alert is RESOLVED (not applicable)", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-resolved",
+        status: "RESOLVED",
+        resolvedAt: new Date(),
+        acknowledgements: [],
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-resolved/acknowledge")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Acknowledgement is not applicable for resolved alerts.");
+      expect(db.alertAcknowledgement.upsert).not.toHaveBeenCalled();
+    });
+
+    test("rejects acknowledgement when alert is expired (older than 72 hours)", async () => {
+      const ancientDate = new Date(Date.now() - 80 * 60 * 60 * 1000);
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-expired",
+        status: "ACTIVE",
+        generatedAt: ancientDate,
+        acknowledgements: [],
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-expired/acknowledge")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Acknowledgement is not applicable for expired alerts.");
+      expect(db.alertAcknowledgement.upsert).not.toHaveBeenCalled();
     });
 
     test("returns 404 if acknowledging nonexistent alert", async () => {
