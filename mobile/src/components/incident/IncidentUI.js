@@ -182,29 +182,28 @@ export function SelectCard({
     </Pressable>
   );
 }
-export function EvidenceUnavailable() {
+export function EvidenceEntry({ incidentId, navigation, disabled }) {
   return (
     <View style={ui.card}>
       <Text style={ui.section}>Evidence</Text>
       <Text style={ui.muted}>
-        Evidence uploads will be available after secure media storage is
-        connected. Text-only reports can be submitted now.
+        Save the incident first, then add private photos, videos or manually
+        imported camera trap media from Incident Details. Upload failures do not
+        discard the incident.
       </Text>
-      {[
-        ["camera-outline", "Take Photo"],
-        ["images-outline", "Choose from Gallery"],
-        ["videocam-outline", "Camera Trap Evidence"],
-      ].map(([icon, title]) => (
-        <View key={title} style={ui.row}>
-          <Ionicons name={icon} size={20} color={palette.muted} />
-          <View style={{ flex: 1 }}>
-            <IncidentButton title={title} secondary disabled />
-          </View>
-        </View>
-      ))}
+      {incidentId && (
+        <IncidentButton
+          title="Manage Evidence"
+          secondary
+          disabled={disabled}
+          onPress={() =>
+            navigation.navigate("IncidentEvidence", { incidentId })
+          }
+        />
+      )}
       <Text style={ui.muted}>
-        Future evidence support: multiple photos and videos, camera trap ID,
-        capture date/time and notes.
+        Maximum five items per incident. Photos up to 10 MB; videos up to 50 MB.
+        Text-only reporting remains available.
       </Text>
     </View>
   );

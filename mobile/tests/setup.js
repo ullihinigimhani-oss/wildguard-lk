@@ -5,6 +5,19 @@ jest.mock(
 jest.mock("react-native-webview", () => ({
   WebView: require("react-native").View,
 }));
+jest.mock("expo-video", () => ({
+  VideoView: require("react-native").View,
+  useVideoPlayer: () => {
+    const React = require("react");
+    return React.useMemo(
+      () => ({
+        pause: jest.fn(),
+        addListener: jest.fn(() => ({ remove: jest.fn() })),
+      }),
+      [],
+    );
+  },
+}));
 
 jest.mock("@expo/vector-icons/Feather", () => {
   const React = require("react");

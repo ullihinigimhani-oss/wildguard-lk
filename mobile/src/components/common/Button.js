@@ -9,11 +9,12 @@ export default function Button({
   loading = false,
   disabled = false,
   color = colors.green,
+  accessibilityLabel,
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={title}
+      accessibilityLabel={accessibilityLabel || title}
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       disabled={disabled || loading}
       onPress={onPress}

@@ -14,6 +14,7 @@ import RangerIncidentScreen from "../screens/incident/RangerIncidentScreen";
 import ReportIncidentScreen from "../screens/incident/ReportIncidentScreen";
 import MyIncidentReportsScreen from "../screens/incident/MyIncidentReportsScreen";
 import IncidentDetailsScreen from "../screens/incident/IncidentDetailsScreen";
+import IncidentEvidenceScreen from "../screens/incident/IncidentEvidenceScreen";
 import RangerShell from "./RangerShell";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import AlertsScreen from "../screens/alerts/AlertsScreen";
@@ -61,6 +62,7 @@ export default function AppNavigator() {
           ["IncidentReports", "My Incident Reports", MyIncidentReportsScreen],
           ["IncidentDetails", "Incident Details", IncidentDetailsScreen],
           ["IncidentEdit", "Edit Incident", ReportIncidentScreen],
+          ["IncidentEvidence", "Incident Evidence", IncidentEvidenceScreen],
         ].map(([name, title, component]) => (
           <Stack.Screen
             key={name}

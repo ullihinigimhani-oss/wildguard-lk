@@ -1,8 +1,19 @@
 // Never expose database errors, request contents, or stack traces to clients.
 function errorHandler(error, req, res, next) {
+  req.evidenceTrace?.fail(error, error.status || 500);
   if (res.headersSent) return next(error);
+  if (
+    error.evidenceError &&
+    [400, 401, 403, 404, 409, 413, 429, 503].includes(error.status)
+  )
+    return res
+      .status(error.status)
+      .set("Cache-Control", "no-store")
+      .json({ success: false, code: error.code, message: error.message });
   if (error.incidentError && [404, 409, 503].includes(error.status))
-    return res.status(error.status).json({ success: false, code: error.code, message: error.message });
+    return res
+      .status(error.status)
+      .json({ success: false, code: error.code, message: error.message });
   if (
     error.navigationError &&
     [400, 404, 409, 422, 429, 502, 503, 504].includes(error.status)

@@ -7,6 +7,15 @@ import { useAuth } from "../../hooks/useAuth";
 import useIncidentResource from "../../hooks/useIncidentResource";
 import useForegroundLocation from "../../hooks/useForegroundLocation";
 import { getMyPatrol } from "../../services/patrolApi";
+import EvidenceDraft from "../../components/incident/EvidenceDraft";
+import {
+  validateEvidenceDraft,
+  discardEvidenceFile,
+} from "../../utils/incidentEvidence";
+import {
+  uploadIncidentEvidence,
+  evidenceError,
+} from "../../services/incidentEvidenceApi";
 import {
   createIncident,
   editIncident,
@@ -23,7 +32,6 @@ import {
   validateForm,
 } from "../../utils/incident";
 import {
-  EvidenceUnavailable,
   Heading,
   IncidentButton,
   Input,
@@ -33,13 +41,18 @@ import {
   ui,
 } from "../../components/incident/IncidentUI";
 
-// Create and edit share one form. Neither path records a PatrolLocation or uploads media.
+// Save the incident once, then upload private evidence against its confirmed ID.
 export default function ReportIncidentScreen({ route, navigation }) {
   const { user } = useAuth(),
     focused = useIsFocused();
   const incidentId = route.params?.incidentId,
     patrolId = route.params?.patrolId;
   const editing = !!incidentId;
+  const [items, setItems] = useState([]),
+    [savedIncident, setSavedIncident] = useState(null),
+    [progress, setProgress] = useState(null),
+    [selecting, setSelecting] = useState(false);
+  const savedRef = useRef(null);
   const loader = useCallback(
     (signal) =>
       editing ? getIncident(incidentId, signal) : getMyPatrol(patrolId, signal),
@@ -93,9 +106,11 @@ export default function ReportIncidentScreen({ route, navigation }) {
       longitude: String(snapshot.longitude),
     }));
   }, [capture, location.position]);
-  const dirty = initial !== null && JSON.stringify(form) !== initial;
-  usePreventRemove(!allowLeave && (dirty || busy), ({ data }) => {
-    if (!pending.current) {
+  const dirty =
+    (initial !== null && JSON.stringify(form) !== initial) ||
+    items.some((item) => item.status !== "uploaded");
+  usePreventRemove(!allowLeave && (dirty || busy || selecting), ({ data }) => {
+    if (!pending.current && !selecting) {
       Keyboard.dismiss();
       setLeaveAction(data.action);
     }
@@ -116,12 +131,20 @@ export default function ReportIncidentScreen({ route, navigation }) {
     (editing
       ? canChangeIncident(authority.data, user?.id)
       : patrol?.status === "IN_PROGRESS");
+  const existingEvidence =
+    savedIncident?.evidence || (editing ? authority.data?.evidence : []) || [];
+  const existingCount = Math.max(
+    savedIncident?.evidenceCount || 0,
+    editing ? authority.data?.evidenceCount || 0 : 0,
+    existingEvidence.length,
+  );
   function change(key, value) {
+    if (savedRef.current) return;
     setForm((previous) => ({ ...previous, [key]: value }));
     setErrors((previous) => ({ ...previous, [key]: undefined }));
   }
   async function submit() {
-    if (pending.current || !eligible) return;
+    if (pending.current || !eligible || selecting) return;
     const validated = validateForm(form);
     setErrors(validated.errors);
     setError(null);
@@ -129,7 +152,12 @@ export default function ReportIncidentScreen({ route, navigation }) {
     const body = editing
       ? incidentPatch(form, originalIncident.current, validated.body)
       : validated.body;
-    if (editing && !Object.keys(body).length) {
+    if (
+      !savedRef.current &&
+      editing &&
+      !Object.keys(body).length &&
+      !items.some((item) => item.status !== "uploaded")
+    ) {
       setError("No changes to save.");
       return;
     }
@@ -141,16 +169,122 @@ export default function ReportIncidentScreen({ route, navigation }) {
     setBusy(true);
     setCapture(false);
     try {
-      const result = editing
-        ? await editIncident(incidentId, body)
-        : await createIncident(patrolId, body);
+      const remaining = items.filter((item) => item.status !== "uploaded");
+      const localSaved = items.filter(
+        (item) =>
+          item.status === "uploaded" &&
+          !existingEvidence.some((e) => e.id === item.evidenceId),
+      ).length;
+      if (remaining.length)
+        await validateEvidenceDraft(
+          remaining,
+          savedRef.current ? 0 : existingCount + localSaved,
+        );
+      if (savedRef.current) {
+        const current = await getIncident(savedRef.current.id);
+        if (!canChangeIncident(current, user?.id))
+          throw new Error(
+            "Evidence uploads are locked. Your saved incident remains available.",
+          );
+        // Let the backend distinguish an already-saved retry from a new fifth-item-limit violation.
+      }
+      setProgress("Saving incident...");
+      const result =
+        savedRef.current ||
+        (editing
+          ? Object.keys(body).length
+            ? await editIncident(incidentId, body)
+            : authority.data
+          : await createIncident(patrolId, body));
+      if (!result?.id)
+        throw new Error("The server did not confirm the incident.");
+      savedRef.current = result;
+      if (mounted.current) setSavedIncident(result);
+      let failed = false;
+      const update = (key, patch) => {
+        if (mounted.current)
+          setItems((previous) =>
+            previous.map((item) =>
+              item.uploadKey === key ? { ...item, ...patch } : item,
+            ),
+          );
+      };
+      for (let index = 0; index < remaining.length; index++) {
+        const item = remaining[index];
+        if (mounted.current)
+          setProgress(
+            `Uploading evidence ${index + 1} of ${remaining.length}...`,
+          );
+        update(item.uploadKey, { status: "uploading", error: null });
+        try {
+          await validateEvidenceDraft([item]);
+          const evidence = await uploadIncidentEvidence(
+            result.id,
+            item,
+            (value) => update(item.uploadKey, { progress: value }),
+          );
+          update(item.uploadKey, {
+            status: "uploaded",
+            progress: 100,
+            evidenceId: evidence.id,
+          });
+        } catch (failure) {
+          failed = true;
+          let message = evidenceError(failure);
+          if (!failure.response) {
+            try {
+              await validateEvidenceDraft([item]);
+            } catch (unavailable) {
+              message = unavailable.message;
+              failure.reselectRequired = unavailable.reselectRequired;
+            }
+          }
+          update(item.uploadKey, {
+            status: "failed",
+            error: message,
+            cleanupBlocked:
+              failure.response?.data?.code === "MEDIA_CLEANUP_FAILED",
+            reselectRequired: failure.reselectRequired,
+          });
+        }
+      }
+      if (failed) {
+        if (mounted.current) {
+          setError("Incident saved, but some evidence failed.");
+          setProgress(null);
+        }
+        return;
+      }
+      // Details fetches authoritative evidence on mount; refresh here when possible too.
+      if (remaining.length) {
+        try {
+          const refreshed = await getIncident(result.id);
+          if (mounted.current) setSavedIncident(refreshed);
+        } catch {
+          /* Details offers its normal retry. */
+        }
+      }
       if (mounted.current) {
+        setProgress(remaining.length ? "Upload complete" : "Incident saved");
         setSuccess(result);
         setAllowLeave(true);
       }
     } catch (failure) {
+      if (failure.reselectRequired)
+        setItems((previous) =>
+          previous.map((item) =>
+            item.uploadKey === failure.evidenceDiagnostic?.requestId
+              ? { ...item, reselectRequired: true }
+              : item,
+          ),
+        );
       if (mounted.current) {
-        setError(incidentError(failure));
+        setProgress(null);
+        setError(
+          failure.response
+            ? incidentError(failure)
+            : failure.message || incidentError(failure),
+        );
         if (failure.response?.status === 400)
           setErrors(failure.response.data?.errors || {});
         if ([403, 404, 409].includes(failure.response?.status))
@@ -199,7 +333,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
               {...type}
               selected={form.incidentType === type.code}
               onPress={() => change("incidentType", type.code)}
-              disabled={busy || !eligible}
+              disabled={busy || !eligible || !!savedIncident}
             />
           ))}
           {errors.incidentType && (
@@ -212,7 +346,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
             value={form.title}
             onChangeText={(value) => change("title", value)}
             maxLength={150}
-            editable={!busy && eligible}
+            editable={!busy && eligible && !savedIncident}
             error={errors.title}
             placeholder="Describe the incident briefly"
           />
@@ -222,7 +356,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
             onChangeText={(value) => change("description", value)}
             maxLength={5000}
             multiline
-            editable={!busy && eligible}
+            editable={!busy && eligible && !savedIncident}
             error={errors.description}
             placeholder="What did you observe? Include useful field details."
           />
@@ -237,7 +371,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
               onChangeText={(value) => change("date", value)}
               placeholder="YYYY-MM-DD"
               maxLength={10}
-              editable={!busy && eligible}
+              editable={!busy && eligible && !savedIncident}
             />
             <Input
               label="Occurred time *"
@@ -245,7 +379,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
               onChangeText={(value) => change("time", value)}
               placeholder="HH:MM"
               maxLength={5}
-              editable={!busy && eligible}
+              editable={!busy && eligible && !savedIncident}
             />
             {errors.occurredAt && (
               <Text accessibilityRole="alert" style={ui.error}>
@@ -262,7 +396,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
             <IncidentButton
               title="Use Current GPS Location"
               loading={capture && location.waiting}
-              disabled={busy || !eligible}
+              disabled={busy || !eligible || !!savedIncident}
               onPress={() => {
                 setCapture(true);
                 location.retry();
@@ -319,7 +453,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
                   : "Enter known coordinates manually"
               }
               secondary
-              disabled={busy || !eligible}
+              disabled={busy || !eligible || !!savedIncident}
               onPress={() => {
                 setManual((value) => !value);
                 setFix(null);
@@ -337,7 +471,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
                   value={form.latitude}
                   keyboardType="numbers-and-punctuation"
                   onChangeText={(value) => change("latitude", value)}
-                  editable={!busy && eligible}
+                  editable={!busy && eligible && !savedIncident}
                   error={errors.latitude}
                 />
                 <Input
@@ -345,7 +479,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
                   value={form.longitude}
                   keyboardType="numbers-and-punctuation"
                   onChangeText={(value) => change("longitude", value)}
-                  editable={!busy && eligible}
+                  editable={!busy && eligible && !savedIncident}
                   error={errors.longitude}
                 />
               </>
@@ -378,7 +512,30 @@ export default function ReportIncidentScreen({ route, navigation }) {
               </Text>
             )}
           </View>
-          <EvidenceUnavailable />
+          <EvidenceDraft
+            items={items}
+            setItems={setItems}
+            existing={existingEvidence}
+            existingCount={existingCount}
+            disabled={!eligible || busy}
+            onSelecting={setSelecting}
+          />
+          {progress && (
+            <Text accessibilityLiveRegion="polite" style={ui.body}>
+              {progress}
+            </Text>
+          )}
+          {savedIncident && error && (
+            <IncidentButton
+              title="View Saved Incident"
+              secondary
+              disabled={busy || selecting}
+              onPress={() => {
+                Keyboard.dismiss();
+                setLeaveAction({ type: "VIEW_SAVED_INCIDENT" });
+              }}
+            />
+          )}
           {error && (
             <Text accessibilityRole="alert" style={ui.error}>
               {error}
@@ -402,9 +559,20 @@ export default function ReportIncidentScreen({ route, navigation }) {
               </Text>
             ))}
           <IncidentButton
-            title={editing ? "Save Changes" : "Submit Incident"}
+            title={
+              savedIncident
+                ? "Retry Failed Uploads"
+                : editing
+                  ? "Save Changes"
+                  : "Submit Incident"
+            }
             loading={busy}
-            disabled={!eligible || capture}
+            disabled={
+              !eligible ||
+              capture ||
+              selecting ||
+              items.some((item) => item.cleanupBlocked || item.reselectRequired)
+            }
             onPress={submit}
           />
           <Text style={ui.muted}>
@@ -429,7 +597,11 @@ export default function ReportIncidentScreen({ route, navigation }) {
         >
           <View accessibilityViewIsModal style={ui.card}>
             <Text style={ui.section}>Discard unsaved changes?</Text>
-            <Text style={ui.body}>Your draft has not been submitted.</Text>
+            <Text style={ui.body}>
+              {savedIncident
+                ? "Your incident and uploaded evidence are saved. Unuploaded selections will be discarded."
+                : "Your draft and selected evidence have not been submitted."}
+            </Text>
             <IncidentButton
               title="Keep Editing"
               onPress={() => setLeaveAction(null)}
@@ -438,7 +610,12 @@ export default function ReportIncidentScreen({ route, navigation }) {
               title="Discard Changes"
               secondary
               color={palette.danger}
-              onPress={() => setAllowLeave(true)}
+              onPress={() => {
+                items.forEach(discardEvidenceFile);
+                if (leaveAction?.type === "VIEW_SAVED_INCIDENT")
+                  setSuccess(savedIncident);
+                setAllowLeave(true);
+              }}
             />
           </View>
         </View>

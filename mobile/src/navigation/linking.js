@@ -20,6 +20,7 @@ export const rangerPaths = {
   IncidentReports: "ranger/patrols/:patrolId/incidents",
   IncidentDetails: "ranger/incidents/:incidentId",
   IncidentEdit: "ranger/incidents/:incidentId/edit",
+  IncidentEvidence: "ranger/incidents/:incidentId/evidence",
   Alerts: "ranger/alerts",
   Sync: "ranger/sync",
 };
@@ -97,6 +98,7 @@ export function createLinking({
           "IncidentReports",
           "IncidentDetails",
           "IncidentEdit",
+          "IncidentEvidence",
         ].includes(name)
       )
         return stateFor("Home");
@@ -106,6 +108,7 @@ export function createLinking({
           "IncidentReports",
           "IncidentDetails",
           "IncidentEdit",
+          "IncidentEvidence",
         ].includes(name)
       )
         return {
