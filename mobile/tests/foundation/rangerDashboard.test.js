@@ -136,7 +136,7 @@ test("all six filters, completed-late history and removal from overdue", () => {
   });
   loaded([patrol(), next(), overdue(), active, completed]);
   const ui = render(<MyPatrolScreen route={{}} navigation={navigation()} />);
-  expect(ui.getAllByRole("header")).toHaveLength(6); // Screen title plus five assignments.
+  expect(ui.getByTestId("patrol-list").props.data).toHaveLength(5); // Virtualized list retains all assignments.
   for (const [label, title] of [
     ["Today", "Boundary sweep"],
     ["Upcoming", "Future sweep"],

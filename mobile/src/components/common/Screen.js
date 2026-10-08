@@ -9,6 +9,7 @@ export default function Screen({
   backgroundColor,
   contentStyle,
   refreshControl,
+  scroll = true,
 }) {
   const rangerLayout = useContext(RangerLayoutContext);
   const rangerVisual = useContext(RangerVisualContext);
@@ -21,7 +22,7 @@ export default function Screen({
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView
+        {scroll ? <ScrollView
           refreshControl={refreshControl}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[
@@ -32,7 +33,7 @@ export default function Screen({
           ]}
         >
           {children}
-        </ScrollView>
+        </ScrollView> : children}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
