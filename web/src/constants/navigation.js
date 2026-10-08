@@ -1,7 +1,6 @@
 export const modules = [
   ["reporting", "Reporting", "▤", ["RESEARCHER"]],
   ["patrols", "Patrol Management", "↗", ["PARK_MANAGER", "RANGER", "COMMUNITY_LIAISON"]],
-  ["patrols/live", "Live Ranger Monitoring", "◉", ["PARK_MANAGER"]],
   ["incidents", "Incidents", "◇", ["PARK_MANAGER", "RANGER", "COMMUNITY_LIAISON"]],
   ["map", "Field Map", "⌖", ["PARK_MANAGER", "RANGER", "COMMUNITY_LIAISON", "RESEARCHER"]],
   ["community-reports", "Community Reports", "◎", ["COMMUNITY_LIAISON", "PARK_MANAGER"]],

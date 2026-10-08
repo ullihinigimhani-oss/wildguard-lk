@@ -54,7 +54,7 @@ Changed:
 - `web/src/pages/RangerMonitoring/RangerMonitoring.jsx` — page (was an empty scaffold)
 - `web/src/services/patrolApi.js` — `listLiveRangers`, `getPatrolTrail`
 - `web/src/routes/AppRoutes.jsx` — `/patrols/live` inside the PARK_MANAGER gate + placeholder exclusion
-- `web/src/constants/navigation.js` — "Live Ranger Monitoring" nav entry (PARK_MANAGER only)
+- `web/src/constants/navigation.js` — no sidebar entry is added for live monitoring (removed from nav); the page is reached from Patrol Management
 - `web/src/pages/PatrolManagement/PatrolManagement.jsx` — manager-only link to the page
 - `web/src/styles.css` — appended live-monitoring styles (append-only)
 - `web/vite.config.js` — registered the new test file
@@ -123,7 +123,8 @@ filters, empty state, error + Retry, and polling with cleanup-on-unmount; plus t
 - The page reports the last known position; it is not a continuous stream.
 - Teammate placeholder `LiveTrackingAction` on the Patrol Management table still shows
   "Live patrol tracking will be available here." — left untouched; the real entry point
-  is the new page (sidebar + "Live Ranger Monitoring" button).
+  is the new page ("Live Ranger Monitoring" button on Patrol Management, with a
+  "← Back to patrols" link on the page itself).
 - `navigation.js` still grants Patrol Management to RANGER/COMMUNITY_LIAISON (pre-existing
   teammate config); the live-monitoring link itself is Park-Manager-only.
 

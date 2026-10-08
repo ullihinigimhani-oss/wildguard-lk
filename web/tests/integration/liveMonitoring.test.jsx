@@ -55,6 +55,12 @@ beforeEach(() => {
   getPatrolTrail.mockResolvedValue([]);
 });
 
+test("provides a back link to patrol management", async () => {
+  mount();
+  const back = await screen.findByRole("link", { name: /Back to patrols/ });
+  expect(back).toHaveAttribute("href", "/patrols");
+});
+
 test("lists active rangers with GPS freshness badges, stats and map markers", async () => {
   mount();
   expect(await screen.findByText("A. Perera")).toBeVisible();

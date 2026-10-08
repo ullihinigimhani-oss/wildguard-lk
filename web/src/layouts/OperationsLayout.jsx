@@ -8,7 +8,11 @@ export default function OperationsLayout() {
   const { pathname } = useLocation();
   const title =
     modules.find((item) => `/${item.path}` === pathname)?.title ||
-    (pathname === "/profile" ? "My profile" : "Dashboard");
+    (pathname === "/profile"
+      ? "My profile"
+      : pathname === "/patrols/live"
+        ? "Live Ranger Monitoring"
+        : "Dashboard");
   useEffect(() => {
     setOpen(false);
   }, [title, pathname]);

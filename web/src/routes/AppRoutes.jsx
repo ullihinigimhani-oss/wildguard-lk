@@ -74,7 +74,7 @@ export default function AppRoutes() {
             {modules
               .filter(
                 (item) =>
-                  !["users", "patrols", "incidents", "community-reports", "reporting", "map", "patrols/live"].includes(
+                  !["users", "patrols", "incidents", "community-reports", "reporting", "map"].includes(
                     item.path,
                   ),
               )

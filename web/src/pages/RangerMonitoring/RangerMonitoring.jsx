@@ -138,6 +138,9 @@ export default function RangerMonitoring() {
 
   return (
     <section className="panel patrol-panel live-monitoring">
+      <p>
+        <Link to="/patrols">← Back to patrols</Link>
+      </p>
       <div className="patrol-list-heading">
         <div>
           <h2>Live Ranger Monitoring</h2>
@@ -146,9 +149,6 @@ export default function RangerMonitoring() {
             Timestamps show the last GPS update received from each Ranger.
           </p>
         </div>
-        <Link className="button secondary" to="/patrols">
-          Open Patrol Management
-        </Link>
       </div>
 
       <div className="metrics-grid live-metrics">
