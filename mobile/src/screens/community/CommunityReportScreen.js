@@ -159,18 +159,52 @@ export default function CommunityReportScreen({ navigation, route }) {
         const item = evidence[i];
         if (item.fileUrl && (item.fileUrl.startsWith("/uploads/") || item.fileUrl.startsWith("http"))) {
           preparedEvidence.push({ fileUrl: item.fileUrl, fileType: item.fileType });
-        } else if (item.base64) {
-          setUploadStatus(`Uploading evidence ${i + 1} of ${evidence.length}...`);
-          const uploadRes = await uploadEvidence({
-            data: item.base64,
-            mimeType: item.fileType,
-            originalName: item.fileName,
-          });
-          item.fileUrl = uploadRes.fileUrl;
-          preparedEvidence.push({ fileUrl: uploadRes.fileUrl, fileType: uploadRes.fileType });
         } else {
-          // Local/mock URI
-          preparedEvidence.push({ fileUrl: item.fileUrl, fileType: item.fileType });
+          let base64Data = item.base64;
+          if (!base64Data && item.fileUrl) {
+            try {
+              const FileSystem = require("expo-file-system");
+              if (FileSystem?.readAsStringAsync) {
+                base64Data = await FileSystem.readAsStringAsync(item.fileUrl, {
+                  encoding: FileSystem.EncodingType?.Base64 || "base64",
+                });
+              }
+            } catch (_) {
+              try {
+                if (typeof fetch === "function") {
+                  const resp = await fetch(item.fileUrl);
+                  const blob = await resp.blob();
+                  base64Data = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const res = reader.result;
+                      if (typeof res === "string") {
+                        resolve(res.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, ""));
+                      } else {
+                        resolve(null);
+                      }
+                    };
+                    reader.onerror = () => resolve(null);
+                    reader.readAsDataURL(blob);
+                  });
+                }
+              } catch (_) {}
+            }
+          }
+
+          if (base64Data) {
+            setUploadStatus(`Uploading evidence ${i + 1} of ${evidence.length}...`);
+            const uploadRes = await uploadEvidence({
+              data: base64Data,
+              mimeType: item.fileType,
+              originalName: item.fileName,
+            });
+            item.fileUrl = uploadRes.fileUrl;
+            preparedEvidence.push({ fileUrl: uploadRes.fileUrl, fileType: uploadRes.fileType || item.fileType });
+          } else {
+            // Local/mock URI
+            preparedEvidence.push({ fileUrl: item.fileUrl, fileType: item.fileType });
+          }
         }
       }
 

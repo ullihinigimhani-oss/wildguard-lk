@@ -20,6 +20,25 @@ const ALLOWED_MIME_TYPES = {
   "video/webm": { ext: ".webm", maxBytes: 25 * 1024 * 1024, type: "video" },
 };
 
+function detectMimeType(buffer, declaredMime) {
+  if (!buffer || buffer.length < 4) return null;
+  const hex = buffer.slice(0, 12).toString("hex").toLowerCase();
+
+  if (hex.startsWith("ffd8ff")) return "image/jpeg";
+  if (hex.startsWith("89504e47")) return "image/png";
+  if (buffer.slice(0, 4).toString() === "RIFF" && buffer.slice(8, 12).toString() === "WEBP") return "image/webp";
+  if (hex.includes("66747970") || hex.includes("68656963")) {
+    if (declaredMime === "video/quicktime" || declaredMime === "video/mp4") return declaredMime;
+    return "image/heic";
+  }
+  if (buffer.length >= 8 && buffer.slice(4, 8).toString() === "ftyp") {
+    return declaredMime === "video/quicktime" ? "video/quicktime" : "video/mp4";
+  }
+  if (hex.startsWith("1a45dfa3")) return "video/webm";
+
+  return null;
+}
+
 /**
  * Validates buffer magic bytes against declared MIME type to prevent spoofing.
  * @param {Buffer} buffer
@@ -64,23 +83,15 @@ function verifyMagicBytes(buffer, mimeType) {
  */
 exports.storeEvidence = async (payload = {}) => {
   const { data, mimeType, originalName = "" } = payload || {};
-  const normalizedMime = (mimeType || "").trim().toLowerCase();
-  const config = ALLOWED_MIME_TYPES[normalizedMime];
-
-  if (!config) {
-    const error = new Error("Unsupported file type. Supported formats: JPEG, PNG, WEBP, HEIC, MP4, MOV, WEBM.");
-    error.status = 400;
-    error.validationError = true;
-    error.fields = { fileType: "Unsupported MIME type." };
-    throw error;
-  }
+  let normalizedMime = (mimeType || "").trim().toLowerCase();
+  if (normalizedMime === "image/jpg") normalizedMime = "image/jpeg";
 
   let buffer;
   if (Buffer.isBuffer(data)) {
     buffer = data;
   } else if (typeof data === "string") {
     // Strip data URI prefix if present (e.g. data:image/jpeg;base64,...)
-    const base64Clean = data.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, "");
+    const base64Clean = data.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, "").trim();
     buffer = Buffer.from(base64Clean, "base64");
   } else {
     const error = new Error("Invalid file data received.");
@@ -96,6 +107,21 @@ exports.storeEvidence = async (payload = {}) => {
     error.status = 400;
     error.validationError = true;
     error.fields = { data: "The uploaded file is empty or corrupted." };
+    throw error;
+  }
+
+  // Auto-detect MIME type from magic bytes to avoid client recompression mismatches
+  const detectedMime = detectMimeType(buffer, normalizedMime);
+  if (detectedMime && ALLOWED_MIME_TYPES[detectedMime]) {
+    normalizedMime = detectedMime;
+  }
+
+  let config = ALLOWED_MIME_TYPES[normalizedMime];
+  if (!config) {
+    const error = new Error("Unsupported file type. Supported formats: JPEG, PNG, WEBP, HEIC, MP4, MOV, WEBM.");
+    error.status = 400;
+    error.validationError = true;
+    error.fields = { fileType: "Unsupported MIME type." };
     throw error;
   }
 
