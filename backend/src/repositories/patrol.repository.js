@@ -109,6 +109,7 @@ exports.findPatrolTrail = (patrolId) =>
   });
 const rangerPatrolSelect = {
   id: true,
+  rangerId: true,
   routeName: true,
   description: true,
   scheduledDate: true,
