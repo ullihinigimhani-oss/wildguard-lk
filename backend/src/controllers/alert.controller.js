@@ -121,4 +121,24 @@ exports.getAlertEscalations = async (req, res, next) => {
   }
 };
 
+exports.ingestRiskAlert = async (req, res, next) => {
+  try {
+    const result = await service.ingestRiskAlert(req.body);
+    const statusCode = result.duplicate || !result.published ? 200 : 201;
+    res.status(statusCode).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.resolveRiskAlert = async (req, res, next) => {
+  try {
+    const result = await service.resolveRiskAlert(req.params.id, req.body, req.user);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 

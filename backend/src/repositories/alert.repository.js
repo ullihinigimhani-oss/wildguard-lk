@@ -355,3 +355,33 @@ exports.listEscalations = async ({ alertId, status, page = 1, pageSize = 20 } = 
 
   return { escalations, total, page: Number(page), pageSize: Number(pageSize) };
 };
+
+exports.createAlert = async (data) => {
+  return db().alert.create({
+    data,
+    select: alertSelect,
+  });
+};
+
+exports.findActiveAlertByAnimalAndZone = async (animalId, riskZoneId, maxAgeMs = 4 * 60 * 60 * 1000) => {
+  const cutoff = new Date(Date.now() - maxAgeMs);
+  return db().alert.findFirst({
+    where: {
+      animalId,
+      riskZoneId,
+      status: "ACTIVE",
+      generatedAt: { gte: cutoff },
+    },
+    select: alertSelect,
+    orderBy: { generatedAt: "desc" },
+  });
+};
+
+exports.updateAlert = async (id, data) => {
+  return db().alert.update({
+    where: { id },
+    data,
+    select: alertSelect,
+  });
+};
+

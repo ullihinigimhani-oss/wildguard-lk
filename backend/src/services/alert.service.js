@@ -649,3 +649,216 @@ exports.getAlertEscalations = async (alertId, user = null) => {
   };
 };
 
+const SEVERITY_MAP = {
+  CRITICAL: "CRITICAL",
+  CRIT: "CRITICAL",
+  "5": "CRITICAL",
+  HIGH: "HIGH",
+  "4": "HIGH",
+  MEDIUM: "MEDIUM",
+  MED: "MEDIUM",
+  MODERATE: "MEDIUM",
+  "3": "MEDIUM",
+  LOW: "LOW",
+  INFO: "LOW",
+  "1": "LOW",
+  "2": "LOW",
+};
+
+function normalizeSeverity(rawRisk) {
+  if (!rawRisk) throw badRequest("Risk level is required for risk detection alert.");
+  const key = String(rawRisk).trim().toUpperCase();
+  const normalized = SEVERITY_MAP[key];
+  if (!normalized) {
+    throw badRequest(`Invalid risk level '${rawRisk}'. Permitted values: CRITICAL, HIGH, MEDIUM, LOW.`);
+  }
+  return normalized;
+}
+
+function sanitizePublicAlertMessage(rawMessage, animal, riskZone) {
+  if (!rawMessage || typeof rawMessage !== "string") return "";
+  let cleaned = rawMessage
+    .replace(/\b(?:lat(?:itude)?|lon(?:gitude)?)\s*[:=]?\s*-?\d+\.\d+/gi, "")
+    .replace(/\(-?\d+\.\d+,\s*-?\d+\.\d+\)/g, "")
+    .replace(/\b(?:collar|tag|sensor)\s*#?[a-zA-Z0-9_\-]+/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!cleaned || cleaned.length < 5) {
+    const zoneName = riskZone?.name || "Perimeter Buffer";
+    const species = animal?.species || animal?.name || "Wild animal";
+    cleaned = `${species} activity confirmed near ${zoneName}. Please exercise caution and observe safety guidance.`;
+  }
+  return cleaned;
+}
+
+const db = () => require("../config/database");
+
+exports.ingestRiskAlert = async (payload = {}) => {
+  const {
+    animalId,
+    animalCode,
+    riskZoneId,
+    zoneName,
+    riskLevel: rawRisk,
+    message,
+    isCommunityRelevant: explicitRelevance,
+  } = payload;
+
+  const riskLevel = normalizeSeverity(rawRisk);
+
+  // 1. Resolve animal
+  let animal = null;
+  if (animalId) {
+    animal = await db().animal.findUnique({ where: { id: animalId } });
+  } else if (animalCode) {
+    animal = await db().animal.findUnique({ where: { animalCode } });
+  }
+
+  if (!animal) {
+    throw badRequest("Animal reference (animalId or animalCode) is required and must exist in monitoring registry.");
+  }
+
+  // 2. Resolve risk zone
+  let riskZone = null;
+  if (riskZoneId) {
+    riskZone = await db().riskZone.findUnique({
+      where: { id: riskZoneId },
+      include: { park: true },
+    });
+  } else if (zoneName) {
+    riskZone = await db().riskZone.findFirst({
+      where: { name: zoneName },
+      include: { park: true },
+    });
+  }
+
+  if (!riskZone) {
+    throw badRequest("Risk zone reference (riskZoneId or zoneName) is required and must exist in risk zone registry.");
+  }
+
+  // 3. Evaluate Community Relevance
+  // Only community-relevant alerts are exposed in public safety alerts feed.
+  // CRITICAL/HIGH alerts near buffer perimeters are community-relevant.
+  // LOW alerts in deep wilderness without settlement exposure are marked as internal research only.
+  const isCommunityRelevant =
+    explicitRelevance !== undefined
+      ? Boolean(explicitRelevance)
+      : riskLevel === "CRITICAL" ||
+        riskLevel === "HIGH" ||
+        (riskLevel === "MEDIUM" && (riskZone.radiusMeters || 0) > 0);
+
+  if (!isCommunityRelevant) {
+    return {
+      success: true,
+      published: false,
+      isCommunityRelevant: false,
+      message: "Risk alert received and recorded for internal wildlife monitoring; not published to community safety feed.",
+      riskLevel,
+      animalId: animal.id,
+      riskZoneId: riskZone.id,
+    };
+  }
+
+  // 4. Duplicate Community Notification Prevention (4-hour active window)
+  const existingActive = await repository.findActiveAlertByAnimalAndZone(animal.id, riskZone.id);
+  if (existingActive) {
+    // If incoming alert is more severe, upgrade the existing alert
+    const severityHierarchy = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
+    const currentScore = severityHierarchy[existingActive.riskLevel] || 0;
+    const newScore = severityHierarchy[riskLevel] || 0;
+
+    if (newScore > currentScore) {
+      const updated = await repository.updateAlert(existingActive.id, {
+        riskLevel,
+        message: sanitizePublicAlertMessage(message, animal, riskZone) || existingActive.message,
+      });
+      return {
+        success: true,
+        duplicate: true,
+        upgraded: true,
+        published: true,
+        isCommunityRelevant: true,
+        message: `Active safety alert upgraded to ${riskLevel} from latest monitoring data.`,
+        alert: formatAlert(updated),
+      };
+    }
+
+    // Touch timestamp without duplicate alert spam
+    await repository.updateAlert(existingActive.id, {
+      updatedAt: new Date(),
+    });
+
+    return {
+      success: true,
+      duplicate: true,
+      alreadyActive: true,
+      published: true,
+      isCommunityRelevant: true,
+      message: "Existing active safety alert updated with latest monitoring telemetry.",
+      alert: formatAlert(existingActive),
+    };
+  }
+
+  // 5. Sanitize sensitive wildlife telemetry from public message
+  const publicMessage = sanitizePublicAlertMessage(
+    message || `${riskLevel} Alert: ${animal.species || "Wildlife"} detected near ${riskZone.name} perimeter buffer.`,
+    animal,
+    riskZone
+  );
+
+  // 6. Create community safety alert using shared Alert model
+  const created = await repository.createAlert({
+    riskLevel,
+    message: publicMessage,
+    status: "ACTIVE",
+    animalId: animal.id,
+    riskZoneId: riskZone.id,
+  });
+
+  return {
+    success: true,
+    published: true,
+    isCommunityRelevant: true,
+    message: "Risk detection consumed and published as Community Safety Alert.",
+    alert: formatAlert(created),
+  };
+};
+
+exports.resolveRiskAlert = async (alertId, resolutionData = {}, user = null) => {
+  if (!alertId || typeof alertId !== "string" || !alertId.trim()) {
+    throw badRequest("Invalid alert ID format.");
+  }
+
+  const alert = await repository.findAlertById(alertId.trim());
+  if (!alert) throw notFound();
+
+  if (alert.status === "RESOLVED") {
+    return {
+      success: true,
+      alreadyResolved: true,
+      message: "Alert is already resolved.",
+      alert: formatAlert(alert, user),
+    };
+  }
+
+  const note = resolutionData.reason || "Risk cleared by wildlife monitoring: Animal retreated to deep forest buffer.";
+  const resolved = await repository.updateAlertStatus(alert.id, "RESOLVED", new Date());
+
+  if (note) {
+    await repository.respondToAlert(alert.id, {
+      responseNote: note,
+      respondedById: user?.id || null,
+      resolvedAt: new Date(),
+    });
+  }
+
+  const finalAlert = await repository.findAlertById(alert.id);
+  return {
+    success: true,
+    message: "Risk alert successfully marked as resolved.",
+    alert: formatAlert(finalAlert || resolved, user),
+  };
+};
+
+

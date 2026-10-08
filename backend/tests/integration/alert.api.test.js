@@ -2,12 +2,22 @@ const request = require("supertest");
 const jwt = require("jsonwebtoken");
 
 jest.mock("../../src/config/database", () => ({
-  user: { findUnique: jest.fn() },
+  user: { findUnique: jest.fn(), findFirst: jest.fn() },
   alert: {
+    create: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     findUnique: jest.fn(),
     count: jest.fn(),
     update: jest.fn(),
+  },
+  animal: {
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+  },
+  riskZone: {
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
   },
   alertAcknowledgement: {
     upsert: jest.fn(),
@@ -1020,6 +1030,243 @@ describe("Safety Alert APIs", () => {
       expect(res.body.escalations[0].status).toBe("PENDING");
     });
   });
+
+  describe("POST /api/alerts/ingest-risk (Duleepa Risk Alert Ingestion)", () => {
+    test("rejects unauthenticated request with 401", async () => {
+      await request(app).post("/api/alerts/ingest-risk").send({}).expect(401);
+    });
+
+    test("forbids COMMUNITY_USER from ingesting monitoring risk alerts with 403", async () => {
+      await request(app)
+        .post("/api/alerts/ingest-risk")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .send({
+          animalCode: "ELE-01",
+          riskZoneId: "zone-1",
+          riskLevel: "CRITICAL",
+        })
+        .expect(403);
+    });
+
+    test("allows PARK_MANAGER to ingest RiskAlert and publishes as Community Safety Alert", async () => {
+      db.animal.findUnique.mockResolvedValue({
+        id: "anim-1",
+        animalCode: "ELE-01",
+        species: "Elephas maximus",
+        name: "Raja",
+      });
+      db.riskZone.findUnique.mockResolvedValue({
+        id: "zone-1",
+        name: "Sector 3 Buffer",
+        radiusMeters: 500,
+        centerLatitude: 6.35,
+        centerLongitude: 81.42,
+        park: { id: "park-1", name: "Yala" },
+      });
+      db.alert.findFirst.mockResolvedValue(null); // No existing active alert
+      db.alert.create.mockResolvedValue({
+        id: "alert-ingest-1",
+        riskLevel: "CRITICAL",
+        message: "CRITICAL Alert: Elephas maximus detected near Sector 3 Buffer perimeter buffer.",
+        status: "ACTIVE",
+        generatedAt: new Date(),
+        animal: { id: "anim-1", animalCode: "ELE-01", species: "Elephas maximus", name: "Raja" },
+        riskZone: {
+          id: "zone-1",
+          name: "Sector 3 Buffer",
+          radiusMeters: 500,
+          centerLatitude: 6.35,
+          centerLongitude: 81.42,
+          park: { id: "park-1", name: "Yala" },
+        },
+        acknowledgements: [],
+        escalations: [],
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/ingest-risk")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({
+          animalCode: "ELE-01",
+          riskZoneId: "zone-1",
+          riskLevel: "CRITICAL",
+          message: "GPS collar ELE-01 (6.34812, 81.41923) breach near Sector 3 Buffer",
+        })
+        .expect(201);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.published).toBe(true);
+      expect(res.body.isCommunityRelevant).toBe(true);
+      expect(res.body.alert.title).toContain("CRITICAL Wildlife Alert");
+      expect(res.body.alert.affectedArea).toContain("Sector 3 Buffer");
+      // Verify sensitive GPS coordinates were stripped from public message
+      expect(res.body.alert.message).not.toContain("6.34812");
+      expect(res.body.alert.message).not.toContain("81.41923");
+      expect(db.alert.create).toHaveBeenCalled();
+    });
+
+    test("filters out internal research alerts (LOW severity deep wilderness) from community feed", async () => {
+      db.animal.findUnique.mockResolvedValue({
+        id: "anim-2",
+        animalCode: "LEO-02",
+        species: "Panthera pardus kotiya",
+      });
+      db.riskZone.findUnique.mockResolvedValue({
+        id: "zone-deep",
+        name: "Deep Wilderness Core",
+        radiusMeters: 0,
+        park: { id: "park-1", name: "Yala" },
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/ingest-risk")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({
+          animalCode: "LEO-02",
+          riskZoneId: "zone-deep",
+          riskLevel: "LOW",
+          isCommunityRelevant: false,
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.published).toBe(false);
+      expect(res.body.isCommunityRelevant).toBe(false);
+      expect(res.body.message).toContain("not published to community safety feed");
+      expect(db.alert.create).not.toHaveBeenCalled();
+    });
+
+    test("prevents duplicate active alerts when same animal is detected in same zone within active window", async () => {
+      db.animal.findUnique.mockResolvedValue({
+        id: "anim-1",
+        animalCode: "ELE-01",
+        species: "Elephas maximus",
+      });
+      db.riskZone.findUnique.mockResolvedValue({
+        id: "zone-1",
+        name: "Sector 3 Buffer",
+        radiusMeters: 500,
+        park: { id: "park-1", name: "Yala" },
+      });
+
+      // Existing active alert found
+      db.alert.findFirst.mockResolvedValue({
+        id: "alert-existing-active",
+        riskLevel: "CRITICAL",
+        status: "ACTIVE",
+        message: "Active herd near Sector 3 Buffer.",
+        generatedAt: new Date(),
+        animal: { id: "anim-1", species: "Elephas maximus" },
+        riskZone: { name: "Sector 3 Buffer", park: { name: "Yala" } },
+        acknowledgements: [],
+        escalations: [],
+      });
+      db.alert.update.mockResolvedValue({
+        id: "alert-existing-active",
+        status: "ACTIVE",
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/ingest-risk")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({
+          animalCode: "ELE-01",
+          riskZoneId: "zone-1",
+          riskLevel: "CRITICAL",
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.duplicate).toBe(true);
+      expect(res.body.alreadyActive).toBe(true);
+      expect(res.body.message).toContain("Existing active safety alert updated");
+      expect(db.alert.create).not.toHaveBeenCalled();
+    });
+
+    test("upgrades existing alert when severity escalates from MEDIUM to CRITICAL", async () => {
+      db.animal.findUnique.mockResolvedValue({
+        id: "anim-1",
+        animalCode: "ELE-01",
+        species: "Elephas maximus",
+      });
+      db.riskZone.findUnique.mockResolvedValue({
+        id: "zone-1",
+        name: "Sector 3 Buffer",
+        radiusMeters: 500,
+        park: { id: "park-1", name: "Yala" },
+      });
+
+      // Existing alert has MEDIUM severity
+      db.alert.findFirst.mockResolvedValue({
+        id: "alert-existing-med",
+        riskLevel: "MEDIUM",
+        status: "ACTIVE",
+        message: "Elephant approaching buffer.",
+        generatedAt: new Date(),
+        animal: { id: "anim-1", species: "Elephas maximus" },
+        riskZone: { name: "Sector 3 Buffer", park: { name: "Yala" } },
+        acknowledgements: [],
+        escalations: [],
+      });
+
+      db.alert.update.mockResolvedValue({
+        id: "alert-existing-med",
+        riskLevel: "CRITICAL",
+        status: "ACTIVE",
+        message: "CRITICAL: Elephant active breach.",
+        generatedAt: new Date(),
+        animal: { id: "anim-1", species: "Elephas maximus" },
+        riskZone: { name: "Sector 3 Buffer", park: { name: "Yala" } },
+        acknowledgements: [],
+        escalations: [],
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/ingest-risk")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({
+          animalCode: "ELE-01",
+          riskZoneId: "zone-1",
+          riskLevel: "CRITICAL",
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.upgraded).toBe(true);
+      expect(res.body.message).toContain("upgraded to CRITICAL");
+      expect(db.alert.update).toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /api/alerts/:id/resolve-risk (Resolve Risk Alert)", () => {
+    test("marks active alert as RESOLVED when telemetry confirms risk subsided", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        status: "ACTIVE",
+        riskLevel: "HIGH",
+        generatedAt: new Date(),
+      });
+      db.alert.update.mockResolvedValue({
+        id: "alert-1",
+        status: "RESOLVED",
+        resolvedAt: new Date(),
+        responseNote: "Collar telemetry confirmed animal returned to deep wilderness.",
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/resolve-risk")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({
+          reason: "Collar telemetry confirmed animal returned to deep wilderness.",
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("successfully marked as resolved");
+      expect(db.alert.update).toHaveBeenCalled();
+    });
+  });
 });
+
 
 

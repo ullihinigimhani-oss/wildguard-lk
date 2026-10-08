@@ -29,7 +29,10 @@ router.post("/read-all", authenticate, controller.markAllAsRead);
 // 4. View alerts requiring operational attention (Liaison or Manager)
 router.get("/attention", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.getAlertsRequiringAttention);
 
-// 5. View alert details & safety instructions
+// 5. Ingest RiskAlert from Duleepa's Wildlife Monitoring & Risk Detection (Staff / Sensor integration)
+router.post("/ingest-risk", authenticate, allowRoles("PARK_MANAGER", "RANGER", "COMMUNITY_LIAISON"), controller.ingestRiskAlert);
+
+// 6. View alert details & safety instructions
 router.get("/:id", optionalAuth, controller.getAlertById);
 
 // 6. Mark individual alert as read (requires login)
@@ -53,4 +56,8 @@ router.get("/:id/escalations", authenticate, allowRoles("COMMUNITY_LIAISON", "PA
 // 12. Update alert status (Liaison or Manager)
 router.patch("/:id/status", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.updateStatus);
 
+// 13. Resolve risk alert from monitoring / field telemetry (Staff)
+router.post("/:id/resolve-risk", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER"), controller.resolveRiskAlert);
+
 module.exports = router;
+
