@@ -62,7 +62,8 @@ function verifyMagicBytes(buffer, mimeType) {
  * @param {string} [params.originalName] - Original filename from client
  * @returns {{ fileUrl: string, fileType: string, fileSize: number, fileName: string }}
  */
-exports.storeEvidence = async ({ data, mimeType, originalName = "" }) => {
+exports.storeEvidence = async (payload = {}) => {
+  const { data, mimeType, originalName = "" } = payload || {};
   const normalizedMime = (mimeType || "").trim().toLowerCase();
   const config = ALLOWED_MIME_TYPES[normalizedMime];
 

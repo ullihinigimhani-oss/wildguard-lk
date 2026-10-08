@@ -60,6 +60,14 @@ exports.submitReport = async (body, user = null) => {
     status: "PENDING",
   };
 
+  // Duplicate report submission protection (60-second window)
+  if (typeof repository.findRecentDuplicateReport === "function") {
+    const existing = await repository.findRecentDuplicateReport(reportData, 60000);
+    if (existing) {
+      return sanitizeReport(existing, user);
+    }
+  }
+
   const created = await repository.createReport(reportData, validated.evidenceItems);
   return sanitizeReport(created, user);
 };
@@ -82,7 +90,10 @@ exports.getMyReports = async (userId, query = {}) => {
 };
 
 exports.getReportDetails = async (id, user = null) => {
-  const report = await repository.findReportById(id);
+  if (!id || typeof id !== "string" || !id.trim() || id.trim().length > 128) {
+    throw notFound();
+  }
+  const report = await repository.findReportById(id.trim());
   if (!report) throw notFound();
 
   const isStaff = user && ["COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER"].includes(user.role);
@@ -129,7 +140,10 @@ exports.uploadEvidence = async (payload) => {
 };
 
 exports.attachEvidence = async (id, payload, user = null) => {
-  const report = await repository.findReportById(id);
+  if (!id || typeof id !== "string" || !id.trim() || id.trim().length > 128) {
+    throw notFound();
+  }
+  const report = await repository.findReportById(id.trim());
   if (!report) throw notFound();
 
   const isStaff = user && ["COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER"].includes(user.role);
@@ -144,7 +158,7 @@ exports.attachEvidence = async (id, payload, user = null) => {
   }
 
   const stored = await evidenceStorage.storeEvidence(payload);
-  const evidenceRecord = await repository.addEvidence(id, {
+  const evidenceRecord = await repository.addEvidence(id.trim(), {
     fileUrl: stored.fileUrl,
     fileType: stored.fileType,
   });
@@ -152,16 +166,19 @@ exports.attachEvidence = async (id, payload, user = null) => {
   return {
     ...stored,
     id: evidenceRecord.id,
-    reportId: id,
+    reportId: id.trim(),
   };
 };
 
 exports.updateReportStatus = async (id, newStatus, user) => {
-  const report = await repository.findReportById(id);
+  if (!id || typeof id !== "string" || !id.trim() || id.trim().length > 128) {
+    throw notFound();
+  }
+  const report = await repository.findReportById(id.trim());
   if (!report) throw notFound();
 
   const validatedStatus = validateReportStatusUpdate(report.status, newStatus);
-  const updated = await repository.updateReportStatus(id, validatedStatus);
+  const updated = await repository.updateReportStatus(id.trim(), validatedStatus);
   return sanitizeReport(updated, user);
 };
 
@@ -197,8 +214,11 @@ exports.forwardToIncidentResponse = async (id, user, options = {}) => {
   if (!["COMMUNITY_LIAISON", "PARK_MANAGER"].includes(user.role)) {
     throw forbidden("Only authorized Liaison or Manager roles can forward community reports.");
   }
+  if (!id || typeof id !== "string" || !id.trim() || id.trim().length > 128) {
+    throw notFound();
+  }
 
-  const report = await repository.findReportById(id);
+  const report = await repository.findReportById(id.trim());
   if (!report) throw notFound();
 
   // Status appropriateness validation

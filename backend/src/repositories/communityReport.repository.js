@@ -66,6 +66,27 @@ exports.findReportById = async (id) => {
   });
 };
 
+exports.findRecentDuplicateReport = async (reportData, windowMs = 60000) => {
+  if (typeof db().communityReport?.findFirst !== "function") return null;
+  const since = new Date(Date.now() - windowMs);
+  const where = {
+    reportType: reportData.reportType,
+    description: reportData.description,
+    submittedAt: { gte: since },
+  };
+
+  if (reportData.reporterId) {
+    where.reporterId = reportData.reporterId;
+  } else if (reportData.isAnonymous) {
+    where.isAnonymous = true;
+  }
+
+  return db().communityReport.findFirst({
+    where,
+    select: reportSelect,
+  });
+};
+
 exports.listReportsByReporter = async (reporterId, { status, reportType, page = 1, pageSize = 20 } = {}) => {
   const where = {
     reporterId,
