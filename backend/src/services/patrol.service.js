@@ -1,5 +1,6 @@
 const repository = require("../repositories/patrol.repository");
 const { localDateKey, scheduleDateKey } = require("../../../shared/patrolLifecycle");
+const { NAVIGATION } = require("../../../shared/patrolNavigation");
 const patrolError = (status, message) => Object.assign(new Error(message), { status, patrolError: true });
 exports.getRangerPatrol = async (id, rangerId) => {
   const patrol = await repository.findRangerPatrol(id, rangerId);
@@ -56,6 +57,24 @@ exports.getPatrol = async (id) => {
   const patrol = await repository.findPatrolById(id);
   if (!patrol) throw httpError(404, "Patrol not found.");
   return patrol;
+};
+// GPS samples older than sampleMaxAgeMs are rejected at ingest, so anything
+// beyond that window is definitively not fresh. It also allows one missed
+// update: a stationary Ranger reports roughly every trailIntervalMs (60s).
+exports.liveFreshnessSeconds = Math.floor(NAVIGATION.sampleMaxAgeMs / 1000);
+exports.getLiveRangers = async () => {
+  const patrols = await repository.findLivePatrols();
+  const rangers = await Promise.all(
+    patrols.map(async (patrol) => ({
+      ...patrol,
+      location: await repository.findLatestLocation(patrol.id),
+    })),
+  );
+  return { rangers, freshnessSeconds: exports.liveFreshnessSeconds };
+};
+exports.getPatrolTrail = async (id) => {
+  await exports.getPatrol(id);
+  return repository.findPatrolTrail(id);
 };
 exports.createPatrol = async (input, createdById) => {
   const park = await repository.findPark(input.parkId);

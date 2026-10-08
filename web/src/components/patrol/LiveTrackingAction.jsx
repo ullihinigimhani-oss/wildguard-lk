@@ -1,12 +1,12 @@
+import { Link } from "react-router-dom";
 import PatrolActionIcon from "./PatrolActionIcon";
-export default function LiveTrackingAction({ patrolId, onSelect }) {
+export default function LiveTrackingAction({ patrolId }) {
   return (
-    <button
-      type="button"
+    <Link
       className="patrol-action live-tracking-action"
-      onClick={() => onSelect(patrolId)}
+      to={`/patrols/${patrolId}/track`}
     >
       <PatrolActionIcon kind="tracking" />Live Tracking
-    </button>
+    </Link>
   );
 }

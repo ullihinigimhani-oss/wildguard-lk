@@ -60,8 +60,8 @@ test.each(["IN_PROGRESS", "COMPLETED", "CANCELLED"])("%s hides edit and cancella
   listPatrols.mockResolvedValue({ patrols: [{ ...patrol, status }], total: 1 }); mountList(); await screen.findByText("Existing patrol");
   expect(screen.queryByRole("link", { name: "Edit" })).toBeNull(); expect(screen.queryByRole("button", { name: "Edit" })).toBeNull(); expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   expect(screen.getByRole("link", { name: "View" })).toHaveAttribute("href", "/patrols/patrol-actual");
-  if (status === "IN_PROGRESS") { fireEvent.click(screen.getByRole("button", { name: "Live Tracking" })); expect(screen.getByText("Live patrol tracking will be available here.")).toHaveAttribute("data-patrol-id", "patrol-actual"); }
-  else expect(screen.queryByRole("button", { name: "Live Tracking" })).toBeNull();
+  if (status === "IN_PROGRESS") expect(screen.getByRole("link", { name: "Live Tracking" })).toHaveAttribute("href", "/patrols/patrol-actual/track");
+  else expect(screen.queryByRole("link", { name: "Live Tracking" })).toBeNull();
 });
 test("scheduled edit uses selected ID; cancellation requires confirmation and refreshes table", async () => {
   mountList(); await screen.findByText("Existing patrol");
@@ -97,7 +97,7 @@ test.each(["SCHEDULED", "IN_PROGRESS"])("%s actions use one compact non-wrapping
       expect(getComputedStyle(action).whiteSpace).toBe("nowrap");
       expect(action.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
     }
-    if (status === "IN_PROGRESS") expect(getComputedStyle(screen.getByRole("button", { name: "Live Tracking" })).backgroundColor).toBe("rgb(23, 77, 58)");
+    if (status === "IN_PROGRESS") expect(getComputedStyle(screen.getByRole("link", { name: "Live Tracking" })).backgroundColor).toBe("rgb(23, 77, 58)");
   } finally { style.remove(); }
 });
 test("cancellation conflict displays error and keeps history visible", async () => {

@@ -80,7 +80,7 @@ test("successful login opens personalized dashboard, profile and logout", async 
   expect(sessionStorage.length).toBe(0);
   expect(api.defaults.headers.common.Authorization).toBeUndefined();
 });
-test.each(["/dashboard", "/patrols", "/incidents", "/profile", "/map"])(
+test.each(["/dashboard", "/patrols", "/patrols/live", "/patrols/patrol-1/track", "/incidents", "/profile", "/map"])(
   "protects %s",
   async (path) => {
     mount(path);
@@ -222,5 +222,23 @@ test("an authenticated non-manager cannot open patrol management", async () => {
   ).not.toBeInTheDocument();
   expect(
     screen.queryByRole("heading", { name: "Create Patrol" }),
+  ).not.toBeInTheDocument();
+});
+
+test("an authenticated non-manager cannot open live ranger monitoring", async () => {
+  sessionStorage.setItem("wildguard.session", "saved-token");
+  mount("/patrols/live");
+  expect(await screen.findByRole("heading", { name: "Test Ranger" })).toBeVisible();
+  expect(
+    screen.queryByRole("heading", { name: "Live Ranger Monitoring" }),
+  ).not.toBeInTheDocument();
+});
+
+test("an authenticated non-manager cannot open per-ranger tracking", async () => {
+  sessionStorage.setItem("wildguard.session", "saved-token");
+  mount("/patrols/patrol-1/track");
+  expect(await screen.findByRole("heading", { name: "Test Ranger" })).toBeVisible();
+  expect(
+    screen.queryByRole("heading", { name: "Northern boundary sweep" }),
   ).not.toBeInTheDocument();
 });
