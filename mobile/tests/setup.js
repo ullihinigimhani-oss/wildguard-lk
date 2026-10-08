@@ -11,3 +11,19 @@ jest.mock("@expo/vector-icons/Feather", () => {
   const { View } = require("react-native");
   return (props) => <View {...props} />;
 });
+jest.mock(
+  "react-native-webview",
+  () => ({ WebView: require("react-native").View }),
+  { virtual: true },
+);
+jest.mock(
+  "@expo/vector-icons/Ionicons",
+  () => {
+    const React = require("react");
+    const { Text } = require("react-native");
+    return function MockIonicons(props) {
+      return <Text {...props}>{props.name}</Text>;
+    };
+  },
+  { virtual: true },
+);

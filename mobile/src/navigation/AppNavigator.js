@@ -17,9 +17,18 @@ import IncidentDetailsScreen from "../screens/incident/IncidentDetailsScreen";
 import RangerShell from "./RangerShell";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import AlertsScreen from "../screens/alerts/AlertsScreen";
+import AlertDetailsScreen from "../screens/alerts/AlertDetailsScreen";
+import CommunityHomeScreen from "../screens/community/CommunityHomeScreen";
+import CommunityReportScreen from "../screens/community/CommunityReportScreen";
+import ReportStatusScreen from "../screens/community/ReportStatusScreen";
+import LiaisonReviewScreen from "../screens/community/LiaisonReviewScreen";
+import CommunityShell from "./CommunityShell";
+import LiaisonShell from "./LiaisonShell";
 import SyncScreen from "../screens/placeholders/SyncScreen";
 import PlaceholderScreen from "../screens/placeholders/PlaceholderScreen";
+
 const Stack = createNativeStackNavigator();
+
 export default function AppNavigator() {
   const headerFont = useFontStyle({ fontWeight: "700" });
   const { user, isDemo, isAuthenticated } = useAuth();
@@ -27,7 +36,9 @@ export default function AppNavigator() {
   const destination = isAuthenticated ? authenticatedDestination(user) : null;
   if (!isDemo && !destination) return <AuthNavigator />;
   const rangerArea = isDemo || destination === "Home";
-  if (!isDemo && destination === "Home")
+
+  // Authenticated Ranger Stack
+  if (!isDemo && destination === "Home") {
     return (
       <Stack.Navigator
         key={`${user.id}:ranger`}
@@ -44,11 +55,7 @@ export default function AppNavigator() {
           ["Incident", "Report Incident", RangerIncidentScreen],
           ["Profile", "Profile", ProfileScreen],
         ].map(([name, title, Component]) => (
-          <Stack.Screen
-            key={name}
-            name={name}
-            options={{ title, headerBackVisible: false }}
-          >
+          <Stack.Screen key={name} name={name} options={{ title, headerBackVisible: false }}>
             {(props) => (
               <RangerShell {...props}>
                 <Component {...props} />
@@ -108,6 +115,82 @@ export default function AppNavigator() {
         />
       </Stack.Navigator>
     );
+  }
+
+  // Authenticated Community Member Stack
+  if (!isDemo && user.role === "COMMUNITY_USER") {
+    return (
+      <Stack.Navigator
+        key={`${user.id}:community`}
+        initialRouteName="CommunityDashboard"
+        screenOptions={{ headerShown: false, animation: "none" }}
+      >
+        {[
+          ["CommunityDashboard", "Dashboard", CommunityHomeScreen],
+          ["SafetyAlerts", "Wildlife Alerts", AlertsScreen],
+          ["Report", "Report Incident", CommunityReportScreen],
+          ["MyReports", "My Reports", ReportStatusScreen],
+          ["Profile", "Profile", ProfileScreen],
+        ].map(([name, title, Component]) => (
+          <Stack.Screen key={name} name={name} options={{ title, headerBackVisible: false }}>
+            {(props) => (
+              <CommunityShell {...props}>
+                <Component {...props} />
+              </CommunityShell>
+            )}
+          </Stack.Screen>
+        ))}
+        <Stack.Screen
+          name="AlertDetails"
+          component={AlertDetailsScreen}
+          options={{
+            headerShown: true,
+            title: "Safety Advisory",
+            headerTintColor: "#245b44",
+            headerShadowVisible: false,
+          }}
+        />
+      </Stack.Navigator>
+    );
+  }
+
+  // Authenticated Community Liaison Stack
+  if (!isDemo && user.role === "COMMUNITY_LIAISON") {
+    return (
+      <Stack.Navigator
+        key={`${user.id}:liaison`}
+        initialRouteName="Review"
+        screenOptions={{ headerShown: false, animation: "none" }}
+      >
+        {[
+          ["Review", "Incident Review", LiaisonReviewScreen],
+          ["SafetyAlerts", "Wildlife Alerts", AlertsScreen],
+          ["Report", "New Report", CommunityReportScreen],
+          ["Profile", "Profile", ProfileScreen],
+        ].map(([name, title, Component]) => (
+          <Stack.Screen key={name} name={name} options={{ title, headerBackVisible: false }}>
+            {(props) => (
+              <LiaisonShell {...props}>
+                <Component {...props} />
+              </LiaisonShell>
+            )}
+          </Stack.Screen>
+        ))}
+        <Stack.Screen
+          name="AlertDetails"
+          component={AlertDetailsScreen}
+          options={{
+            headerShown: true,
+            title: "Safety Advisory",
+            headerTintColor: "#245b44",
+            headerShadowVisible: false,
+          }}
+        />
+      </Stack.Navigator>
+    );
+  }
+
+  // Fallback Stack (Park Manager, Researcher, Demo)
   return (
     <Stack.Navigator
       key={isDemo ? "demo" : `${user.id}:${user.role}`}
