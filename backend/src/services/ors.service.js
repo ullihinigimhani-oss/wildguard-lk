@@ -16,6 +16,7 @@ const routeError = (status, code, message, retryAfterSeconds) =>
   });
 const entries = new Map();
 let globalCalls = [];
+let providerNotBefore = 0;
 const COOLDOWN_MS = 10000,
   CACHE_MS = 45000,
   MAX_GLOBAL_PER_MINUTE = 30;
@@ -41,6 +42,9 @@ exports.walkingRoute = async ({
       "Full patrol navigation needs 2–50 valid required points. The saved waypoints remain visible.",
     );
   const cacheSlot = full ? "fullCached" : "cached";
+  // Blue approach and green plan are distinct startup requests. Keep the shared
+  // per-minute budgets, but do not let one purpose consume the other's cooldown.
+  const cooldownSlot = full ? 'fullStartedAt' : 'startedAt';
   const now = Date.now();
   for (const [id, entry] of entries)
     if (
@@ -118,7 +122,8 @@ exports.walkingRoute = async ({
   entry.calls = entry.calls.filter((time) => now - time < 60000);
   globalCalls = globalCalls.filter((time) => now - time < 60000);
   const retryMs = Math.max(
-    COOLDOWN_MS - (now - entry.startedAt),
+    providerNotBefore - now,
+    COOLDOWN_MS - (now - (entry[cooldownSlot] ?? -Infinity)),
     entry.calls.length >= 6 ? 60000 - (now - entry.calls[0]) : 0,
     globalCalls.length >= MAX_GLOBAL_PER_MINUTE
       ? 60000 - (now - globalCalls[0])
@@ -127,8 +132,8 @@ exports.walkingRoute = async ({
   if (retryMs > 0)
     throw routeError(
       429,
-      "ROUTE_COOLDOWN",
-      "Walking route requests are temporarily limited. Please wait before retrying.",
+      providerNotBefore > now ? 'ROUTE_RATE_LIMIT' : "ROUTE_COOLDOWN",
+      providerNotBefore > now ? 'Walking provider is temporarily rate limited. Please wait before retrying.' : "Walking route requests are temporarily limited. Please wait before retrying.",
       Math.ceil(retryMs / 1000),
     );
   const environment = require("../config/environment");
@@ -154,7 +159,7 @@ exports.walkingRoute = async ({
       "ROUTING_UNAVAILABLE",
       "Walking routing is currently unavailable. Planned patrol points remain available.",
     );
-  entry.startedAt = now;
+  entry[cooldownSlot] = now;
   entry.calls.push(now);
   globalCalls.push(now);
   entry.pendingKey = key;
@@ -194,13 +199,19 @@ exports.walkingRoute = async ({
         "Walking route is currently unavailable. Check your connection and try again.",
       );
     }
-    if (response.status === 429)
+    if (response.status === 429) {
+      const header = response.headers?.get?.('retry-after');
+      const numeric = header && Number(header);
+      const retryAfter = Number.isFinite(numeric) && numeric >= 0 ? numeric : header ? Math.max(0, (Date.parse(header) - Date.now()) / 1000) : NaN;
+      const seconds = Number.isFinite(retryAfter) ? Math.ceil(retryAfter) : 60;
+      providerNotBefore = Date.now() + seconds * 1000;
       throw routeError(
         429,
         "ROUTE_RATE_LIMIT",
         "Walking routing is temporarily busy. Try again in a minute.",
-        60,
+        seconds,
       );
+    }
     if ([400, 404, 413].includes(response.status)) {
       let provider;
       try { provider = (await response.json()).error; } catch { /* Never expose upstream content. */ }

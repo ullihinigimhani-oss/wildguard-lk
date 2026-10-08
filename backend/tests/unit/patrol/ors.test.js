@@ -359,16 +359,37 @@ test("full patrol uses one ordered multi-coordinate walking request with avoidan
   expect(JSON.stringify(result)).not.toContain("isolated-test-key");
   expect(fetch).toHaveBeenCalledTimes(1);
 });
-test("full cache is independent of live cache, coalesces duplicates, and shares cooldown", async () => {
+test("full cache coalesces duplicates and allows a distinct blue startup request", async () => {
   mockFull();
   const first = ors.walkingRoute(fullInput()),
     second = ors.walkingRoute(fullInput());
   expect(await first).toEqual(await second);
   await ors.walkingRoute(fullInput());
   expect(fetch).toHaveBeenCalledTimes(1);
-  await expect(ors.walkingRoute(input())).rejects.toMatchObject({
-    status: 429,
-  });
+  fetch.mockResolvedValue({ok:true,status:200,json:async()=>data()});
+  await expect(ors.walkingRoute(input())).resolves.toMatchObject({profile:'foot-walking'});
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+test('blue startup does not throttle the first green request', async () => {
+  await ors.walkingRoute(input()); mockFull();
+  await expect(ors.walkingRoute(fullInput())).resolves.toMatchObject({profile:'foot-walking'});
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+test('ORS Retry-After reaches the client without being replaced by 60 seconds', async () => {
+  fetch.mockResolvedValue({ok:false,status:429,headers:{get:()=> '90'}});
+  await expect(ors.walkingRoute(input())).rejects.toMatchObject({code:'ROUTE_RATE_LIMIT',retryAfterSeconds:90});
+});
+test('provider backoff blocks new upstream calls across purposes while allowing valid cached geometry', async () => {
+  jest.useFakeTimers();
+  await ors.walkingRoute(input());
+  fetch.mockResolvedValue({ok:false,status:429,headers:{get:()=> '90'}});
+  await expect(ors.walkingRoute(fullInput())).rejects.toMatchObject({code:'ROUTE_RATE_LIMIT',retryAfterSeconds:90});
+  await expect(ors.walkingRoute(input())).resolves.toMatchObject({profile:'foot-walking'});
+  await expect(ors.walkingRoute({...fullInput(),rangerId:'other'})).rejects.toMatchObject({code:'ROUTE_RATE_LIMIT',retryAfterSeconds:90});
+  expect(fetch).toHaveBeenCalledTimes(2);
+  jest.advanceTimersByTime(90000);mockFull();
+  await expect(ors.walkingRoute(fullInput())).resolves.toMatchObject({profile:'foot-walking'});
+  expect(fetch).toHaveBeenCalledTimes(3);
 });
 test("full cache reused past live expiry; changed intermediate waypoint invalidates cache", async () => {
   jest.useFakeTimers();

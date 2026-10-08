@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from "@testing-library/react-native";
-import useFullPatrolRoute from "../../src/hooks/useFullPatrolRoute";
+import useFullPatrolRoute, { clearFullRouteCache } from "../../src/hooks/useFullPatrolRoute";
 import { getFullPatrolRoute } from "../../src/services/patrolApi";
 jest.mock("../../src/services/patrolApi", () => ({
   getFullPatrolRoute: jest.fn(),
@@ -39,7 +39,7 @@ const mount = () =>
       useFullPatrolRoute(patrol, pts, "a", navigation, active),
     { initialProps: { navigation: live, pts: points, active: true } },
   );
-beforeEach(() => getFullPatrolRoute.mockReset().mockResolvedValue(full));
+beforeEach(() => { clearFullRouteCache(); getFullPatrolRoute.mockReset().mockResolvedValue(full); });
 test("full context loads once and GPS jitter/progression/reroutes do not recalculate it", async () => {
   const hook = mount();
   await waitFor(() => expect(hook.result.current.route).toBe(full));
@@ -137,4 +137,36 @@ test("unmapped required point provides a Manager review message without fake geo
   expect(hook.result.current.route).toBeNull();
   expect(getFullPatrolRoute).toHaveBeenCalledTimes(1);
   hook.unmount();
+});
+test('screen return reuses verified geometry with the same session, points and risk context',async()=>{
+ const first=mount();await waitFor(()=>expect(first.result.current.route).toBe(full));first.unmount();
+ const second=mount();await waitFor(()=>expect(second.result.current.route).toBe(full));expect(getFullPatrolRoute).toHaveBeenCalledTimes(1);second.unmount();
+});
+test('duplicate manual retries do not overlap an in-flight request',async()=>{
+ let resolve;getFullPatrolRoute.mockReturnValueOnce(new Promise(done=>resolve=done));const hook=mount();
+ act(()=>{hook.result.current.retry();hook.result.current.retry();});expect(getFullPatrolRoute).toHaveBeenCalledTimes(1);
+ await act(async()=>resolve(full));hook.unmount();
+});
+test('header Retry-After takes precedence over a shorter body delay; taps cannot bypass it',async()=>{
+ jest.useFakeTimers();try{
+ getFullPatrolRoute.mockRejectedValueOnce({response:{status:429,headers:{'retry-after':'45'},data:{code:'ROUTE_RATE_LIMIT',retryAfterSeconds:10}}}).mockResolvedValue(full);
+ const hook=mount();await act(async()=>{});expect(hook.result.current.error).toMatch(/provider is rate limited/);
+ act(()=>hook.result.current.retry());await act(async()=>jest.advanceTimersByTime(44000));expect(getFullPatrolRoute).toHaveBeenCalledTimes(1);
+ await act(async()=>jest.advanceTimersByTime(1000));expect(hook.result.current.route).toBe(full);hook.unmount();
+ }finally{jest.useRealTimers();}
+});
+test('automatic retries are bounded and fallback respects the final rate-limit delay',async()=>{
+ jest.useFakeTimers();try{
+ getFullPatrolRoute.mockRejectedValue({response:{status:429,data:{code:'ROUTE_COOLDOWN',retryAfterSeconds:10}}});const hook=mount();await act(async()=>{});
+ for(const delay of [10000,10000,20000])await act(async()=>jest.advanceTimersByTime(delay));
+ expect(getFullPatrolRoute).toHaveBeenCalledTimes(4);act(()=>hook.result.current.retry());expect(getFullPatrolRoute).toHaveBeenCalledTimes(4);
+ await act(async()=>jest.advanceTimersByTime(40000));expect(getFullPatrolRoute).toHaveBeenCalledTimes(4);
+ getFullPatrolRoute.mockResolvedValue(full);await act(async()=>hook.result.current.retry());expect(hook.result.current.route).toBe(full);hook.unmount();
+ }finally{jest.useRealTimers();}
+});
+test('transient outage retries automatically but exit cancels retry timers',async()=>{
+ jest.useFakeTimers();try{
+ getFullPatrolRoute.mockRejectedValue({response:{status:503,data:{code:'ROUTING_UNAVAILABLE'}}});const hook=mount();await act(async()=>{});hook.unmount();
+ await act(async()=>jest.advanceTimersByTime(60000));expect(getFullPatrolRoute).toHaveBeenCalledTimes(1);
+ }finally{jest.useRealTimers();}
 });
