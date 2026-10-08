@@ -19,6 +19,7 @@ import {
   markAlertAsRead,
   respondToAlert,
   forwardAlert,
+  escalateAlert,
 } from "../../services/alertApi";
 import { useAuth } from "../../hooks/useAuth";
 import { colors, styles } from "../../constants/theme";
@@ -81,6 +82,9 @@ export default function AlertDetailsScreen({ route, navigation }) {
   const [responding, setResponding] = useState(false);
   const [forwarding, setForwarding] = useState(false);
   const [handoffData, setHandoffData] = useState(null);
+  const [escalationReason, setEscalationReason] = useState("");
+  const [escalating, setEscalating] = useState(false);
+  const [escalationHandoffData, setEscalationHandoffData] = useState(null);
 
   useEffect(() => {
     if (!alertParam) {
@@ -283,6 +287,84 @@ export default function AlertDetailsScreen({ route, navigation }) {
     }
   }
 
+  function handleConfirmEscalation() {
+    if (!isAuthorizedResponder) return;
+    if (isResolved || isExpired) {
+      NativeAlert.alert("Closed", "Cannot escalate resolved or expired alerts.");
+      return;
+    }
+
+    if (!isHighOrCritical) {
+      NativeAlert.alert("Invalid Severity", "Only HIGH or CRITICAL severity alerts can be escalated.");
+      return;
+    }
+
+    const trimmed = escalationReason.trim();
+    if (!trimmed || trimmed.length < 10 || trimmed.length > 1000) {
+      NativeAlert.alert("Invalid Reason", "Escalation reason must be between 10 and 1000 characters.");
+      return;
+    }
+
+    NativeAlert.alert(
+      "Confirm Escalation",
+      `Are you sure you want to escalate this ${alert.riskLevel} alert to Conservation Operations & Incident Response?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm Escalate",
+          style: "destructive",
+          onPress: () => performEscalate(trimmed),
+        },
+      ]
+    );
+  }
+
+  async function performEscalate(trimmedReason) {
+    setEscalating(true);
+    try {
+      const res = await escalateAlert(alert.id, {
+        reason: trimmedReason,
+        targetDepartment: "INCIDENT_RESPONSE",
+      });
+
+      if (res.alreadyEscalated) {
+        NativeAlert.alert(
+          "Already Escalated",
+          res.message || "Alert already has an active escalation."
+        );
+      } else {
+        NativeAlert.alert(
+          "Alert Escalated",
+          res.message || "Alert escalated to Conservation Operations & Incident Response successfully."
+        );
+      }
+
+      if (res.alert) {
+        setAlert(res.alert);
+      } else if (res.escalation) {
+        setAlert((prev) => ({
+          ...prev,
+          isEscalated: true,
+          escalation: res.escalation,
+          status: prev.status === "ACTIVE" ? "ACKNOWLEDGED" : prev.status,
+        }));
+      }
+
+      if (res.incidentHandoff) {
+        setEscalationHandoffData(res.incidentHandoff);
+      }
+
+      setEscalationReason("");
+    } catch (err) {
+      NativeAlert.alert(
+        "Escalation Failed",
+        err.response?.data?.message || err.message || "Could not escalate alert."
+      );
+    } finally {
+      setEscalating(false);
+    }
+  }
+
   if (loading) {
     return (
       <Screen>
@@ -323,6 +405,10 @@ export default function AlertDetailsScreen({ route, navigation }) {
   const isRead = Boolean(alert.isRead || alert.isAcknowledged);
   const isResolved = alert.status === "RESOLVED" || Boolean(alert.isResolved);
   const isExpired = Boolean(alert.isExpired) && !isResolved;
+  const isHighOrCritical = alert.riskLevel === "HIGH" || alert.riskLevel === "CRITICAL";
+  const activeEscalation =
+    alert.escalation && (alert.escalation.status === "PENDING" || alert.escalation.status === "ACKNOWLEDGED");
+  const isAlreadyEscalated = Boolean(alert.isEscalated || activeEscalation);
 
   const lat = alert.location?.latitude ?? alert.riskZone?.centerLatitude;
   const lon = alert.location?.longitude ?? alert.riskZone?.centerLongitude;
@@ -771,6 +857,80 @@ export default function AlertDetailsScreen({ route, navigation }) {
         </View>
       )}
 
+      {/* Existing Management Escalation Record (if logged) */}
+      {(alert.escalation || alert.isEscalated || escalationHandoffData) && (
+        <View style={[styles.card, { gap: 10, borderColor: "#dc2626", borderWidth: 1.5, backgroundColor: "#fff5f5" }]}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Ionicons name="warning" size={18} color="#dc2626" />
+              <Text style={[styles.heading, { fontSize: 15, color: "#991b1b" }]}>
+                Management Escalation Record
+              </Text>
+            </View>
+            <View
+              style={{
+                backgroundColor: "#fee2e2",
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 4,
+                borderWidth: 1,
+                borderColor: "#fca5a5",
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: "800", color: "#991b1b" }}>
+                {alert.escalation?.status
+                  ? `ESCALATED: ${alert.escalation.status}`
+                  : "ESCALATED: PENDING"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ gap: 4 }}>
+            <Text style={{ fontSize: 13, color: colors.text }}>
+              <Text style={{ fontWeight: "700", color: "#991b1b" }}>Target Division: </Text>
+              {alert.escalation?.targetDepartment || "Conservation Operations (Incident Response)"}
+            </Text>
+            <Text style={{ fontSize: 13, color: colors.text }}>
+              <Text style={{ fontWeight: "600" }}>Priority Level: </Text>
+              {alert.escalation?.priority || alert.riskLevel}
+            </Text>
+            {alert.escalation?.escalatedBy && (
+              <Text style={{ fontSize: 13, color: colors.text }}>
+                <Text style={{ fontWeight: "600" }}>Escalated By: </Text>
+                {alert.escalation.escalatedBy.name} ({alert.escalation.escalatedBy.role?.replace(/_/g, " ")})
+              </Text>
+            )}
+            {alert.escalation?.escalatedAt && (
+              <Text style={{ fontSize: 12, color: colors.muted }}>
+                Escalation logged: {formatAlertDetailTime(alert.escalation.escalatedAt)}
+              </Text>
+            )}
+          </View>
+
+          {(alert.escalation?.reason || escalationHandoffData?.reason) && (
+            <View style={{ backgroundColor: "#fef2f2", padding: 10, borderRadius: 8, borderWidth: 1, borderColor: "#fecaca" }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#991b1b", marginBottom: 2 }}>
+                Escalation Justification:
+              </Text>
+              <Text style={{ fontSize: 13, color: "#7f1d1d", fontStyle: "italic", lineHeight: 18 }}>
+                "{alert.escalation?.reason || escalationHandoffData?.reason}"
+              </Text>
+            </View>
+          )}
+
+          {escalationHandoffData?.recommendedOperationalAction && (
+            <View style={{ gap: 2, borderTopWidth: 1, borderTopColor: "#fecaca", paddingTop: 8 }}>
+              <Text style={{ fontSize: 12, color: "#991b1b", fontWeight: "700" }}>
+                Recommended Operational Action:
+              </Text>
+              <Text style={{ fontSize: 12, color: "#7f1d1d" }}>
+                {escalationHandoffData.recommendedOperationalAction}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Authorized Liaison Response Controls (Role Protected: only COMMUNITY_LIAISON or PARK_MANAGER) */}
       {isAuthorizedResponder && !isResolved && !isExpired && (
         <View style={[styles.card, { gap: 14, borderColor: "#3b82f6", borderWidth: 1.5 }]}>
@@ -971,6 +1131,105 @@ export default function AlertDetailsScreen({ route, navigation }) {
               disabled={forwarding}
               onPress={handleForwardAlert}
             />
+          </View>
+
+          {/* High-Priority Alert Escalation Section */}
+          <View style={{ borderTopWidth: 1, borderTopColor: "#e2e8f0", paddingTop: 14, gap: 10 }}>
+            <View style={{ gap: 2 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="megaphone" size={17} color="#dc2626" />
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#991b1b" }}>
+                  High-Priority Management Escalation
+                </Text>
+              </View>
+              <Text style={{ fontSize: 11, color: colors.muted }}>
+                Escalate HIGH or CRITICAL alert to Conservation Operations & Incident Response
+              </Text>
+            </View>
+
+            {!isHighOrCritical ? (
+              <View
+                style={{
+                  backgroundColor: "#f8fafc",
+                  padding: 10,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: "#e2e8f0",
+                }}
+              >
+                <Text style={{ fontSize: 12, color: colors.muted, fontStyle: "italic" }}>
+                  Management escalation to Incident Response is restricted to HIGH and CRITICAL alerts only. (Current: {alert.riskLevel})
+                </Text>
+              </View>
+            ) : isAlreadyEscalated ? (
+              <View
+                style={{
+                  backgroundColor: "#fff7ed",
+                  borderColor: "#fed7aa",
+                  borderWidth: 1,
+                  borderRadius: 8,
+                  padding: 10,
+                  gap: 4,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Ionicons name="checkmark-circle" size={16} color="#c2410c" />
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#9a3412" }}>
+                    Active Escalation in Progress
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11, color: "#c2410c" }}>
+                  This alert has already been escalated to Incident Response. Duplicate active escalation is locked.
+                </Text>
+              </View>
+            ) : (
+              <View style={{ gap: 10 }}>
+                <View style={{ gap: 6 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: colors.text }}>
+                      Escalation Reason:
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: escalationReason.trim().length >= 10 ? colors.green : colors.muted,
+                      }}
+                    >
+                      {escalationReason.length}/1000 (min 10)
+                    </Text>
+                  </View>
+
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: 8,
+                      padding: 10,
+                      fontSize: 13,
+                      color: colors.dark,
+                      backgroundColor: "#fff",
+                      minHeight: 70,
+                      textAlignVertical: "top",
+                    }}
+                    multiline
+                    numberOfLines={3}
+                    placeholder="Provide justification for Conservation Operations & Incident Response dispatch (min 10 chars)..."
+                    placeholderTextColor="#94a3b8"
+                    value={escalationReason}
+                    onChangeText={setEscalationReason}
+                    maxLength={1000}
+                  />
+                </View>
+
+                <Button
+                  title="Escalate to Incident Response"
+                  color="#dc2626"
+                  loading={escalating}
+                  disabled={escalating}
+                  onPress={handleConfirmEscalation}
+                />
+              </View>
+            )}
           </View>
         </View>
       )}

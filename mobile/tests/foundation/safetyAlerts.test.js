@@ -26,6 +26,8 @@ jest.mock("../../src/services/alertApi", () => ({
   getAlertsRequiringAttention: jest.fn(),
   respondToAlert: jest.fn(),
   forwardAlert: jest.fn(),
+  escalateAlert: jest.fn(),
+  getAlertEscalations: jest.fn(),
 }));
 
 let mockUser = { id: "user-test-1", name: "Community Member", role: "COMMUNITY_USER" };
@@ -1209,6 +1211,254 @@ describe("Task 14: Authorized Wildlife Alert Response", () => {
     expect(screen.queryByText("Forward Alert (Handoff)")).toBeNull();
   });
 });
+
+describe("Task 15: High-Priority Alert Escalation", () => {
+  const criticalAlertForEscalation = {
+    id: "alert-crit-1",
+    riskLevel: "CRITICAL",
+    title: "CRITICAL Wildlife Alert - Boundary Zone",
+    message: "Elephant herd spotted advancing towards school boundary.",
+    shortMessage: "Elephant herd near school.",
+    status: "ACTIVE",
+    isAcknowledged: false,
+    generatedAt: "2026-10-08T08:00:00.000Z",
+    affectedArea: "Boundary Zone",
+    safetyInstructions: ["Remain indoors in solid structures."],
+  };
+
+  const highAlertForEscalation = {
+    id: "alert-high-1",
+    riskLevel: "HIGH",
+    title: "HIGH Wildlife Alert - River Edge",
+    message: "Large mugger crocodile spotted on bathing bank.",
+    shortMessage: "Crocodile on bathing bank.",
+    status: "ACTIVE",
+    isAcknowledged: false,
+    generatedAt: "2026-10-08T08:00:00.000Z",
+    affectedArea: "River Edge",
+    safetyInstructions: ["Avoid the waterbank."],
+  };
+
+  const mediumAlert = {
+    id: "alert-med-1",
+    riskLevel: "MEDIUM",
+    title: "MEDIUM Wildlife Alert - West Buffer",
+    message: "Wild boar track detected.",
+    shortMessage: "Wild boar track detected.",
+    status: "ACTIVE",
+    isAcknowledged: false,
+    generatedAt: "2026-10-08T08:00:00.000Z",
+    affectedArea: "West Buffer",
+    safetyInstructions: ["Standard caution."],
+  };
+
+  const alreadyEscalatedAlert = {
+    id: "alert-esc-active",
+    riskLevel: "CRITICAL",
+    title: "CRITICAL Wildlife Alert - North Gate",
+    message: "Elephant herd crossing road.",
+    status: "ACKNOWLEDGED",
+    isEscalated: true,
+    escalation: {
+      id: "esc-1",
+      status: "PENDING",
+      priority: "CRITICAL",
+      reason: "Emergency Ranger deployment needed for perimeter breach.",
+      targetDepartment: "INCIDENT_RESPONSE",
+      escalatedAt: "2026-10-08T08:15:00.000Z",
+      escalatedBy: {
+        name: "Officer Nimal",
+        role: "COMMUNITY_LIAISON",
+      },
+    },
+    generatedAt: "2026-10-08T08:00:00.000Z",
+    affectedArea: "North Gate",
+  };
+
+  test("COMMUNITY_USER cannot see management escalation controls", () => {
+    mockUser = { id: "user-1", name: "Community Member", role: "COMMUNITY_USER" };
+
+    const route = { params: { alertData: criticalAlertForEscalation } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    expect(screen.queryByText("High-Priority Management Escalation")).toBeNull();
+    expect(screen.queryByText("Escalate to Incident Response")).toBeNull();
+  });
+
+  test("COMMUNITY_LIAISON sees severity restriction notice on MEDIUM alert", () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+
+    const route = { params: { alertData: mediumAlert } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    expect(screen.getByText("High-Priority Management Escalation")).toBeTruthy();
+    expect(
+      screen.getByText(/Management escalation to Incident Response is restricted to HIGH and CRITICAL alerts only/)
+    ).toBeTruthy();
+    expect(screen.queryByText("Escalate to Incident Response")).toBeNull();
+  });
+
+  test("rejects escalation reason shorter than 10 characters with validation alert", async () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+    const alertSpy = jest.spyOn(NativeAlert, "alert");
+
+    const route = { params: { alertData: criticalAlertForEscalation } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    const reasonInput = screen.getByPlaceholderText(
+      "Provide justification for Conservation Operations & Incident Response dispatch (min 10 chars)..."
+    );
+    fireEvent.changeText(reasonInput, "short");
+
+    const escalateBtn = screen.getByText("Escalate to Incident Response");
+    fireEvent.press(escalateBtn);
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "Invalid Reason",
+      "Escalation reason must be between 10 and 1000 characters."
+    );
+    expect(alertApi.escalateAlert).not.toHaveBeenCalled();
+  });
+
+  test("allows COMMUNITY_LIAISON to confirm and escalate CRITICAL alert with incident handoff", async () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+
+    // Simulate clicking "Confirm Escalate" on the NativeAlert prompt
+    jest.spyOn(NativeAlert, "alert").mockImplementation((title, msg, buttons) => {
+      const confirmBtn = buttons?.find((b) => b.text === "Confirm Escalate");
+      if (confirmBtn?.onPress) {
+        confirmBtn.onPress();
+      }
+    });
+
+    alertApi.escalateAlert.mockResolvedValueOnce({
+      success: true,
+      message: "Alert escalated to INCIDENT_RESPONSE successfully.",
+      escalation: {
+        id: "esc-101",
+        status: "PENDING",
+        priority: "CRITICAL",
+        reason: "Active herd moving towards settlement boundary; immediate field team dispatch requested.",
+        targetDepartment: "INCIDENT_RESPONSE",
+        escalatedAt: "2026-10-08T08:30:00.000Z",
+        escalatedBy: {
+          name: "Liaison Officer",
+          role: "COMMUNITY_LIAISON",
+        },
+      },
+      incidentHandoff: {
+        escalationId: "esc-101",
+        alertId: "alert-crit-1",
+        priority: "CRITICAL",
+        urgency: "IMMEDIATE",
+        recommendedOperationalAction: "Immediate field ranger deployment and emergency incident dispatch.",
+      },
+    });
+
+    const route = { params: { alertData: criticalAlertForEscalation } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    const reasonInput = screen.getByPlaceholderText(
+      "Provide justification for Conservation Operations & Incident Response dispatch (min 10 chars)..."
+    );
+    fireEvent.changeText(
+      reasonInput,
+      "Active herd moving towards settlement boundary; immediate field team dispatch requested."
+    );
+
+    const escalateBtn = screen.getByText("Escalate to Incident Response");
+    fireEvent.press(escalateBtn);
+
+    await waitFor(() => {
+      expect(alertApi.escalateAlert).toHaveBeenCalledWith("alert-crit-1", {
+        reason: "Active herd moving towards settlement boundary; immediate field team dispatch requested.",
+        targetDepartment: "INCIDENT_RESPONSE",
+      });
+      expect(screen.getByText("Management Escalation Record")).toBeTruthy();
+      expect(screen.getByText("ESCALATED: PENDING")).toBeTruthy();
+      expect(screen.getByText(/Immediate field ranger deployment and emergency incident dispatch/)).toBeTruthy();
+    });
+  });
+
+  test("allows PARK_MANAGER to escalate HIGH alert", async () => {
+    mockUser = { id: "mgr-1", name: "Park Manager", role: "PARK_MANAGER" };
+
+    jest.spyOn(NativeAlert, "alert").mockImplementation((title, msg, buttons) => {
+      const confirmBtn = buttons?.find((b) => b.text === "Confirm Escalate");
+      if (confirmBtn?.onPress) {
+        confirmBtn.onPress();
+      }
+    });
+
+    alertApi.escalateAlert.mockResolvedValueOnce({
+      success: true,
+      message: "Alert escalated to INCIDENT_RESPONSE successfully.",
+      escalation: {
+        id: "esc-102",
+        status: "PENDING",
+        priority: "HIGH",
+        reason: "Confirmed large mugger crocodile sighting on bathing bank.",
+        targetDepartment: "INCIDENT_RESPONSE",
+        escalatedAt: "2026-10-08T08:35:00.000Z",
+        escalatedBy: {
+          name: "Park Manager",
+          role: "PARK_MANAGER",
+        },
+      },
+      incidentHandoff: {
+        escalationId: "esc-102",
+        alertId: "alert-high-1",
+        priority: "HIGH",
+        urgency: "HIGH",
+        recommendedOperationalAction: "Dispatch conflict mitigation patrol to verify community perimeter.",
+      },
+    });
+
+    const route = { params: { alertData: highAlertForEscalation } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    const reasonInput = screen.getByPlaceholderText(
+      "Provide justification for Conservation Operations & Incident Response dispatch (min 10 chars)..."
+    );
+    fireEvent.changeText(
+      reasonInput,
+      "Confirmed large mugger crocodile sighting on bathing bank."
+    );
+
+    const escalateBtn = screen.getByText("Escalate to Incident Response");
+    fireEvent.press(escalateBtn);
+
+    await waitFor(() => {
+      expect(alertApi.escalateAlert).toHaveBeenCalledWith("alert-high-1", {
+        reason: "Confirmed large mugger crocodile sighting on bathing bank.",
+        targetDepartment: "INCIDENT_RESPONSE",
+      });
+      expect(screen.getByText("Management Escalation Record")).toBeTruthy();
+    });
+  });
+
+  test("displays active escalation badge and locks duplicate active escalation when already escalated", () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+
+    const route = { params: { alertData: alreadyEscalatedAlert } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    expect(screen.getByText("Management Escalation Record")).toBeTruthy();
+    expect(screen.getByText("ESCALATED: PENDING")).toBeTruthy();
+    expect(screen.getByText(/"Emergency Ranger deployment needed for perimeter breach."/)).toBeTruthy();
+    expect(screen.getByText("Active Escalation in Progress")).toBeTruthy();
+    expect(
+      screen.getByText(/This alert has already been escalated to Incident Response. Duplicate active escalation is locked./)
+    ).toBeTruthy();
+    expect(screen.queryByText("Escalate to Incident Response")).toBeNull();
+  });
+
+  test("AlertCard displays ESCALATED badge when alert is escalated", () => {
+    render(<AlertCard alert={alreadyEscalatedAlert} onPress={jest.fn()} />);
+    expect(screen.getByText("ESCALATED")).toBeTruthy();
+  });
+});
+
 
 
 

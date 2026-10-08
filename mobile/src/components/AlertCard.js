@@ -182,6 +182,25 @@ export default function AlertCard({
               <Text style={{ fontSize: 10, fontWeight: "700", color: colors.green }}>READ</Text>
             </View>
           )}
+
+          {Boolean(alert.isEscalated || alert.escalation) && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 4,
+                backgroundColor: "#fee2e2",
+                borderWidth: 1,
+                borderColor: "#fca5a5",
+              }}
+            >
+              <Ionicons name="warning" size={10} color="#b91c1c" />
+              <Text style={{ fontSize: 10, fontWeight: "800", color: "#b91c1c" }}>ESCALATED</Text>
+            </View>
+          )}
         </View>
 
         <Text style={{ fontSize: 12, color: colors.muted }}>{dateStr}</Text>

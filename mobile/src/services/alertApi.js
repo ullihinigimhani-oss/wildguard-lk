@@ -60,3 +60,16 @@ export async function forwardAlert(id, payload = {}, signal) {
   return data;
 }
 
+export async function escalateAlert(id, payload = {}, signal) {
+  const { data } = await api.post(`/alerts/${id}/escalate`, payload, { signal });
+  if (!data.success) throw new Error(data.message || "Could not escalate alert.");
+  return data;
+}
+
+export async function getAlertEscalations(id, signal) {
+  const { data } = await api.get(`/alerts/${id}/escalations`, { signal });
+  if (!data.success) throw new Error(data.message || "Could not load alert escalations.");
+  return data;
+}
+
+
