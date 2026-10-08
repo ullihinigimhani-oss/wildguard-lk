@@ -78,7 +78,18 @@ export default function AlertsScreen({ navigation }) {
       return;
     }
 
+    const targetAlert = alerts.find((a) => a.id === alertId);
+    if (targetAlert?.isResolved || targetAlert?.status === "RESOLVED" || targetAlert?.isExpired) {
+      setError("Acknowledgement is not applicable for resolved or expired alerts.");
+      return;
+    }
+
+    if (targetAlert?.isAcknowledged) {
+      return;
+    }
+
     const previousAlerts = [...alerts];
+    const nowIso = new Date().toISOString();
     setAcknowledgingId(alertId);
 
     // Optimistically update UI immediately
@@ -88,8 +99,10 @@ export default function AlertsScreen({ navigation }) {
           ? {
               ...a,
               isAcknowledged: true,
+              acknowledgedAt: nowIso,
               isRead: true,
-              readAt: new Date().toISOString(),
+              readAt: a.readAt || nowIso,
+              userState: "ACKNOWLEDGED",
             }
           : a
       )

@@ -609,3 +609,161 @@ describe("Task 11: Alert Read/Unread Management", () => {
   });
 });
 
+describe("Task 12: Acknowledge Safety Alert (Explicit Acknowledgement)", () => {
+  const readUnacknowledgedAlert = {
+    id: "alert-read-unack",
+    riskLevel: "CRITICAL",
+    title: "CRITICAL Wildlife Alert - Border Ridge",
+    shortMessage: "Elephant herd spotted near ridge.",
+    message: "Elephant herd spotted near ridge.",
+    status: "ACTIVE",
+    isAcknowledged: false,
+    isRead: true,
+    readAt: "2026-10-08T09:00:00.000Z",
+    generatedAt: "2026-10-08T08:00:00.000Z",
+    affectedArea: "Border Ridge (Yala)",
+    safetyInstructions: ["Stay inside secure shelters."],
+  };
+
+  const fullyAcknowledgedAlert = {
+    id: "alert-ack-1",
+    riskLevel: "HIGH",
+    title: "HIGH Wildlife Alert - Sector 7",
+    shortMessage: "Bear sighted near trail.",
+    message: "Bear sighted near trail.",
+    status: "ACTIVE",
+    isAcknowledged: true,
+    acknowledgedAt: "2026-10-08T09:45:00.000Z",
+    isRead: true,
+    readAt: "2026-10-08T09:10:00.000Z",
+    userState: "ACKNOWLEDGED",
+    generatedAt: "2026-10-08T08:30:00.000Z",
+    affectedArea: "Sector 7 (Yala)",
+    safetyInstructions: ["Avoid solo travel."],
+  };
+
+  const resolvedAlert = {
+    id: "alert-resolved-1",
+    riskLevel: "MEDIUM",
+    title: "MEDIUM Wildlife Alert - Waterhole",
+    shortMessage: "Animal returned to sanctuary.",
+    message: "Animal returned to sanctuary.",
+    status: "RESOLVED",
+    resolvedAt: "2026-10-08T10:00:00.000Z",
+    isAcknowledged: false,
+    isRead: true,
+    generatedAt: "2026-10-08T07:00:00.000Z",
+    safetyInstructions: ["Perimeter is safe."],
+  };
+
+  const expiredAlert = {
+    id: "alert-expired-1",
+    riskLevel: "LOW",
+    title: "LOW Wildlife Alert - Past Notice",
+    shortMessage: "Past animal movement notice.",
+    message: "Past animal movement notice.",
+    status: "ACTIVE",
+    isExpired: true,
+    isAcknowledged: false,
+    isRead: true,
+    generatedAt: "2026-10-05T08:00:00.000Z",
+    safetyInstructions: ["Historical advisory."],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(NativeAlert, "alert").mockImplementation(() => {});
+    alertApi.acknowledgeAlert.mockResolvedValue({
+      success: true,
+      message: "Alert acknowledged successfully. Stay safe and adhere to safety instructions.",
+    });
+    alertApi.markAlertAsRead.mockResolvedValue({ success: true });
+  });
+
+  afterEach(() => {
+    if (NativeAlert.alert.mockRestore) NativeAlert.alert.mockRestore();
+  });
+
+  test("AlertCard distinguishes READ from ACKNOWLEDGED: allows acknowledging read alert", () => {
+    const onAcknowledge = jest.fn();
+    render(
+      <AlertCard
+        alert={readUnacknowledgedAlert}
+        onPress={jest.fn()}
+        onAcknowledge={onAcknowledge}
+      />
+    );
+
+    // Shows READ badge in header, but Acknowledge button is still active
+    expect(screen.getByText("READ")).toBeTruthy();
+    const ackButton = screen.getByText("Acknowledge");
+    expect(ackButton).toBeTruthy();
+
+    fireEvent.press(ackButton);
+    expect(onAcknowledge).toHaveBeenCalledTimes(1);
+  });
+
+  test("AlertCard renders Acknowledged indicator and no acknowledge button when already acknowledged", () => {
+    render(<AlertCard alert={fullyAcknowledgedAlert} onPress={jest.fn()} />);
+
+    expect(screen.getByText("Acknowledged")).toBeTruthy();
+    expect(screen.queryByText("Acknowledge")).toBeNull();
+  });
+
+  test("AlertCard renders Resolved / Expired status and does not allow acknowledging non-applicable alerts", () => {
+    const onAcknowledge = jest.fn();
+    const { unmount } = render(
+      <AlertCard alert={resolvedAlert} onPress={jest.fn()} onAcknowledge={onAcknowledge} />
+    );
+
+    expect(screen.getByText("Resolved")).toBeTruthy();
+    expect(screen.queryByText("Acknowledge")).toBeNull();
+    unmount();
+
+    render(<AlertCard alert={expiredAlert} onPress={jest.fn()} onAcknowledge={onAcknowledge} />);
+    expect(screen.getByText("Expired")).toBeTruthy();
+    expect(screen.queryByText("Acknowledge")).toBeNull();
+  });
+
+  test("AlertDetailsScreen displays SAFETY INSTRUCTIONS ACKNOWLEDGED banner with formatted timestamp", () => {
+    const route = { params: { alertData: fullyAcknowledgedAlert } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    expect(screen.getByText("SAFETY INSTRUCTIONS ACKNOWLEDGED")).toBeTruthy();
+    expect(screen.getByText(/You confirmed understanding on/)).toBeTruthy();
+    expect(screen.getByText("✓ Alert Acknowledged")).toBeTruthy();
+  });
+
+  test("AlertDetailsScreen provides confirmation feedback and enters acknowledged state upon button press", async () => {
+    const route = { params: { alertData: readUnacknowledgedAlert } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    const ackBtn = screen.getByText("Acknowledge This Alert");
+    fireEvent.press(ackBtn);
+
+    await waitFor(() => {
+      expect(alertApi.acknowledgeAlert).toHaveBeenCalledWith("alert-read-unack");
+      expect(NativeAlert.alert).toHaveBeenCalledWith(
+        "Acknowledged",
+        expect.stringMatching(/acknowledged/)
+      );
+      expect(screen.getByText("SAFETY INSTRUCTIONS ACKNOWLEDGED")).toBeTruthy();
+      expect(screen.getByText("✓ Alert Acknowledged")).toBeTruthy();
+    });
+  });
+
+  test("AlertDetailsScreen disables acknowledge button for resolved and expired alerts", () => {
+    const { unmount } = render(
+      <AlertDetailsScreen route={{ params: { alertData: resolvedAlert } }} navigation={{ goBack: jest.fn() }} />
+    );
+    expect(screen.getByText("Alert Resolved (No Action Needed)")).toBeTruthy();
+    unmount();
+
+    render(
+      <AlertDetailsScreen route={{ params: { alertData: expiredAlert } }} navigation={{ goBack: jest.fn() }} />
+    );
+    expect(screen.getByText("Notice Expired")).toBeTruthy();
+  });
+});
+
+

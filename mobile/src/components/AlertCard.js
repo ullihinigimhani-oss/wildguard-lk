@@ -68,8 +68,10 @@ export default function AlertCard({
   acknowledging = false,
 }) {
   const risk = RISK_CONFIG[alert.riskLevel] || RISK_CONFIG.MEDIUM;
-  const isAck = Boolean(alert.isAcknowledged || alert.isRead);
-  const isResolved = alert.status === "RESOLVED";
+  const isAcknowledged = Boolean(alert.isAcknowledged);
+  const isRead = Boolean(alert.isRead || alert.isAcknowledged);
+  const isResolved = alert.status === "RESOLVED" || Boolean(alert.isResolved);
+  const isExpired = Boolean(alert.isExpired) && !isResolved;
 
   const dateStr = formatAlertDate(alert.generatedAt || alert.createdAt);
   const areaStr = formatAffectedArea(alert);
@@ -136,7 +138,18 @@ export default function AlertCard({
             >
               <Text style={{ fontSize: 10, fontWeight: "700", color: "#475569" }}>RESOLVED</Text>
             </View>
-          ) : !isAck ? (
+          ) : isExpired ? (
+            <View
+              style={{
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 4,
+                backgroundColor: "#fef3c7",
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#92400e" }}>EXPIRED</Text>
+            </View>
+          ) : !isRead ? (
             <View
               style={{
                 flexDirection: "row",
@@ -243,7 +256,17 @@ export default function AlertCard({
           <Ionicons name="chevron-forward" size={14} color={colors.green} />
         </Pressable>
 
-        {isAck ? (
+        {isResolved ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Ionicons name="checkmark-circle-outline" size={16} color="#64748b" />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>Resolved</Text>
+          </View>
+        ) : isExpired ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Ionicons name="time-outline" size={16} color="#d97706" />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#d97706" }}>Expired</Text>
+          </View>
+        ) : isAcknowledged ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Ionicons name="checkmark-circle" size={16} color={colors.green} />
             <Text style={{ fontSize: 12, fontWeight: "600", color: colors.green }}>Acknowledged</Text>

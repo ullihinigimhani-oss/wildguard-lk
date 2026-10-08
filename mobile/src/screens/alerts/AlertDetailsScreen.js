@@ -138,24 +138,43 @@ export default function AlertDetailsScreen({ route, navigation }) {
       return;
     }
 
+    if (isResolved || isExpired) {
+      NativeAlert.alert("Not Applicable", "Acknowledgement is not applicable for resolved or expired alerts.");
+      return;
+    }
+
+    if (isAck) {
+      NativeAlert.alert("Already Acknowledged", "You have already acknowledged this safety alert.");
+      return;
+    }
+
     const previousAlert = { ...alert };
+    const nowIso = new Date().toISOString();
     setAcknowledging(true);
 
     // Optimistically update UI immediately
     setAlert((prev) => ({
       ...prev,
       isAcknowledged: true,
+      acknowledgedAt: nowIso,
       isRead: true,
-      readAt: new Date().toISOString(),
+      readAt: prev?.readAt || nowIso,
+      userState: "ACKNOWLEDGED",
     }));
 
     try {
-      await acknowledgeAlert(alert.id);
-      NativeAlert.alert("Acknowledged", "Your acknowledgement has been logged for this alert.");
+      const res = await acknowledgeAlert(alert.id);
+      NativeAlert.alert(
+        "Acknowledged",
+        res?.message || "Your acknowledgement has been logged for this alert."
+      );
     } catch (err) {
       // Revert optimistic update on failure
       setAlert(previousAlert);
-      NativeAlert.alert("Error", err.response?.data?.message || err.message || "Could not acknowledge alert.");
+      NativeAlert.alert(
+        "Error",
+        err.response?.data?.message || err.message || "Could not acknowledge alert."
+      );
     } finally {
       setAcknowledging(false);
     }
@@ -394,6 +413,11 @@ export default function AlertDetailsScreen({ route, navigation }) {
               Last updated: {formatAlertDetailTime(alert.updatedAt)}
             </Text>
           )}
+          {alert.acknowledgedAt && (
+            <Text style={[styles.muted, { fontSize: 12, color: colors.green, fontWeight: "600" }]}>
+              Acknowledged: {formatAlertDetailTime(alert.acknowledgedAt)}
+            </Text>
+          )}
         </View>
       </View>
 
@@ -549,17 +573,47 @@ export default function AlertDetailsScreen({ route, navigation }) {
         </View>
       </View>
 
+      {/* Acknowledged State Feedback Banner */}
+      {isAck && (
+        <View
+          style={{
+            backgroundColor: "#f0fdf4",
+            borderColor: "#86efac",
+            borderWidth: 1,
+            borderRadius: 10,
+            padding: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <Ionicons name="checkmark-done-circle" size={24} color="#16a34a" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#166534" }}>
+              SAFETY INSTRUCTIONS ACKNOWLEDGED
+            </Text>
+            <Text style={{ fontSize: 12, color: "#15803d" }}>
+              {alert.acknowledgedAt
+                ? `You confirmed understanding on ${formatAlertDetailTime(alert.acknowledgedAt)}.`
+                : "You have confirmed and logged understanding of these safety instructions."}
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Bottom Actions: Share & Acknowledge */}
       <View style={{ gap: 10, paddingBottom: 24, marginTop: 8 }}>
         <Button
           title={
             isResolved
               ? "Alert Resolved (No Action Needed)"
+              : isExpired
+              ? "Notice Expired"
               : isAck
               ? "✓ Alert Acknowledged"
               : "Acknowledge This Alert"
           }
-          disabled={isAck || isResolved || acknowledging}
+          disabled={isAck || isResolved || isExpired || acknowledging}
           loading={acknowledging}
           onPress={handleAcknowledge}
         />
