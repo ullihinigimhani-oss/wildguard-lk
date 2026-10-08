@@ -139,6 +139,16 @@ describe("Community Report APIs", () => {
       expect(res.body.errors.description).toBe("Provide a description of at least 5 characters.");
     });
 
+    test("rejects whitespace-only description", async () => {
+      const res = await request(app)
+        .post("/api/community-reports")
+        .send(validReportPayload({ description: "     " }))
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.errors.description).toBe("Provide a description of at least 5 characters.");
+    });
+
     test("rejects when both manualLocation and GPS coordinates are missing", async () => {
       const res = await request(app)
         .post("/api/community-reports")
@@ -147,6 +157,27 @@ describe("Community Report APIs", () => {
 
       expect(res.body.success).toBe(false);
       expect(res.body.errors.location).toBe("Provide a location description or GPS coordinates.");
+    });
+
+    test("rejects partial coordinates when latitude is provided without longitude", async () => {
+      const res = await request(app)
+        .post("/api/community-reports")
+        .send(validReportPayload({ manualLocation: "Village Sector 3", latitude: 6.543, longitude: undefined }))
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.errors.longitude).toBe("Longitude is required when latitude is provided.");
+    });
+
+    test("rejects out of range GPS coordinates", async () => {
+      const res = await request(app)
+        .post("/api/community-reports")
+        .send(validReportPayload({ manualLocation: "Village Sector 3", latitude: 95.0, longitude: -190.0 }))
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.errors.latitude).toBe("Latitude must be a valid number between -90 and 90.");
+      expect(res.body.errors.longitude).toBe("Longitude must be a valid number between -180 and 180.");
     });
 
     test("accepts valid GPS coordinates without manual location", async () => {

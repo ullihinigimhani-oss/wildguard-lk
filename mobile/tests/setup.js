@@ -7,3 +7,14 @@ jest.mock(
   () => ({ WebView: require("react-native").View }),
   { virtual: true },
 );
+jest.mock(
+  "@expo/vector-icons/Ionicons",
+  () => {
+    const React = require("react");
+    const { Text } = require("react-native");
+    return function MockIonicons(props) {
+      return <Text {...props}>{props.name}</Text>;
+    };
+  },
+  { virtual: true },
+);

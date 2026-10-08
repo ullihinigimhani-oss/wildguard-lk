@@ -115,7 +115,7 @@ export default function CommunityReportScreen({ navigation, route }) {
       parseFloat(lonTrim) >= -180 &&
       parseFloat(lonTrim) <= 180;
 
-    if (!hasManualLoc && !hasValidCoords) {
+    if (!hasManualLoc && !hasValidCoords && !errs.latitude && !errs.longitude) {
       errs.location = "Provide a location description or GPS coordinates.";
     }
 
@@ -393,7 +393,7 @@ export default function CommunityReportScreen({ navigation, route }) {
         onChangeManualLocation={setManualLocation}
         onChangeLatitude={setLatitude}
         onChangeLongitude={setLongitude}
-        error={errors.location || errors.manualLocation || errors.latitude || errors.longitude}
+        error={errors.latitude || errors.longitude || errors.manualLocation || errors.location}
         disabled={submitting}
       />
 
