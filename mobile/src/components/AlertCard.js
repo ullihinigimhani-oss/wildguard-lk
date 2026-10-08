@@ -35,6 +35,31 @@ const RISK_CONFIG = {
   },
 };
 
+export function formatAlertDate(dateString) {
+  if (!dateString) return "Date not recorded";
+  const parsed = new Date(dateString);
+  if (isNaN(parsed.getTime())) return "Date not recorded";
+  return parsed.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function formatAffectedArea(alert) {
+  if (!alert) return "Unspecified Perimeter";
+  if (alert.affectedArea) return alert.affectedArea;
+  if (alert.riskZone?.name) {
+    const park = alert.riskZone.park?.name ? ` (${alert.riskZone.park.name})` : "";
+    return `${alert.riskZone.name}${park}`;
+  }
+  if (alert.riskZone?.centerLatitude && alert.riskZone?.centerLongitude) {
+    return `GPS: ${alert.riskZone.centerLatitude.toFixed(4)}, ${alert.riskZone.centerLongitude.toFixed(4)}`;
+  }
+  return "General Buffer Perimeter";
+}
+
 export default function AlertCard({
   alert,
   onPress,
@@ -42,21 +67,18 @@ export default function AlertCard({
   acknowledging = false,
 }) {
   const risk = RISK_CONFIG[alert.riskLevel] || RISK_CONFIG.MEDIUM;
-  const isAck = alert.isAcknowledged;
+  const isAck = Boolean(alert.isAcknowledged || alert.isRead);
+  const isResolved = alert.status === "RESOLVED";
 
-  const dateStr = alert.generatedAt
-    ? new Date(alert.generatedAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        day: "numeric",
-        month: "short",
-      })
-    : "";
+  const dateStr = formatAlertDate(alert.generatedAt || alert.createdAt);
+  const areaStr = formatAffectedArea(alert);
+  const titleStr = alert.title || `${alert.riskLevel} Wildlife Alert`;
+  const messageStr = alert.shortMessage || alert.message;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Alert: ${alert.riskLevel} - ${alert.message}`}
+      accessibilityLabel={`Alert: ${alert.riskLevel} - ${titleStr}`}
       onPress={onPress}
       style={({ pressed }) => ({
         backgroundColor: colors.white,
@@ -73,53 +95,137 @@ export default function AlertCard({
         elevation: 2,
       })}
     >
+      {/* Top Header: Severity Pill + Unread Badge + Date */}
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            paddingHorizontal: 8,
-            paddingVertical: 3,
-            borderRadius: 6,
-            backgroundColor: risk.bg,
-            borderWidth: 1,
-            borderColor: risk.border,
-          }}
-        >
-          <Ionicons name={risk.icon} size={13} color={risk.text} />
-          <Text style={{ fontSize: 11, fontWeight: "700", color: risk.text, letterSpacing: 0.5 }}>
-            {alert.riskLevel} ALERT
-          </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 5,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 6,
+              backgroundColor: risk.bg,
+              borderWidth: 1,
+              borderColor: risk.border,
+            }}
+          >
+            <Ionicons name={risk.icon} size={13} color={risk.text} />
+            <Text style={{ fontSize: 11, fontWeight: "700", color: risk.text, letterSpacing: 0.5 }}>
+              {alert.riskLevel} ALERT
+            </Text>
+          </View>
+
+          {isResolved ? (
+            <View
+              style={{
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 4,
+                backgroundColor: "#f1f5f9",
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#475569" }}>RESOLVED</Text>
+            </View>
+          ) : !isAck ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 4,
+                backgroundColor: "#fee2e2",
+              }}
+            >
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#dc2626" }} />
+              <Text style={{ fontSize: 10, fontWeight: "800", color: "#b91c1c" }}>UNREAD</Text>
+            </View>
+          ) : (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 4,
+                backgroundColor: colors.cream,
+              }}
+            >
+              <Ionicons name="checkmark" size={11} color={colors.green} />
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.green }}>READ</Text>
+            </View>
+          )}
         </View>
 
         <Text style={{ fontSize: 12, color: colors.muted }}>{dateStr}</Text>
       </View>
 
-      <Text style={{ fontSize: 15, fontWeight: "600", color: colors.text, lineHeight: 21 }}>
-        {alert.message}
+      {/* Title */}
+      <Text style={{ fontSize: 16, fontWeight: "700", color: colors.dark, lineHeight: 22 }}>
+        {titleStr}
       </Text>
 
-      {(alert.animal?.species || alert.riskZone?.name) && (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-          {alert.animal?.species && (
-            <View style={{ backgroundColor: colors.cream, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 }}>
-              <Text style={{ fontSize: 11, color: colors.green, fontWeight: "600" }}>
-                {alert.animal.species}
-              </Text>
-            </View>
-          )}
-          {alert.riskZone?.name && (
-            <View style={{ backgroundColor: "#f1f5f9", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 }}>
-              <Text style={{ fontSize: 11, color: "#475569", fontWeight: "600" }}>
-                {alert.riskZone.name}
-              </Text>
-            </View>
-          )}
-        </View>
-      )}
+      {/* Message / Short Message */}
+      <Text style={{ fontSize: 14, color: colors.text, lineHeight: 20 }}>
+        {messageStr}
+      </Text>
 
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, borderTopColor: "#f1f5f9", paddingTop: 10 }}>
+      {/* Affected Area & Wildlife Tags */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            backgroundColor: "#f8fafc",
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Ionicons name="location-sharp" size={12} color={colors.green} />
+          <Text style={{ fontSize: 11, color: colors.dark, fontWeight: "600" }}>
+            {areaStr}
+          </Text>
+        </View>
+
+        {alert.animal?.species && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              backgroundColor: colors.cream,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 6,
+            }}
+          >
+            <Ionicons name="paw" size={11} color={colors.green} />
+            <Text style={{ fontSize: 11, color: colors.green, fontWeight: "600" }}>
+              {alert.animal.species}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Bottom Actions: Safety Guidance & Acknowledge */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderTopWidth: 1,
+          borderTopColor: "#f1f5f9",
+          paddingTop: 10,
+        }}
+      >
         <Pressable
           accessibilityRole="button"
           onPress={onPress}
@@ -129,37 +235,35 @@ export default function AlertCard({
           <Ionicons name="chevron-forward" size={14} color={colors.green} />
         </Pressable>
 
-        {onAcknowledge && (
-          isAck ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Ionicons name="checkmark-circle" size={15} color={colors.green} />
-              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.green }}>Acknowledged</Text>
-            </View>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Acknowledge alert"
-              disabled={acknowledging}
-              onPress={onAcknowledge}
-              style={{
-                backgroundColor: colors.cream,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-            >
-              {acknowledging ? (
-                <ActivityIndicator size="small" color={colors.green} />
-              ) : (
-                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.green }}>
-                  Acknowledge
-                </Text>
-              )}
-            </Pressable>
-          )
-        )}
+        {isAck ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Ionicons name="checkmark-circle" size={16} color={colors.green} />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: colors.green }}>Acknowledged</Text>
+          </View>
+        ) : onAcknowledge ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Acknowledge alert"
+            disabled={acknowledging}
+            onPress={onAcknowledge}
+            style={{
+              backgroundColor: colors.cream,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            {acknowledging ? (
+              <ActivityIndicator size="small" color={colors.green} />
+            ) : (
+              <Text style={{ fontSize: 12, fontWeight: "700", color: colors.green }}>
+                Acknowledge
+              </Text>
+            )}
+          </Pressable>
+        ) : null}
       </View>
     </Pressable>
   );

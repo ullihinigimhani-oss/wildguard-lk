@@ -1,4 +1,4 @@
-import React, { useMemo, useContext } from "react";
+import React, { useMemo, useContext, useState, useEffect } from "react";
 import { ActivityIndicator, StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
@@ -67,16 +67,28 @@ export default function App() {
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
   });
+  const [fontTimeout, setFontTimeout] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFontTimeout(true);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const ready = Boolean(fontsLoaded || fontError || fontTimeout);
+
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="dark-content" />
-      {!fontsLoaded && !fontError ? (
+      {!ready ? (
         <ActivityIndicator
           style={{ flex: 1 }}
+          color="#245b44"
           accessibilityLabel="Loading app"
         />
       ) : (
-        <TypographyContext.Provider value={fontsLoaded}>
+        <TypographyContext.Provider value={Boolean(fontsLoaded)}>
           <OnboardingProvider>
             <AuthProvider>
               <AppNavigation />

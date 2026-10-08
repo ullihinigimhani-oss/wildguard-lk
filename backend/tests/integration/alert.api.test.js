@@ -82,6 +82,9 @@ describe("Safety Alert APIs", () => {
 
       expect(res.body.success).toBe(true);
       expect(res.body.alerts).toHaveLength(2);
+      expect(res.body.alerts[0].title).toContain("CRITICAL Wildlife Alert");
+      expect(res.body.alerts[0].affectedArea).toContain("Sector 3 Buffer");
+      expect(res.body.alerts[0].shortMessage).toBeDefined();
       expect(res.body.alerts[0].safetyInstructions).toBeDefined();
       expect(Array.isArray(res.body.alerts[0].safetyInstructions)).toBe(true);
       expect(res.body.alerts[0].isAcknowledged).toBe(false);
@@ -99,6 +102,14 @@ describe("Safety Alert APIs", () => {
       expect(res.body.alerts[1].isAcknowledged).toBe(false);
     });
 
+    test("accepts status=HISTORY filter and status=RESOLVED filter", async () => {
+      const resHistory = await request(app).get("/api/alerts?status=HISTORY").expect(200);
+      expect(resHistory.body.success).toBe(true);
+
+      const resResolved = await request(app).get("/api/alerts?status=RESOLVED").expect(200);
+      expect(resResolved.body.success).toBe(true);
+    });
+
     test("rejects invalid riskLevel filter with 400", async () => {
       const res = await request(app).get("/api/alerts?riskLevel=EXTREME").expect(400);
       expect(res.body.success).toBe(false);
@@ -112,20 +123,181 @@ describe("Safety Alert APIs", () => {
       await request(app).get("/api/alerts/nonexistent").expect(404);
     });
 
-    test("returns alert details with safety instructions", async () => {
+    test("rejects invalid alert ID format with 400", async () => {
+      const res = await request(app).get("/api/alerts/%20%20").expect(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Invalid alert ID format.");
+    });
+
+    test("returns sanitized alert details with instructions, location coordinates, and no leaked user IDs", async () => {
       db.alert.findUnique.mockResolvedValue({
         id: "alert-1",
         riskLevel: "CRITICAL",
-        message: "Elephant herd spotted.",
+        message: "Elephant herd spotted near southern boundary.",
         status: "ACTIVE",
-        animal: { species: "Elephas maximus" },
-        acknowledgements: [],
+        generatedAt: new Date(),
+        updatedAt: new Date(),
+        animal: { species: "Elephas maximus", animalCode: "ELE-01", name: "Raja" },
+        riskZone: {
+          id: "zone-1",
+          name: "Sector 3 Buffer",
+          centerLatitude: 6.35,
+          centerLongitude: 81.42,
+          radiusMeters: 500,
+          park: { id: "park-1", name: "Yala" },
+        },
+        acknowledgements: [{ userId: "secret-user-99", acknowledgedAt: new Date() }],
       });
 
       const res = await request(app).get("/api/alerts/alert-1").expect(200);
       expect(res.body.success).toBe(true);
       expect(res.body.alert.id).toBe("alert-1");
-      expect(res.body.alert.safetyInstructions).toBeDefined();
+      expect(res.body.alert.title).toContain("CRITICAL Wildlife Alert");
+      expect(res.body.alert.alertType).toBe("WILDLIFE_PROXIMITY");
+      expect(res.body.alert.severity).toBe("CRITICAL");
+      expect(res.body.alert.location.hasCoordinates).toBe(true);
+      expect(res.body.alert.location.latitude).toBe(6.35);
+      expect(res.body.alert.location.longitude).toBe(81.42);
+      expect(res.body.alert.location.radiusMeters).toBe(500);
+
+      // Verify sanitization: no raw acknowledgements or secret user IDs leaked
+      expect(res.body.alert.acknowledgements).toBeUndefined();
+      expect(res.body.alert.acknowledgementCount).toBe(1);
+
+      // Verify clear, readable safety instructions
+      expect(Array.isArray(res.body.alert.safetyInstructions)).toBe(true);
+      const instructionsText = res.body.alert.safetyInstructions.join(" ");
+      expect(instructionsText).toContain("Stay away from the affected perimeter area");
+      expect(instructionsText).toContain("Do not approach");
+      expect(instructionsText).toContain("Keep children");
+      expect(instructionsText).toContain("Sector 3 Buffer");
+    });
+
+    test("returns resolved alert details with isResolved=true and resolvedAt", async () => {
+      const resolvedDate = new Date();
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-resolved",
+        riskLevel: "MEDIUM",
+        message: "Deer herd moved back into core sanctuary.",
+        status: "RESOLVED",
+        resolvedAt: resolvedDate,
+        acknowledgements: [],
+      });
+
+      const res = await request(app).get("/api/alerts/alert-resolved").expect(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.alert.status).toBe("RESOLVED");
+      expect(res.body.alert.isResolved).toBe(true);
+      expect(res.body.alert.isExpired).toBe(true);
+    });
+  });
+
+  describe("GET /api/alerts/unread-count (Unread Counter)", () => {
+    test("returns active unread count for unauthenticated visitor", async () => {
+      db.alert.count.mockResolvedValue(2);
+      const res = await request(app).get("/api/alerts/unread-count").expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.unreadCount).toBe(2);
+      expect(res.headers["cache-control"]).toBe("no-store");
+    });
+
+    test("computes user-specific unread count excluding acknowledged alerts", async () => {
+      db.alert.count.mockResolvedValue(1);
+      const res = await request(app)
+        .get("/api/alerts/unread-count")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.unreadCount).toBe(1);
+      expect(db.alert.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: "ACTIVE",
+            acknowledgements: { none: { userId: "user-1" } },
+          }),
+        })
+      );
+    });
+  });
+
+  describe("POST /api/alerts/:id/read (Mark as Read - User-Specific)", () => {
+    test("rejects unauthenticated request with 401", async () => {
+      await request(app).post("/api/alerts/alert-1/read").expect(401);
+      expect(db.alertAcknowledgement.upsert).not.toHaveBeenCalled();
+    });
+
+    test("rejects invalid alert ID with 400", async () => {
+      const res = await request(app)
+        .post("/api/alerts/%20%20/read")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Invalid alert ID format.");
+    });
+
+    test("persists user-specific read receipt without modifying global alert status", async () => {
+      db.alert.findUnique.mockResolvedValue({ id: "alert-1", status: "ACTIVE" });
+      const now = new Date();
+      db.alertAcknowledgement.upsert.mockResolvedValue({
+        id: "ack-1",
+        alertId: "alert-1",
+        userId: "user-1",
+        acknowledgedAt: now,
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/read")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toBe("Alert marked as read.");
+      expect(res.body.isRead).toBe(true);
+      expect(res.body.alertId).toBe("alert-1");
+      expect(res.body.userId).toBe("user-1");
+      expect(res.body.readAt).toBeDefined();
+
+      // Confirms user-specific isolation: global alert table is NOT updated
+      expect(db.alert.update).not.toHaveBeenCalled();
+
+      // Confirms unique upsert pattern prevents duplicate records
+      expect(db.alertAcknowledgement.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { alertId_userId: { alertId: "alert-1", userId: "user-1" } },
+        })
+      );
+    });
+
+    test("returns 404 for nonexistent alert", async () => {
+      db.alert.findUnique.mockResolvedValue(null);
+
+      await request(app)
+        .post("/api/alerts/missing/read")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(404);
+    });
+  });
+
+  describe("POST /api/alerts/read-all (Mark All As Read)", () => {
+    test("rejects unauthenticated request with 401", async () => {
+      await request(app).post("/api/alerts/read-all").expect(401);
+    });
+
+    test("marks all active alerts as read for user", async () => {
+      db.alert.findMany.mockResolvedValue([{ id: "alert-1" }, { id: "alert-2" }]);
+      db.alertAcknowledgement.upsert.mockResolvedValue({ id: "ack" });
+
+      const res = await request(app)
+        .post("/api/alerts/read-all")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toBe("All active alerts marked as read.");
+      expect(db.alertAcknowledgement.upsert).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -151,6 +323,7 @@ describe("Safety Alert APIs", () => {
 
       expect(res.body.success).toBe(true);
       expect(res.body.message).toBe("Alert acknowledged successfully.");
+      expect(res.body.isRead).toBe(true);
       expect(db.alertAcknowledgement.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { alertId_userId: { alertId: "alert-1", userId: "user-1" } },

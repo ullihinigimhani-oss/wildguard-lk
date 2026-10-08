@@ -39,4 +39,7 @@ router.post("/:id/evidence", optionalAuth, controller.attachEvidence);
 // 7. Liaison & Manager update report status
 router.patch("/:id/status", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.updateStatus);
 
+// 8. Liaison & Manager escalate community report for operational response
+router.post("/:id/escalate", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.escalateReport);
+
 module.exports = router;

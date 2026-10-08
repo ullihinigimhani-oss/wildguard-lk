@@ -24,9 +24,36 @@ exports.getAlertById = async (req, res, next) => {
   }
 };
 
+exports.getUnreadCount = async (req, res, next) => {
+  try {
+    const result = await service.getUnreadCount(req.user || null);
+    res.set("Cache-Control", "no-store").json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.acknowledgeAlert = async (req, res, next) => {
   try {
     const result = await service.acknowledgeAlert(req.params.id, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.markAsRead = async (req, res, next) => {
+  try {
+    const result = await service.markAsRead(req.params.id, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.markAllAsRead = async (req, res, next) => {
+  try {
+    const result = await service.markAllAsRead(req.user);
     res.json(result);
   } catch (error) {
     next(error);
