@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, View } from "react-native";
+import { Image, Pressable, View } from "react-native";
 import { Text } from "../../components/common/Typography";
 import Feather from "@expo/vector-icons/Feather";
 import {
@@ -17,6 +17,7 @@ export default function DashboardPatrolCard({ patrol, now, onPress }) {
     secondary = active ? c.onForest : c.muted;
   return (
     <View style={[s.card, active && s.activeCard]}>
+      {active && <Image accessible={false} source={require("../../../assets/images/onboarding-ranger.jpg")} resizeMode="cover" style={{ height: 120, width: "100%", borderRadius: 16 }} />}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
         {state.badges.map((badge) => (
           <View

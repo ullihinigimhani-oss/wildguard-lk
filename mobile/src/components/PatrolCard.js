@@ -2,7 +2,7 @@ import React from "react";
 import { View } from "react-native";
 import { Text } from "./common/Typography";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { styles, colors } from "../constants/theme";
+import { styles, colors } from "../constants/rangerTheme";
 import { rangerStyles as ui } from "../constants/rangerTheme";
 import { patrolDate, patrolTime, classifyPatrol } from "../utils/rangerPatrol";
 export const patrolTypes = {

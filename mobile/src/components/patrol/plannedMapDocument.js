@@ -1,6 +1,6 @@
 // Leaflet runs inside an isolated map document, not directly in React Native.
 // Only validated presentation data enters this document. No session or ORS secret.
-export function buildPlannedMapDocument(points, segments, live = false) {
+export function buildPlannedMapDocument(points, segments, live = false, previewTrail = []) {
   const mapPoints = points.map(
     ({
       type,
@@ -25,6 +25,7 @@ export function buildPlannedMapDocument(points, segments, live = false) {
     }),
   );
   const data = JSON.stringify({
+    trail: previewTrail.map(({ latitude, longitude }) => ({ latitude, longitude })),
     points: mapPoints,
     segments: segments.map((segment) =>
       segment.map((point) => [point.latitude, point.longitude]),
@@ -55,7 +56,7 @@ export function buildPlannedMapDocument(points, segments, live = false) {
   (function(){try{
     if(typeof L==='undefined'){mapFailure();return;}
     var data=${data};
-    if(!data.points.length){document.getElementById('status').textContent='No planned route points are available.';notify('map-error');return;}
+    if(!data.points.length && !data.trail.length){document.getElementById('status').textContent='No planned route points are available.';notify('map-error');return;}
     var map=L.map('map',{zoomControl:true,scrollWheelZoom:false});
     var plannedLayer=L.layerGroup().addTo(map);
     map.createPane('riskAreas');map.getPane('riskAreas').style.zIndex=350;
@@ -109,6 +110,7 @@ export function buildPlannedMapDocument(points, segments, live = false) {
     tiles.on('tileerror',function(){failedTiles=true;document.getElementById('status').hidden=false;document.getElementById('status').textContent='Map tiles are unavailable. Saved route points remain visible.';notify('tile-error');});
     tiles.on('load',function(){if(!failedTiles){document.getElementById('status').hidden=true;notify('tiles-ready');}});
     if(!live)data.segments.forEach(function(segment){if(segment.length>1)L.polyline(segment,{color:'#245b44',weight:4,dashArray:'8 6'}).addTo(plannedLayer);});
+    if(!live && data.trail.length>1)L.polyline(data.trail.map(function(p){return[p.latitude,p.longitude];}),{color:'#c76b19',weight:3}).addTo(actualLayer);
     data.points.forEach(function(point){
       var iconNode=document.createElement('span');iconNode.className='point-marker point-'+point.type.toLowerCase();iconNode.style.backgroundColor=point.color;iconNode.textContent=point.symbol;
       var marker=L.marker([point.latitude,point.longitude],{icon:L.divIcon({html:iconNode,className:'planned-marker',iconSize:[32,32],iconAnchor:[16,16]}),title:(point.order+1)+'. '+point.typeLabel+': '+point.label,keyboard:true}).addTo(plannedLayer);
@@ -116,7 +118,7 @@ export function buildPlannedMapDocument(points, segments, live = false) {
       if(point.note){var note=document.createElement('div');note.textContent=point.note;note.className='popup-note';popup.appendChild(note);}
       marker.bindPopup(popup);marker.on('click',function(){notify('point-selected',{order:point.order});});
     });
-    function fit(){map.invalidateSize();var positions=live && (activeRoutePositions.length || fullPositions.length)?activeRoutePositions.concat(fullPositions):data.points.map(function(p){return[p.latitude,p.longitude];});if(live && currentPosition)positions.push(currentPosition);if(live && activeDestination)positions.push(activeDestination);if(positions.length===1){map.setView(positions[0],15);}else{map.fitBounds(L.latLngBounds(positions),{padding:[38,38],maxZoom:16});}}
+    function fit(){map.invalidateSize();var positions=live && (activeRoutePositions.length || fullPositions.length)?activeRoutePositions.concat(fullPositions):data.points.map(function(p){return[p.latitude,p.longitude];});if(!live)positions=positions.concat(data.trail.map(function(p){return[p.latitude,p.longitude];}));if(live && currentPosition)positions.push(currentPosition);if(live && activeDestination)positions.push(activeDestination);if(positions.length===1){map.setView(positions[0],15);}else{map.fitBounds(L.latLngBounds(positions),{padding:[38,38],maxZoom:16});}}
     document.getElementById('fit').onclick=fit;fit();
     window.addEventListener('resize',function(){map.invalidateSize();});
     notify('map-ready');

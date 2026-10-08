@@ -8,7 +8,7 @@ import React, {
 import { ActivityIndicator, View } from "react-native";
 import { Text } from "../common/Typography";
 import Button from "../common/Button";
-import { colors, styles } from "../../constants/theme";
+import { colors, styles } from "../../constants/rangerTheme";
 import PatrolMapSurface from "./PatrolMapSurface";
 import { buildPlannedMapDocument } from "./plannedMapDocument";
 
@@ -59,7 +59,7 @@ export default function PatrolRouteMap({
       <View
         style={{
           height: live ? 440 : 360,
-          borderRadius: 16,
+          borderRadius: 24,
           overflow: "hidden",
           borderWidth: 1,
           borderColor: colors.border,
