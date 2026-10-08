@@ -4,10 +4,10 @@ export const time = (value) =>
     ? new Date(value).toLocaleString()
     : "—";
 const statusClass = {
-  PENDING: "badge-scheduled",
-  UNDER_REVIEW: "badge-medium",
-  RESPONDING: "badge-in-progress",
-  RESOLVED: "badge-completed",
+  PENDING: "badge-pending",
+  UNDER_REVIEW: "badge-under-review",
+  VERIFIED: "badge-verified",
+  REJECTED: "badge-rejected",
 };
 export function Status({ incident }) {
   return (

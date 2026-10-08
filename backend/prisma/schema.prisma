@@ -48,8 +48,8 @@ enum PatrolPriority {
 enum IncidentStatus {
   PENDING
   UNDER_REVIEW
-  RESPONDING
-  RESOLVED
+  VERIFIED
+  REJECTED
 }
 
 enum CommunityReportStatus {

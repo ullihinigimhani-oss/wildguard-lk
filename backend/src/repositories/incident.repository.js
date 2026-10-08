@@ -176,3 +176,28 @@ exports.update = async (tx, id, patrolId, reporterId, data) => {
     select: detailSelect
   });
 };
+// Manager review does not touch Patrol, Reporter ownership or the active-patrol
+// lock: a review can happen after the patrol has finished. The guard repeats the
+// withdrawn check so a report withdrawn mid-request is never re-stated.
+exports.setStatus = async (id, status) => db().$transaction(async tx => {
+  const result = await tx.incident.updateMany({
+    where: {
+      id,
+      withdrawnAt: null
+    },
+    data: {
+      status
+    }
+  });
+  if (!result.count) throw incidentError(409, "INCIDENT_CHANGED", "This incident changed. Refresh and try again.");
+  return tx.incident.findFirst({
+    where: {
+      id
+    },
+    select: detailSelect
+  });
+}, {
+  isolationLevel: "ReadCommitted",
+  maxWait: 5000,
+  timeout: 10000
+});

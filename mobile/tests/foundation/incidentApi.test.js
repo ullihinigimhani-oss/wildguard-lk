@@ -84,7 +84,7 @@ test.each(["SCHEDULED", "COMPLETED", "CANCELLED"])(
     ).toBe(false);
   },
 );
-test.each(["UNDER_REVIEW", "RESPONDING", "RESOLVED"])(
+test.each(["UNDER_REVIEW", "VERIFIED", "REJECTED"])(
   "%s review locks editing",
   (status) => expect(canChangeIncident({ ...record, status }, "r")).toBe(false),
 );

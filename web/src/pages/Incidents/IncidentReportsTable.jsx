@@ -1,14 +1,17 @@
 import { Link } from "react-router-dom";
 import { incidentTypes } from "../../services/incidentApi";
 import { Status, time } from "../../components/incident/incidentPresentation";
+import IncidentStatusForm from "../../components/incident/IncidentStatusForm";
 export default function IncidentReportsTable({
   items,
   detailsPath,
   showReporter = false,
+  statusEditor = false,
+  onStatusSaved,
 }) {
   return (
     <div className="table-scroll">
-      <table className="incident-table">
+      <table className={statusEditor ? "incident-table has-status-editor" : "incident-table"}>
         <thead>
           <tr>
             {[
@@ -47,7 +50,7 @@ export default function IncidentReportsTable({
               )}
               <td>{time(item.occurredAt)}</td>
               <td>{item.evidenceCount ?? "—"}</td>
-              <td>
+              <td className="table-actions">
                 <Link
                   className="button"
                   to={detailsPath(item)}
@@ -55,6 +58,13 @@ export default function IncidentReportsTable({
                 >
                   View
                 </Link>
+                {statusEditor && (
+                  <IncidentStatusForm
+                    compact
+                    incident={item}
+                    onSaved={onStatusSaved}
+                  />
+                )}
               </td>
             </tr>
           ))}

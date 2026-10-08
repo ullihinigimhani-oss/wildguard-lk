@@ -38,5 +38,10 @@ router.get(
   controller.details,
 );
 router.patch("/:incidentId", allowRoles("RANGER"), controller.edit);
+router.patch(
+  "/:incidentId/status",
+  allowRoles("PARK_MANAGER"),
+  controller.updateStatus,
+);
 router.post("/:incidentId/withdraw", allowRoles("RANGER"), controller.withdraw);
 module.exports = router;

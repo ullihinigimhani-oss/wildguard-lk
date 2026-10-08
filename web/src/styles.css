@@ -1864,3 +1864,24 @@ td small {
     grid-template-columns: 1fr;
   }
 }
+
+/* Incident review statuses (Park Manager review workflow) */
+.badge-pending {
+  background: #eef1f4;
+  color: #4a5a6a;
+}
+
+.badge-under-review {
+  background: #f7efdd;
+  color: #886829;
+}
+
+.badge-verified {
+  background: #e2f0e5;
+  color: #2f7a4d;
+}
+
+.badge-rejected {
+  background: #f8e8e4;
+  color: #974836;
+}
