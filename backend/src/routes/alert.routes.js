@@ -44,7 +44,13 @@ router.post("/:id/respond", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_
 // 9. Forward alert requiring Ranger / Manager action (Liaison or Manager)
 router.post("/:id/forward", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.forwardAlert);
 
-// 10. Update alert status (Liaison or Manager)
+// 10. Escalate alert to Conservation Operations / Incident Response (Liaison or Manager)
+router.post("/:id/escalate", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.escalateAlert);
+
+// 11. View alert escalation history (Liaison or Manager)
+router.get("/:id/escalations", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.getAlertEscalations);
+
+// 12. Update alert status (Liaison or Manager)
 router.patch("/:id/status", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.updateStatus);
 
 module.exports = router;

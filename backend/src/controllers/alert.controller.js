@@ -103,3 +103,22 @@ exports.forwardAlert = async (req, res, next) => {
   }
 };
 
+exports.escalateAlert = async (req, res, next) => {
+  try {
+    const result = await service.escalateAlert(req.params.id, req.body, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAlertEscalations = async (req, res, next) => {
+  try {
+    const result = await service.getAlertEscalations(req.params.id, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+

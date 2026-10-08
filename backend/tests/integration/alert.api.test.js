@@ -12,6 +12,12 @@ jest.mock("../../src/config/database", () => ({
   alertAcknowledgement: {
     upsert: jest.fn(),
   },
+  alertEscalation: {
+    create: jest.fn(),
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    count: jest.fn(),
+  },
 }));
 
 const db = require("../../src/config/database");
@@ -744,5 +750,276 @@ describe("Safety Alert APIs", () => {
       expect(res.body.message).toContain("already been forwarded to RANGER");
     });
   });
+
+  describe("POST /api/alerts/:id/escalate (High-Priority Alert Escalation)", () => {
+    test("rejects unauthenticated request with 401", async () => {
+      await request(app)
+        .post("/api/alerts/alert-1/escalate")
+        .send({ reason: "Immediate containment required due to herd proximity." })
+        .expect(401);
+    });
+
+    test("forbids COMMUNITY_USER from escalating alerts with 403", async () => {
+      const res = await request(app)
+        .post("/api/alerts/alert-1/escalate")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .send({ reason: "Immediate containment required due to herd proximity." })
+        .expect(403);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("permission");
+    });
+
+    test("returns 404 when alert does not exist", async () => {
+      db.alert.findUnique.mockResolvedValue(null);
+
+      await request(app)
+        .post("/api/alerts/missing/escalate")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ reason: "Immediate containment required due to herd proximity." })
+        .expect(404);
+    });
+
+    test("rejects escalation when alert is RESOLVED with 400", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        riskLevel: "CRITICAL",
+        status: "RESOLVED",
+        resolvedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/escalate")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ reason: "Immediate containment required due to herd proximity." })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Cannot escalate a resolved alert.");
+    });
+
+    test("rejects escalation when alert is expired (>72 hours) with 400", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        riskLevel: "CRITICAL",
+        status: "ACTIVE",
+        generatedAt: new Date(Date.now() - 80 * 60 * 60 * 1000),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/escalate")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ reason: "Immediate containment required due to herd proximity." })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Cannot escalate an expired alert.");
+    });
+
+    test("rejects LOW and MEDIUM severity alerts with 400", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-2",
+        riskLevel: "MEDIUM",
+        status: "ACTIVE",
+        generatedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-2/escalate")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ reason: "Attempting to escalate a medium priority alert." })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Only HIGH or CRITICAL severity alerts can be escalated.");
+    });
+
+    test("rejects escalation when reason is missing or shorter than 10 characters", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        riskLevel: "CRITICAL",
+        status: "ACTIVE",
+        generatedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/escalate")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ reason: "too short" })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("between 10 and 1000 characters");
+    });
+
+    test("allows COMMUNITY_LIAISON to escalate CRITICAL alert with clean incidentHandoff", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        riskLevel: "CRITICAL",
+        status: "ACTIVE",
+        message: "Elephant herd approaching boundary.",
+        generatedAt: new Date(),
+        animal: { id: "anim-1", species: "Elephas maximus", animalCode: "ELE-01", name: "Raja" },
+        riskZone: { name: "Sector 3 Buffer", park: { name: "Yala" } },
+        escalations: [],
+      });
+      db.alertEscalation.findFirst.mockResolvedValue(null);
+
+      const now = new Date();
+      const mockEscalation = {
+        id: "esc-1",
+        alertId: "alert-1",
+        escalatedById: "liaison",
+        reason: "Immediate incident response requested: rogue elephant near community settlement.",
+        priority: "CRITICAL",
+        status: "PENDING",
+        targetDepartment: "INCIDENT_RESPONSE",
+        incidentId: null,
+        escalatedAt: now,
+        escalatedBy: { id: "liaison", name: "Liaison Officer", role: "COMMUNITY_LIAISON" },
+      };
+      db.alertEscalation.create.mockResolvedValue(mockEscalation);
+      db.alert.update.mockResolvedValue({ id: "alert-1", status: "ACKNOWLEDGED" });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/escalate")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({
+          reason: "Immediate incident response requested: rogue elephant near community settlement.",
+          targetDepartment: "INCIDENT_RESPONSE",
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("escalated to INCIDENT_RESPONSE");
+      expect(res.body.escalation.id).toBe("esc-1");
+      expect(res.body.escalation.priority).toBe("CRITICAL");
+
+      // Verify incident handoff contract
+      expect(res.body.incidentHandoff).toBeDefined();
+      expect(res.body.incidentHandoff.escalationId).toBe("esc-1");
+      expect(res.body.incidentHandoff.alertId).toBe("alert-1");
+      expect(res.body.incidentHandoff.urgency).toBe("IMMEDIATE");
+      expect(res.body.incidentHandoff.priority).toBe("CRITICAL");
+      expect(res.body.incidentHandoff.targetDepartment).toBe("INCIDENT_RESPONSE");
+      expect(res.body.incidentHandoff.escalatedBy.role).toBe("COMMUNITY_LIAISON");
+      expect(res.body.incidentHandoff.affectedArea).toContain("Sector 3 Buffer");
+      expect(res.body.incidentHandoff.recommendedOperationalAction).toContain("Immediate field ranger deployment");
+    });
+
+    test("allows PARK_MANAGER to escalate HIGH alert", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-high",
+        riskLevel: "HIGH",
+        status: "ACTIVE",
+        message: "Crocodile spotted near village washing area.",
+        generatedAt: new Date(),
+        riskZone: { name: "River Bank", park: { name: "Wilpattu" } },
+        escalations: [],
+      });
+      db.alertEscalation.findFirst.mockResolvedValue(null);
+
+      const now = new Date();
+      db.alertEscalation.create.mockResolvedValue({
+        id: "esc-2",
+        alertId: "alert-high",
+        escalatedById: "manager",
+        reason: "Crocodile sighting confirmed by villagers; management escalation for perimeter barriers.",
+        priority: "HIGH",
+        status: "PENDING",
+        targetDepartment: "INCIDENT_RESPONSE",
+        escalatedAt: now,
+        escalatedBy: { id: "manager", name: "Park Manager", role: "PARK_MANAGER" },
+      });
+      db.alert.update.mockResolvedValue({ id: "alert-high", status: "ACKNOWLEDGED" });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-high/escalate")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({
+          reason: "Crocodile sighting confirmed by villagers; management escalation for perimeter barriers.",
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.escalation.priority).toBe("HIGH");
+      expect(res.body.incidentHandoff.urgency).toBe("HIGH");
+    });
+
+    test("detects duplicate active escalation and returns alreadyEscalated: true", async () => {
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-1",
+        riskLevel: "CRITICAL",
+        status: "ACKNOWLEDGED",
+        generatedAt: new Date(),
+        escalations: [],
+      });
+
+      const existingActive = {
+        id: "esc-existing",
+        alertId: "alert-1",
+        status: "PENDING",
+        reason: "Existing active escalation in progress.",
+        priority: "CRITICAL",
+        escalatedAt: new Date(),
+        escalatedBy: { id: "liaison", name: "Liaison Officer", role: "COMMUNITY_LIAISON" },
+      };
+      db.alertEscalation.findFirst.mockResolvedValue(existingActive);
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/escalate")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({
+          reason: "Attempting duplicate escalation while one is already active.",
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.alreadyEscalated).toBe(true);
+      expect(res.body.message).toContain("already has an active escalation");
+      expect(res.body.escalation.id).toBe("esc-existing");
+      expect(db.alertEscalation.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("GET /api/alerts/:id/escalations (View Escalation History)", () => {
+    test("rejects unauthenticated request with 401", async () => {
+      await request(app).get("/api/alerts/alert-1/escalations").expect(401);
+    });
+
+    test("forbids COMMUNITY_USER from viewing escalations with 403", async () => {
+      await request(app)
+        .get("/api/alerts/alert-1/escalations")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(403);
+    });
+
+    test("allows COMMUNITY_LIAISON to retrieve escalation history for alert", async () => {
+      db.alert.findUnique.mockResolvedValue({ id: "alert-1" });
+      db.alertEscalation.findMany.mockResolvedValue([
+        {
+          id: "esc-1",
+          alertId: "alert-1",
+          status: "PENDING",
+          priority: "CRITICAL",
+          reason: "Elephant herd movement.",
+          escalatedAt: new Date(),
+          escalatedBy: { id: "liaison", name: "Liaison Officer", role: "COMMUNITY_LIAISON" },
+        },
+      ]);
+      db.alertEscalation.count.mockResolvedValue(1);
+
+      const res = await request(app)
+        .get("/api/alerts/alert-1/escalations")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.escalations)).toBe(true);
+      expect(res.body.escalations).toHaveLength(1);
+      expect(res.body.escalations[0].status).toBe("PENDING");
+    });
+  });
 });
+
 

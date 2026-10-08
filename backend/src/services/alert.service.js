@@ -159,6 +159,14 @@ function formatAlert(alert, user = null) {
     forwardedAt: alert.forwardedAt || null,
     isResponded: Boolean(alert.respondedAt || alert.responseNote),
     isForwarded: Boolean(alert.forwardedTo),
+    isEscalated: Boolean(
+      alert.escalations?.some((e) => e.status === "PENDING" || e.status === "ACKNOWLEDGED")
+    ),
+    escalation:
+      alert.escalations?.find(
+        (e) => e.status === "PENDING" || e.status === "ACKNOWLEDGED"
+      ) || null,
+    escalationHistory: alert.escalations || [],
   };
 }
 
@@ -519,3 +527,125 @@ exports.forwardAlert = async (alertId, body = {}, user = null) => {
     handoff,
   };
 };
+
+exports.escalateAlert = async (alertId, body = {}, user = null) => {
+  assertAuthorizedRole(user);
+
+  if (!alertId || typeof alertId !== "string" || !alertId.trim()) {
+    throw badRequest("Invalid alert ID format.");
+  }
+
+  const alert = await repository.findAlertById(alertId.trim());
+  if (!alert) throw notFound();
+
+  if (alert.status === "RESOLVED" || alert.resolvedAt) {
+    throw badRequest("Cannot escalate a resolved alert.");
+  }
+
+  const ageMs = Date.now() - new Date(alert.generatedAt || alert.createdAt || Date.now()).getTime();
+  if (ageMs > 72 * 60 * 60 * 1000) {
+    throw badRequest("Cannot escalate an expired alert.");
+  }
+
+  // Permitted severity: only HIGH or CRITICAL alerts
+  const risk = String(alert.riskLevel || "").toUpperCase();
+  if (risk !== "HIGH" && risk !== "CRITICAL") {
+    throw badRequest("Only HIGH or CRITICAL severity alerts can be escalated.");
+  }
+
+  const { reason, targetDepartment = "INCIDENT_RESPONSE", incidentId = null } = body || {};
+
+  if (!reason || typeof reason !== "string") {
+    throw badRequest("Escalation reason is required.");
+  }
+
+  const trimmedReason = reason.trim();
+  if (trimmedReason.length < 10 || trimmedReason.length > 1000) {
+    throw badRequest("Escalation reason must be between 10 and 1000 characters.");
+  }
+
+  // Duplicate active escalation protection
+  const existingActive = await repository.findActiveEscalationByAlertId(alert.id);
+  if (existingActive) {
+    return {
+      success: true,
+      message: "Alert already has an active escalation.",
+      alreadyEscalated: true,
+      escalation: existingActive,
+      alert: formatAlert(alert, user),
+    };
+  }
+
+  const escalation = await repository.createAlertEscalation({
+    alertId: alert.id,
+    escalatedById: user.id,
+    reason: trimmedReason,
+    priority: alert.riskLevel,
+    targetDepartment: (targetDepartment && String(targetDepartment).trim()) || "INCIDENT_RESPONSE",
+    incidentId: incidentId ? String(incidentId).trim() : null,
+  });
+
+  // Automatically acknowledge responsibility if still in ACTIVE state
+  if (alert.status === "ACTIVE") {
+    await repository.updateAlertStatus(alert.id, "ACKNOWLEDGED");
+  }
+
+  const updatedAlert = await repository.findAlertById(alert.id);
+  const formattedAlert = formatAlert(updatedAlert || alert, user);
+
+  // Clean handoff integration point for Chanuka's Conservation Operations & Incident Response
+  const incidentHandoff = {
+    escalationId: escalation.id,
+    alertId: alert.id,
+    priority: alert.riskLevel,
+    urgency: alert.riskLevel === "CRITICAL" ? "IMMEDIATE" : "HIGH",
+    targetDepartment: escalation.targetDepartment,
+    incidentId: escalation.incidentId || null,
+    escalatedBy: {
+      id: user.id,
+      name: user.name || "Authorized Officer",
+      role: user.role,
+    },
+    escalatedAt: escalation.escalatedAt,
+    reason: trimmedReason,
+    affectedArea: formattedAlert.affectedArea,
+    animal: alert.animal
+      ? {
+          id: alert.animal.id,
+          species: alert.animal.species,
+          animalCode: alert.animal.animalCode,
+          name: alert.animal.name,
+        }
+      : null,
+    recommendedOperationalAction:
+      alert.riskLevel === "CRITICAL"
+        ? "Immediate field ranger deployment and emergency incident dispatch."
+        : "Dispatch conflict mitigation patrol to verify community perimeter.",
+  };
+
+  return {
+    success: true,
+    message: `Alert escalated to ${escalation.targetDepartment} successfully.`,
+    escalation,
+    incidentHandoff,
+    alert: formattedAlert,
+  };
+};
+
+exports.getAlertEscalations = async (alertId, user = null) => {
+  assertAuthorizedRole(user);
+
+  if (!alertId || typeof alertId !== "string" || !alertId.trim()) {
+    throw badRequest("Invalid alert ID format.");
+  }
+
+  const alert = await repository.findAlertById(alertId.trim());
+  if (!alert) throw notFound();
+
+  const result = await repository.listEscalations({ alertId: alert.id });
+  return {
+    success: true,
+    ...result,
+  };
+};
+

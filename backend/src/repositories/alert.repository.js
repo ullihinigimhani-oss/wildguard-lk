@@ -53,6 +53,27 @@ const alertSelect = {
   },
   forwardedTo: true,
   forwardedAt: true,
+  escalations: {
+    select: {
+      id: true,
+      reason: true,
+      status: true,
+      priority: true,
+      targetDepartment: true,
+      incidentId: true,
+      escalatedAt: true,
+      resolvedAt: true,
+      escalatedById: true,
+      escalator: {
+        select: {
+          id: true,
+          name: true,
+          role: true,
+        },
+      },
+    },
+    orderBy: { escalatedAt: "desc" },
+  },
   createdAt: true,
   updatedAt: true,
 };
@@ -250,4 +271,87 @@ exports.respondToAlert = async (id, { status, responseNote, respondedById, forwa
     },
     select: alertSelect,
   });
+};
+
+exports.createAlertEscalation = async ({
+  alertId,
+  escalatedById,
+  reason,
+  status = "PENDING",
+  priority,
+  targetDepartment = "INCIDENT_RESPONSE",
+  incidentId = null,
+}) => {
+  return db().alertEscalation.create({
+    data: {
+      alertId,
+      escalatedById,
+      reason,
+      status,
+      priority,
+      targetDepartment,
+      incidentId,
+    },
+    include: {
+      escalator: {
+        select: { id: true, name: true, role: true },
+      },
+      alert: {
+        select: {
+          id: true,
+          riskLevel: true,
+          message: true,
+          status: true,
+        },
+      },
+    },
+  });
+};
+
+exports.findActiveEscalationByAlertId = async (alertId) => {
+  return db().alertEscalation.findFirst({
+    where: {
+      alertId,
+      status: { in: ["PENDING", "ACKNOWLEDGED"] },
+    },
+    include: {
+      escalator: {
+        select: { id: true, name: true, role: true },
+      },
+    },
+    orderBy: { escalatedAt: "desc" },
+  });
+};
+
+exports.listEscalations = async ({ alertId, status, page = 1, pageSize = 20 } = {}) => {
+  const where = {
+    ...(alertId && { alertId }),
+    ...(status && { status }),
+  };
+  const skip = (Number(page) - 1) * Number(pageSize);
+  const take = Number(pageSize);
+
+  const [escalations, total] = await Promise.all([
+    db().alertEscalation.findMany({
+      where,
+      include: {
+        escalator: { select: { id: true, name: true, role: true } },
+        alert: {
+          select: {
+            id: true,
+            riskLevel: true,
+            message: true,
+            status: true,
+            riskZone: { select: { name: true, park: { select: { name: true } } } },
+          },
+        },
+      },
+      orderBy: { escalatedAt: "desc" },
+      skip,
+      take,
+    }),
+    db().alertEscalation.count({ where }),
+  ]);
+
+  return { escalations, total, page: Number(page), pageSize: Number(pageSize) };
 };

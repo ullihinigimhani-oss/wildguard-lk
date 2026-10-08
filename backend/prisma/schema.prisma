@@ -81,6 +81,13 @@ enum SyncStatus {
   FAILED
 }
 
+enum EscalationStatus {
+  PENDING
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
 // ======================================================
 // USERS & PARKS
 // ======================================================
@@ -113,6 +120,7 @@ model User {
 
   alertAcknowledgements AlertAcknowledgement[]
   respondedAlerts       Alert[]                @relation("AlertResponses")
+  alertEscalations      AlertEscalation[]      @relation("AlertEscalations")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -252,6 +260,7 @@ model Incident {
   patrol   Patrol? @relation(fields: [patrolId], references: [id])
 
   evidence IncidentEvidence[]
+  escalatedAlerts AlertEscalation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -434,6 +443,7 @@ model Alert {
   riskZone   RiskZone @relation(fields: [riskZoneId], references: [id])
 
   acknowledgements AlertAcknowledgement[]
+  escalations      AlertEscalation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -457,6 +467,30 @@ model AlertAcknowledgement {
 
   @@unique([alertId, userId])
   @@index([userId])
+}
+
+model AlertEscalation {
+  id               String           @id @default(cuid())
+  alertId          String
+  alert            Alert            @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  escalatedById    String
+  escalator        User             @relation("AlertEscalations", fields: [escalatedById], references: [id])
+  reason           String
+  status           EscalationStatus @default(PENDING)
+  priority         String
+  targetDepartment String           @default("INCIDENT_RESPONSE")
+  incidentId       String?
+  incident         Incident?        @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  escalatedAt      DateTime         @default(now())
+  resolvedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([alertId])
+  @@index([escalatedById])
+  @@index([status])
+  @@index([alertId, status])
 }
 
 // ======================================================
