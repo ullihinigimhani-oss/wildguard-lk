@@ -192,6 +192,115 @@ describe("Safety Alert APIs", () => {
     });
   });
 
+  describe("GET /api/alerts/unread-count (Unread Counter)", () => {
+    test("returns active unread count for unauthenticated visitor", async () => {
+      db.alert.count.mockResolvedValue(2);
+      const res = await request(app).get("/api/alerts/unread-count").expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.unreadCount).toBe(2);
+      expect(res.headers["cache-control"]).toBe("no-store");
+    });
+
+    test("computes user-specific unread count excluding acknowledged alerts", async () => {
+      db.alert.count.mockResolvedValue(1);
+      const res = await request(app)
+        .get("/api/alerts/unread-count")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.unreadCount).toBe(1);
+      expect(db.alert.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: "ACTIVE",
+            acknowledgements: { none: { userId: "user-1" } },
+          }),
+        })
+      );
+    });
+  });
+
+  describe("POST /api/alerts/:id/read (Mark as Read - User-Specific)", () => {
+    test("rejects unauthenticated request with 401", async () => {
+      await request(app).post("/api/alerts/alert-1/read").expect(401);
+      expect(db.alertAcknowledgement.upsert).not.toHaveBeenCalled();
+    });
+
+    test("rejects invalid alert ID with 400", async () => {
+      const res = await request(app)
+        .post("/api/alerts/%20%20/read")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Invalid alert ID format.");
+    });
+
+    test("persists user-specific read receipt without modifying global alert status", async () => {
+      db.alert.findUnique.mockResolvedValue({ id: "alert-1", status: "ACTIVE" });
+      const now = new Date();
+      db.alertAcknowledgement.upsert.mockResolvedValue({
+        id: "ack-1",
+        alertId: "alert-1",
+        userId: "user-1",
+        acknowledgedAt: now,
+      });
+
+      const res = await request(app)
+        .post("/api/alerts/alert-1/read")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toBe("Alert marked as read.");
+      expect(res.body.isRead).toBe(true);
+      expect(res.body.alertId).toBe("alert-1");
+      expect(res.body.userId).toBe("user-1");
+      expect(res.body.readAt).toBeDefined();
+
+      // Confirms user-specific isolation: global alert table is NOT updated
+      expect(db.alert.update).not.toHaveBeenCalled();
+
+      // Confirms unique upsert pattern prevents duplicate records
+      expect(db.alertAcknowledgement.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { alertId_userId: { alertId: "alert-1", userId: "user-1" } },
+        })
+      );
+    });
+
+    test("returns 404 for nonexistent alert", async () => {
+      db.alert.findUnique.mockResolvedValue(null);
+
+      await request(app)
+        .post("/api/alerts/missing/read")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(404);
+    });
+  });
+
+  describe("POST /api/alerts/read-all (Mark All As Read)", () => {
+    test("rejects unauthenticated request with 401", async () => {
+      await request(app).post("/api/alerts/read-all").expect(401);
+    });
+
+    test("marks all active alerts as read for user", async () => {
+      db.alert.findMany.mockResolvedValue([{ id: "alert-1" }, { id: "alert-2" }]);
+      db.alertAcknowledgement.upsert.mockResolvedValue({ id: "ack" });
+
+      const res = await request(app)
+        .post("/api/alerts/read-all")
+        .set("Authorization", `Bearer ${token("user-1")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toBe("All active alerts marked as read.");
+      expect(db.alertAcknowledgement.upsert).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe("POST /api/alerts/:id/acknowledge (Acknowledge Alert)", () => {
     test("rejects unauthenticated request with 401", async () => {
       await request(app).post("/api/alerts/alert-1/acknowledge").expect(401);
@@ -214,6 +323,7 @@ describe("Safety Alert APIs", () => {
 
       expect(res.body.success).toBe(true);
       expect(res.body.message).toBe("Alert acknowledged successfully.");
+      expect(res.body.isRead).toBe(true);
       expect(db.alertAcknowledgement.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { alertId_userId: { alertId: "alert-1", userId: "user-1" } },

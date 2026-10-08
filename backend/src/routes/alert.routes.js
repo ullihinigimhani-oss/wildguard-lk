@@ -20,13 +20,22 @@ const optionalAuth = async (req, res, next) => {
 // 1. View safety alerts feed (public or authenticated)
 router.get("/", optionalAuth, controller.listAlerts);
 
-// 2. View alert details & safety instructions
+// 2. Get unread alert count for user
+router.get("/unread-count", optionalAuth, controller.getUnreadCount);
+
+// 3. Mark all active alerts as read (requires login)
+router.post("/read-all", authenticate, controller.markAllAsRead);
+
+// 4. View alert details & safety instructions
 router.get("/:id", optionalAuth, controller.getAlertById);
 
-// 3. Acknowledge alert (requires login)
+// 5. Mark individual alert as read (requires login)
+router.post("/:id/read", authenticate, controller.markAsRead);
+
+// 6. Acknowledge alert (requires login)
 router.post("/:id/acknowledge", authenticate, controller.acknowledgeAlert);
 
-// 4. Update alert status (Liaison or Manager)
+// 7. Update alert status (Liaison or Manager)
 router.patch("/:id/status", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.updateStatus);
 
 module.exports = router;

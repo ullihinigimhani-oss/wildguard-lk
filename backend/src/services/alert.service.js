@@ -62,9 +62,12 @@ function getSafetyInstructions(riskLevel, species, zoneName) {
 }
 
 function formatAlert(alert, user = null) {
-  const isAcknowledged = user
-    ? alert.acknowledgements?.some((ack) => ack.userId === user.id)
-    : false;
+  const userAck = user
+    ? alert.acknowledgements?.find((ack) => ack.userId === user.id)
+    : null;
+  const isAcknowledged = Boolean(userAck);
+  const isRead = isAcknowledged;
+  const readAt = userAck?.acknowledgedAt || null;
 
   const species = alert.animal?.name || alert.animal?.species;
   const zoneName = alert.riskZone?.name;
@@ -113,7 +116,9 @@ function formatAlert(alert, user = null) {
     location,
     isResolved,
     isExpired,
-    isAcknowledged: Boolean(isAcknowledged),
+    isAcknowledged,
+    isRead,
+    readAt,
     acknowledgementCount: acknowledgements ? acknowledgements.length : 0,
     safetyInstructions: getSafetyInstructions(alert.riskLevel, alert.animal?.species, zoneName),
   };
@@ -142,11 +147,24 @@ exports.listAlerts = async (query = {}, user = null) => {
 
   const alerts = result.alerts.map((a) => formatAlert(a, user));
 
+  const unreadCount = alerts.filter(
+    (a) => !a.isRead && a.status === "ACTIVE"
+  ).length;
+
   return {
     alerts,
     total: result.total,
+    unreadCount,
     page: result.page,
     pageSize: result.pageSize,
+  };
+};
+
+exports.getUnreadCount = async (user = null) => {
+  const count = await repository.countUnreadAlerts(user?.id || null);
+  return {
+    success: true,
+    unreadCount: count,
   };
 };
 
@@ -159,6 +177,36 @@ exports.getAlertDetails = async (id, user = null) => {
   if (!alert) throw notFound();
 
   return formatAlert(alert, user);
+};
+
+exports.markAsRead = async (alertId, user) => {
+  if (!user || !user.id) throw badRequest("User authentication required.");
+  if (!alertId || typeof alertId !== "string" || !alertId.trim()) {
+    throw badRequest("Invalid alert ID format.");
+  }
+
+  const alert = await repository.findAlertById(alertId.trim());
+  if (!alert) throw notFound();
+
+  const receipt = await repository.acknowledgeAlert(alertId.trim(), user.id);
+  return {
+    success: true,
+    message: "Alert marked as read.",
+    alertId: alertId.trim(),
+    userId: user.id,
+    isRead: true,
+    readAt: receipt.acknowledgedAt,
+  };
+};
+
+exports.markAllAsRead = async (user) => {
+  if (!user || !user.id) throw badRequest("User authentication required.");
+  const result = await repository.markAllAsRead(user.id);
+  return {
+    success: true,
+    message: "All active alerts marked as read.",
+    ...result,
+  };
 };
 
 exports.acknowledgeAlert = async (alertId, user) => {
@@ -174,6 +222,10 @@ exports.acknowledgeAlert = async (alertId, user) => {
   return {
     success: true,
     message: "Alert acknowledged successfully.",
+    alertId: alertId.trim(),
+    userId: user.id,
+    isRead: true,
+    readAt: acknowledgement.acknowledgedAt,
     acknowledgement,
   };
 };
