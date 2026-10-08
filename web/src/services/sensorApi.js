@@ -36,4 +36,9 @@ export const getDensityZones = async (startDate, endDate, radius = 300) => {
   return response.data;
 };
 
+export const getAnimalsNearHighRiskZones = async () => {
+  const response = await api.get('/sensors/animals/near-high-risk-zones');
+  return response.data;
+};
+
 export default api;

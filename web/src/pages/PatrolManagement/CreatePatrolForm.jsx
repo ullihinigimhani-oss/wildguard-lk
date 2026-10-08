@@ -11,6 +11,7 @@ import {
   validatePatrol,
 } from "../../constants/patrols";
 import { createPatrol, updatePatrol } from "../../services/patrolApi";
+import usePatrolRouteValidation from '../../hooks/usePatrolRouteValidation';
 const formFields = [
   {
     key: "patrol_title",
@@ -55,6 +56,7 @@ export default function CreatePatrolForm({ onCreated, patrolId, initialValues = 
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const pending = useRef(false);
+  const routeValidation = usePatrolRouteValidation({ park_ranger_area: values.park_ranger_area, plannedRoute: patrolPayload(values).plannedRoute });
   function update(key, value) {
     setValues({ ...values, [key]: value });
   }
@@ -66,6 +68,10 @@ export default function CreatePatrolForm({ onCreated, patrolId, initialValues = 
     setMessage("");
     if (Object.keys(next).length) {
       document.getElementById(Object.keys(next)[0])?.focus();
+      return;
+    }
+    if (!routeValidation.route || routeValidation.loading) {
+      setMessage('Validate the complete walking route before saving this patrol.');
       return;
     }
     pending.current = true;
@@ -82,6 +88,7 @@ export default function CreatePatrolForm({ onCreated, patrolId, initialValues = 
         body?.message ||
           "Unable to save this patrol. Please check your connection and try again.",
       );
+      if (body?.code) routeValidation.invalidate(body);
     } finally {
       pending.current = false;
       setLoading(false);
@@ -206,6 +213,8 @@ export default function CreatePatrolForm({ onCreated, patrolId, initialValues = 
         onChange={(points) => update("plannedRoute", points)}
         disabled={loading}
         error={errors.plannedRoute}
+        validation={routeValidation}
+        canValidate={!!values.park_ranger_area}
       />
       {message && (
         <p role="alert" className="field-error patrol-span">
@@ -218,7 +227,7 @@ export default function CreatePatrolForm({ onCreated, patrolId, initialValues = 
             Cancel
           </Link>
         )}
-        <button className="button primary" disabled={loading}>
+        <button className="button primary" disabled={loading || routeValidation.loading || !routeValidation.route}>
           {loading ? (patrolId ? "Saving changes…" : "Creating patrol…") : (patrolId ? "Save Changes" : "Create Patrol")}
         </button>
         <span className="small muted">

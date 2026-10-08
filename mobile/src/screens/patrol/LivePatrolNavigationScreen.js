@@ -269,7 +269,7 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
                     secondary
                     onPress={full.retry}
                     disabled={
-                      full.loading ||
+                      full.loading || full.waiting ||
                       live.routing ||
                       !live.riskReady ||
                       accessLost

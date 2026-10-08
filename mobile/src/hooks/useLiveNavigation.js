@@ -1,3 +1,4 @@
+import { walkingRouteError } from "../utils/walkingRouteError";
 import { useEffect, useRef, useState } from "react";
 import { pointInGeometry } from "../../../shared/riskGeometry";
 import {
@@ -335,7 +336,7 @@ export default function useLiveNavigation(patrol, points, userId, location) {
           ctx.cancelled = true;
           ctx.controller.abort();
         }
-        const message = [401, 403, 404, 409].includes(status)
+        const message = walkingRouteError(error.response?.data) || ([401, 403, 404, 409].includes(status)
           ? "This patrol is no longer available for navigation. Refresh the patrol."
           : code === "DESTINATION_IN_RISK_ZONE"
             ? "Next patrol point is inside a known high-risk area. Review the planned route and contact the Park Manager."
@@ -354,7 +355,7 @@ export default function useLiveNavigation(patrol, points, userId, location) {
                     ? "No mapped walking route is available. Planned patrol points remain visible."
                     : status === 429
                       ? "Routing request limit reached. Wait a little, then retry."
-                      : "Walking route is currently unavailable. Planned patrol points remain visible.";
+                      : "Walking route is currently unavailable. Planned patrol points remain visible.");
         setState((value) => ({
           ...value,
           route: null,

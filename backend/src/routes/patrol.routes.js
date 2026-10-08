@@ -29,6 +29,7 @@ router.get("/:patrolId/incidents", allowRoles("RANGER", "PARK_MANAGER"), require
 router.post("/:patrolId/incidents", allowRoles("RANGER"), require("../controllers/incident.controller").create);
 router.use(allowRoles("PARK_MANAGER"));
 router.get("/rangers", controller.listAssignableRangers);
+router.post('/validate-route', controller.validateRoute);
 router.post("/", controller.create);
 router.get("/", controller.list);
 router.get("/live", controller.live);

@@ -1,0 +1,164 @@
+{
+  "before": {
+    "Alert": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "AlertAcknowledgement": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "Animal": {
+      "count": 2,
+      "fingerprint": "7ef47bb6accd5beb8e3efa6120071e96"
+    },
+    "AnimalLocation": {
+      "count": 2,
+      "fingerprint": "bc4c0aa65384fc69e716c0fa978d5167"
+    },
+    "CameraTrap": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "CameraTrapImage": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "CommunityReport": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "CommunityReportEvidence": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "Incident": {
+      "count": 2,
+      "fingerprint": "1c5d9119868ddbb7a8b26a4573fc1a28"
+    },
+    "IncidentEvidence": {
+      "count": 1,
+      "fingerprint": "628c041c28f25d287112d84c719a7156"
+    },
+    "Park": {
+      "count": 1,
+      "fingerprint": "ca6097e4f6cd577bd827d81c074b4b6f"
+    },
+    "Patrol": {
+      "count": 1,
+      "fingerprint": "a1d1a7d5cf14c4da39ab5feb063a4de8"
+    },
+    "PatrolLocation": {
+      "count": 17,
+      "fingerprint": "3f15c38a0d8046323d85485fbda01117"
+    },
+    "PatrolWaypoint": {
+      "count": 4,
+      "fingerprint": "e8a437d345d21c6ae71323c4951f2e91"
+    },
+    "RiskZone": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "TrackingCollar": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "User": {
+      "count": 11,
+      "fingerprint": "aca902583cf4215333def50ef6857fed"
+    },
+    "_prisma_migrations": {
+      "count": 9,
+      "fingerprint": "195c5f41f8184106ff52bb03f6323a07"
+    },
+    "OtherPatrolWaypoints": {
+      "count": 3,
+      "fingerprint": "e4ac529c8e398c04e6047e53f7d0223c"
+    }
+  },
+  "after": {
+    "Alert": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "AlertAcknowledgement": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "Animal": {
+      "count": 2,
+      "fingerprint": "7ef47bb6accd5beb8e3efa6120071e96"
+    },
+    "AnimalLocation": {
+      "count": 2,
+      "fingerprint": "bc4c0aa65384fc69e716c0fa978d5167"
+    },
+    "CameraTrap": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "CameraTrapImage": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "CommunityReport": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "CommunityReportEvidence": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "Incident": {
+      "count": 2,
+      "fingerprint": "1c5d9119868ddbb7a8b26a4573fc1a28"
+    },
+    "IncidentEvidence": {
+      "count": 1,
+      "fingerprint": "628c041c28f25d287112d84c719a7156"
+    },
+    "Park": {
+      "count": 1,
+      "fingerprint": "ca6097e4f6cd577bd827d81c074b4b6f"
+    },
+    "Patrol": {
+      "count": 1,
+      "fingerprint": "a1d1a7d5cf14c4da39ab5feb063a4de8"
+    },
+    "PatrolLocation": {
+      "count": 17,
+      "fingerprint": "3f15c38a0d8046323d85485fbda01117"
+    },
+    "PatrolWaypoint": {
+      "count": 4,
+      "fingerprint": "0a2821716ff1a96faaafc0fdc6b9a449"
+    },
+    "RiskZone": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "TrackingCollar": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "User": {
+      "count": 11,
+      "fingerprint": "aca902583cf4215333def50ef6857fed"
+    },
+    "_prisma_migrations": {
+      "count": 9,
+      "fingerprint": "195c5f41f8184106ff52bb03f6323a07"
+    },
+    "OtherPatrolWaypoints": {
+      "count": 3,
+      "fingerprint": "e4ac529c8e398c04e6047e53f7d0223c"
+    }
+  },
+  "savedStart": {
+    "id": "cmuzp56z7000nrgn3cx1s0j10",
+    "latitude": 6.582579,
+    "longitude": 79.959617
+  },
+  "onlyApprovedFieldsChanged": true
+}

@@ -2,6 +2,7 @@ jest.mock("../../../src/config/environment", () => ({
   ORS_API_KEY: "isolated-test-key-not-real",
   ORS_BASE_URL: "https://api.heigit.org",
 }));
+jest.mock('../../../src/services/riskZone.service', () => ({ forPark: jest.fn().mockResolvedValue([]) }));
 let ors;
 const input = () => ({
   rangerId: "a",
@@ -358,16 +359,37 @@ test("full patrol uses one ordered multi-coordinate walking request with avoidan
   expect(JSON.stringify(result)).not.toContain("isolated-test-key");
   expect(fetch).toHaveBeenCalledTimes(1);
 });
-test("full cache is independent of live cache, coalesces duplicates, and shares cooldown", async () => {
+test("full cache coalesces duplicates and allows a distinct blue startup request", async () => {
   mockFull();
   const first = ors.walkingRoute(fullInput()),
     second = ors.walkingRoute(fullInput());
   expect(await first).toEqual(await second);
   await ors.walkingRoute(fullInput());
   expect(fetch).toHaveBeenCalledTimes(1);
-  await expect(ors.walkingRoute(input())).rejects.toMatchObject({
-    status: 429,
-  });
+  fetch.mockResolvedValue({ok:true,status:200,json:async()=>data()});
+  await expect(ors.walkingRoute(input())).resolves.toMatchObject({profile:'foot-walking'});
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+test('blue startup does not throttle the first green request', async () => {
+  await ors.walkingRoute(input()); mockFull();
+  await expect(ors.walkingRoute(fullInput())).resolves.toMatchObject({profile:'foot-walking'});
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+test('ORS Retry-After reaches the client without being replaced by 60 seconds', async () => {
+  fetch.mockResolvedValue({ok:false,status:429,headers:{get:()=> '90'}});
+  await expect(ors.walkingRoute(input())).rejects.toMatchObject({code:'ROUTE_RATE_LIMIT',retryAfterSeconds:90});
+});
+test('provider backoff blocks new upstream calls across purposes while allowing valid cached geometry', async () => {
+  jest.useFakeTimers();
+  await ors.walkingRoute(input());
+  fetch.mockResolvedValue({ok:false,status:429,headers:{get:()=> '90'}});
+  await expect(ors.walkingRoute(fullInput())).rejects.toMatchObject({code:'ROUTE_RATE_LIMIT',retryAfterSeconds:90});
+  await expect(ors.walkingRoute(input())).resolves.toMatchObject({profile:'foot-walking'});
+  await expect(ors.walkingRoute({...fullInput(),rangerId:'other'})).rejects.toMatchObject({code:'ROUTE_RATE_LIMIT',retryAfterSeconds:90});
+  expect(fetch).toHaveBeenCalledTimes(2);
+  jest.advanceTimersByTime(90000);mockFull();
+  await expect(ors.walkingRoute(fullInput())).resolves.toMatchObject({profile:'foot-walking'});
+  expect(fetch).toHaveBeenCalledTimes(3);
 });
 test("full cache reused past live expiry; changed intermediate waypoint invalidates cache", async () => {
   jest.useFakeTimers();
@@ -439,5 +461,27 @@ test("intermediate waypoint connector crossing a RiskZone rejects the entire ful
   await expect(
     ors.walkingRoute({ ...fullInput(), riskZones: [risk] }),
   ).rejects.toMatchObject({ code: "NO_RISK_AVOIDING_ROUTE" });
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+test.each([[true,0,"PATROL_POINT_UNMAPPED"],[false,0,"CURRENT_LOCATION_UNMAPPED"],[false,1,"DESTINATION_POINT_UNMAPPED"]])("2010 safely identifies full=%s point=%s",async(full,index,code)=>{
+ const req=input();
+ if(full)req.waypoints=[{...req.currentLocation,id:"s",type:"START"},req.destination];
+ fetch.mockResolvedValue({ok:false,status:404,json:async()=>({error:{code:2010,message:"Could not find "+(full?"coordinate ":"point ")+index+": PRIVATE COORDINATES within a radius of 350.0 meters. SECRET"}})});
+ let failure;try{await ors.walkingRoute(req);}catch(e){failure=e;}
+ expect(failure).toMatchObject({code,status:422,providerCode:2010,routingPoint:{index}});
+ expect(failure.message).not.toMatch(/PRIVATE|SECRET/);
+ expect(JSON.stringify(failure)).not.toMatch(/PRIVATE|SECRET/);
+});
+test("provider parameter error is distinct from disconnected network",async()=>{
+ fetch.mockResolvedValue({ok:false,status:400,json:async()=>({error:{code:2003,message:"private"}})});
+ await expect(ors.walkingRoute(input())).rejects.toMatchObject({code:"ROUTING_REQUEST_INVALID"});
+});
+test('manager preview and subsequent identical save reuse a verified complete ORS response', async () => {
+  fetch.mockResolvedValue({ok:true,status:200,json:async()=>fullData()});
+  const validator = require('../../../src/services/patrolRouteValidation.service');
+  const route = await validator.validate('park',fullInput().waypoints,'manager');
+  expect(route.geometry.coordinates).toHaveLength(5);
+  await expect(validator.validate('park',fullInput().waypoints,'manager')).resolves.toEqual(route);
   expect(fetch).toHaveBeenCalledTimes(1);
 });

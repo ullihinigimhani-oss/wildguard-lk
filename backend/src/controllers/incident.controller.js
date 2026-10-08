@@ -62,3 +62,17 @@ exports.withdraw = endpoint(async req => {
     incident: await service.withdraw(id(req.params.incidentId, "incidentId"), req.user)
   };
 });
+exports.getVerifiedIncidentsCount = async (req, res, next) => {
+  try {
+    const db = require("../config/database");
+    const count = await db.incident.count({
+      where: {
+        status: 'VERIFIED',
+        withdrawnAt: null
+      }
+    });
+    res.json({ success: true, data: { count } });
+  } catch (error) {
+    next(error);
+  }
+};

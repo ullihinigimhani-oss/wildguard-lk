@@ -6,6 +6,7 @@ router.get('/animals/locations', require('../controllers/sensor.controller').get
 router.get('/animals/:animalId/locations', require('../controllers/sensor.controller').getAnimalLocationsByDateRange);
 router.get('/locations', require('../controllers/sensor.controller').getAllLocationsByDateRange);
 router.get('/zones/density', require('../controllers/sensor.controller').getDensityZones);
+router.get('/animals/near-high-risk-zones', require('../controllers/sensor.controller').getAnimalsNearHighRiskZones);
 router.put('/animals/:id', require('../controllers/sensor.controller').updateAnimal);
 router.delete('/animals/:id', require('../controllers/sensor.controller').deleteAnimal);
 module.exports = router;

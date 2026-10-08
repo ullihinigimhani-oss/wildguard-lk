@@ -1,4 +1,5 @@
 const request = require("supertest");
+jest.mock('../../src/services/patrolRouteValidation.service', () => ({ validate: jest.fn().mockResolvedValue({}) }));
 const jwt = require("jsonwebtoken");
 jest.mock("../../src/config/database", () => ({
   $transaction: jest.fn(),
