@@ -1,6 +1,7 @@
 import React from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   Text,
   View,
@@ -88,11 +89,18 @@ export default function AlertCard({
         borderColor: alert.riskLevel === "CRITICAL" ? risk.border : colors.border,
         gap: 10,
         opacity: pressed ? 0.85 : 1,
-        shadowColor: colors.dark,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        elevation: 2,
+        ...Platform.select({
+          web: {
+            boxShadow: "0px 2px 6px rgba(0, 0, 0, 0.04)",
+          },
+          default: {
+            shadowColor: colors.dark,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 6,
+            elevation: 2,
+          },
+        }),
       })}
     >
       {/* Top Header: Severity Pill + Unread Badge + Date */}

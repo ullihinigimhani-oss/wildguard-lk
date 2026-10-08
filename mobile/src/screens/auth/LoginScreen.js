@@ -42,7 +42,9 @@ export default function LoginScreen({ navigation, route }) {
               ? "Invalid email or password."
               : error.response?.status === 400
                 ? "Please check your email and password."
-                : "We couldn't sign you in. Please try again.",
+                : !error.response
+                  ? "Unable to connect to server. Please check your network or server status."
+                  : "We couldn't sign you in. Please try again.",
         );
     } finally {
       setPassword("");

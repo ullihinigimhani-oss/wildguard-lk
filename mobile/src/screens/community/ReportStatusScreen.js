@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -242,11 +243,18 @@ export default function ReportStatusScreen({ navigation }) {
                   borderColor: colors.border,
                   gap: 10,
                   opacity: pressed ? 0.85 : 1,
-                  shadowColor: colors.dark,
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.04,
-                  shadowRadius: 5,
-                  elevation: 2,
+                  ...Platform.select({
+                    web: {
+                      boxShadow: "0px 2px 5px rgba(0, 0, 0, 0.04)",
+                    },
+                    default: {
+                      shadowColor: colors.dark,
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.04,
+                      shadowRadius: 5,
+                      elevation: 2,
+                    },
+                  }),
                 })}
               >
                 {/* Header: Report Type, Anonymous Chip, Status */}

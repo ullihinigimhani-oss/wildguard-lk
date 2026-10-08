@@ -1,4 +1,5 @@
 import React from "react";
+import { Platform } from "react-native";
 
 // Presentation only: scoped to the Ranger stack, including its detail screens.
 export const RangerVisualContext = React.createContext(false);
@@ -23,9 +24,16 @@ export const fieldCard = {
   gap: 14,
   borderWidth: 1,
   borderColor: fieldColors.border,
-  shadowColor: fieldColors.forest,
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.045,
-  shadowRadius: 14,
-  elevation: 2,
+  ...Platform.select({
+    web: {
+      boxShadow: "0px 4px 14px rgba(18, 61, 41, 0.045)",
+    },
+    default: {
+      shadowColor: fieldColors.forest,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.045,
+      shadowRadius: 14,
+      elevation: 2,
+    },
+  }),
 };
