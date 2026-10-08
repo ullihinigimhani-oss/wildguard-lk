@@ -64,3 +64,10 @@ exports.updateAnimal = async (req, res, next) => {
     res.json({ success: true, message: 'Animal updated successfully', data });
   } catch (error) { next(error); }
 };
+exports.deleteAnimal = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const data = await service.deleteAnimal(id);
+    res.json({ success: true, message: 'Animal deleted successfully', data });
+  } catch (error) { next(error); }
+};
