@@ -19,6 +19,7 @@ import {
 } from "../../utils/incidentEvidence";
 import { canChangeIncident } from "../../utils/incident";
 import { LocalEvidencePreview } from "../../components/incident/EvidenceMedia";
+import PhotoUploadMode from "../../components/incident/PhotoUploadMode";
 import {
   Heading,
   IncidentButton,
@@ -42,6 +43,7 @@ export default function IncidentEvidenceScreen({ route, navigation }) {
   const pending = useRef(false),
     selectionPending = useRef(false),
     mounted = useRef(true);
+  const [photoMode, setPhotoMode] = useState("original");
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -143,7 +145,7 @@ export default function IncidentEvidenceScreen({ route, navigation }) {
       const selected = [];
       try {
         for (const asset of result.assets)
-          selected.push(await prepareEvidenceItem(asset, source, kind));
+          selected.push(await prepareEvidenceItem(asset, source, kind, undefined, photoMode));
       } catch (failure) {
         selected.forEach(discardEvidenceFile);
         throw failure;
@@ -243,6 +245,7 @@ export default function IncidentEvidenceScreen({ route, navigation }) {
             onPress={() => select(mode)}
           />
         ))}
+        <PhotoUploadMode value={photoMode} onChange={setPhotoMode} disabled={!eligible || busy || selecting} />
         <Text style={ui.muted}>
           Camera trap import is manual. Add its actual ID and capture time if
           known; no automatic camera integration is implied.

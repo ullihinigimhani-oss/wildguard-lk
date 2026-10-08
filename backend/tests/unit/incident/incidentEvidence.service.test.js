@@ -274,6 +274,18 @@ test("private media rechecks incident assignment after an access ticket was issu
   ).rejects.toMatchObject({ status: 404 });
 });
 
+test("invalid media ticket is distinct from expiry", async () => {
+  await expect(service.media("i", "e-1", "invalid")).rejects.toMatchObject({ status: 401, code: "MEDIA_ACCESS_INVALID" });
+});
+
+test("missing signing configuration is not mislabeled as expired access", async () => {
+  const secret = process.env.JWT_SECRET;
+  try {
+    delete process.env.JWT_SECRET;
+    await expect(service.media("i", "e-1", "invalid")).rejects.toMatchObject({ status: 503, code: "MEDIA_ACCESS_UNAVAILABLE" });
+  } finally { process.env.JWT_SECRET = secret; }
+});
+
 test("audio-only media disguised as video fails provider content validation and is cleaned up", async () => {
   const video = {
     ...media,
