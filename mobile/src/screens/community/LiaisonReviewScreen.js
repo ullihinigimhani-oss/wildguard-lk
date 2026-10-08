@@ -167,18 +167,23 @@ export default function LiaisonReviewScreen() {
     if (!escalatingReport) return;
     setEscalating(true);
     try {
-      await escalateReport(escalatingReport.id, {
+      const res = await escalateReport(escalatingReport.id, {
         urgency: escalationUrgency,
         notes: escalationNotes.trim() || undefined,
       });
+      const incidentNotice = res?.incident?.id ? ` (Incident #${res.incident.id})` : "";
       Alert.alert(
         "Escalated Successfully",
-        `Report has been dispatched for operational response (${escalationUrgency} priority).`
+        `Report has been dispatched for operational response (${escalationUrgency} priority)${incidentNotice}.`
       );
       setEscalatingReport(null);
       setEscalationNotes("");
       if (selectedReport && selectedReport.id === escalatingReport.id) {
-        setSelectedReport((prev) => (prev ? { ...prev, status: "RESPONSE_IN_PROGRESS" } : null));
+        setSelectedReport((prev) => (prev ? {
+          ...prev,
+          status: "RESPONSE_IN_PROGRESS",
+          incidentId: res?.incident?.id || prev.incidentId,
+        } : null));
       }
       await fetchReports(page);
     } catch (err) {
@@ -417,6 +422,13 @@ export default function LiaisonReviewScreen() {
                           <Text style={{ fontSize: 10, fontWeight: "700", color: "#c2410c" }}>CONFLICT RESPONSE</Text>
                         </View>
                       )}
+                      {item.incidentId && (
+                        <View style={{ backgroundColor: "#e0f2fe", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#0369a1" }}>
+                            INCIDENT #{item.incidentId.slice(-6).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                     <Text style={{ fontSize: 11, color: colors.muted }}>{formattedDate}</Text>
                   </View>
@@ -553,7 +565,7 @@ export default function LiaisonReviewScreen() {
                       )}
 
                       {/* Step 2: Dispatch / Escalate Response */}
-                      {(item.status === "PENDING" || item.status === "UNDER_REVIEW") && (
+                      {(item.status === "PENDING" || item.status === "UNDER_REVIEW") && !item.incidentId && (
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="Dispatch Response"
@@ -575,6 +587,28 @@ export default function LiaisonReviewScreen() {
                             Dispatch Response
                           </Text>
                         </Pressable>
+                      )}
+
+                      {item.incidentId && (
+                        <View
+                          style={{
+                            flex: 1,
+                            minWidth: 150,
+                            backgroundColor: "#f0fdf4",
+                            borderWidth: 1,
+                            borderColor: "#bbf7d0",
+                            padding: 8,
+                            borderRadius: 8,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+                          <Text style={{ color: "#16a34a", fontWeight: "700", fontSize: 12 }}>
+                            Dispatched to Incident Response
+                          </Text>
+                        </View>
                       )}
 
                       {/* Step 3: Mark Resolved */}

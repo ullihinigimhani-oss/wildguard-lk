@@ -72,3 +72,73 @@ exports.updateStatus = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getAlertsRequiringAttention = async (req, res, next) => {
+  try {
+    const result = await service.getAlertsRequiringAttention(req.query, req.user);
+    res.set("Cache-Control", "no-store").json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.respondToAlert = async (req, res, next) => {
+  try {
+    const result = await service.respondToAlert(req.params.id, req.body, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.forwardAlert = async (req, res, next) => {
+  try {
+    const result = await service.forwardAlert(req.params.id, req.body, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.escalateAlert = async (req, res, next) => {
+  try {
+    const result = await service.escalateAlert(req.params.id, req.body, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAlertEscalations = async (req, res, next) => {
+  try {
+    const result = await service.getAlertEscalations(req.params.id, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.ingestRiskAlert = async (req, res, next) => {
+  try {
+    const result = await service.ingestRiskAlert(req.body);
+    const statusCode = result.duplicate || !result.published ? 200 : 201;
+    res.status(statusCode).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.resolveRiskAlert = async (req, res, next) => {
+  try {
+    const result = await service.resolveRiskAlert(req.params.id, req.body, req.user);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+

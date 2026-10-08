@@ -42,4 +42,7 @@ router.patch("/:id/status", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_
 // 8. Liaison & Manager escalate community report for operational response
 router.post("/:id/escalate", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.escalateReport);
 
+// 9. Liaison & Manager forward reviewed report to Chanuka's Incident Response
+router.post("/:id/forward-incident", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.forwardToIncidentResponse);
+
 module.exports = router;

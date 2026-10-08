@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors, styles } from "../constants/theme";
+import { shareSafetyAlert } from "../utils/shareAlert";
 
 const RISK_CONFIG = {
   CRITICAL: {
@@ -65,11 +66,14 @@ export default function AlertCard({
   alert,
   onPress,
   onAcknowledge,
+  onShare,
   acknowledging = false,
 }) {
   const risk = RISK_CONFIG[alert.riskLevel] || RISK_CONFIG.MEDIUM;
-  const isAck = Boolean(alert.isAcknowledged || alert.isRead);
-  const isResolved = alert.status === "RESOLVED";
+  const isAcknowledged = Boolean(alert.isAcknowledged);
+  const isRead = Boolean(alert.isRead || alert.isAcknowledged);
+  const isResolved = alert.status === "RESOLVED" || Boolean(alert.isResolved);
+  const isExpired = Boolean(alert.isExpired) && !isResolved;
 
   const dateStr = formatAlertDate(alert.generatedAt || alert.createdAt);
   const areaStr = formatAffectedArea(alert);
@@ -136,7 +140,18 @@ export default function AlertCard({
             >
               <Text style={{ fontSize: 10, fontWeight: "700", color: "#475569" }}>RESOLVED</Text>
             </View>
-          ) : !isAck ? (
+          ) : isExpired ? (
+            <View
+              style={{
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 4,
+                backgroundColor: "#fef3c7",
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#92400e" }}>EXPIRED</Text>
+            </View>
+          ) : !isRead ? (
             <View
               style={{
                 flexDirection: "row",
@@ -165,6 +180,25 @@ export default function AlertCard({
             >
               <Ionicons name="checkmark" size={11} color={colors.green} />
               <Text style={{ fontSize: 10, fontWeight: "700", color: colors.green }}>READ</Text>
+            </View>
+          )}
+
+          {Boolean(alert.isEscalated || alert.escalation) && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 4,
+                backgroundColor: "#fee2e2",
+                borderWidth: 1,
+                borderColor: "#fca5a5",
+              }}
+            >
+              <Ionicons name="warning" size={10} color="#b91c1c" />
+              <Text style={{ fontSize: 10, fontWeight: "800", color: "#b91c1c" }}>ESCALATED</Text>
             </View>
           )}
         </View>
@@ -234,16 +268,49 @@ export default function AlertCard({
           paddingTop: 10,
         }}
       >
-        <Pressable
-          accessibilityRole="button"
-          onPress={onPress}
-          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.green }}>Safety Guidance</Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.green} />
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onPress}
+            style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.green }}>Safety Guidance</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.green} />
+          </Pressable>
 
-        {isAck ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Share alert: ${titleStr}`}
+            onPress={(e) => {
+              if (onShare) onShare(alert);
+              else shareSafetyAlert(alert);
+            }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 3,
+              paddingVertical: 4,
+              paddingHorizontal: 6,
+              borderRadius: 6,
+              backgroundColor: "#f8fafc",
+            }}
+          >
+            <Ionicons name="share-social-outline" size={13} color={colors.muted} />
+            <Text style={{ fontSize: 11, fontWeight: "600", color: colors.muted }}>Share</Text>
+          </Pressable>
+        </View>
+
+        {isResolved ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Ionicons name="checkmark-circle-outline" size={16} color="#64748b" />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>Resolved</Text>
+          </View>
+        ) : isExpired ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Ionicons name="time-outline" size={16} color="#d97706" />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#d97706" }}>Expired</Text>
+          </View>
+        ) : isAcknowledged ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Ionicons name="checkmark-circle" size={16} color={colors.green} />
             <Text style={{ fontSize: 12, fontWeight: "600", color: colors.green }}>Acknowledged</Text>
