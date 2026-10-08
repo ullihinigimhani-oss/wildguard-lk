@@ -123,21 +123,72 @@ describe("Safety Alert APIs", () => {
       await request(app).get("/api/alerts/nonexistent").expect(404);
     });
 
-    test("returns alert details with safety instructions", async () => {
+    test("rejects invalid alert ID format with 400", async () => {
+      const res = await request(app).get("/api/alerts/%20%20").expect(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Invalid alert ID format.");
+    });
+
+    test("returns sanitized alert details with instructions, location coordinates, and no leaked user IDs", async () => {
       db.alert.findUnique.mockResolvedValue({
         id: "alert-1",
         riskLevel: "CRITICAL",
-        message: "Elephant herd spotted.",
+        message: "Elephant herd spotted near southern boundary.",
         status: "ACTIVE",
-        animal: { species: "Elephas maximus" },
-        acknowledgements: [],
+        generatedAt: new Date(),
+        updatedAt: new Date(),
+        animal: { species: "Elephas maximus", animalCode: "ELE-01", name: "Raja" },
+        riskZone: {
+          id: "zone-1",
+          name: "Sector 3 Buffer",
+          centerLatitude: 6.35,
+          centerLongitude: 81.42,
+          radiusMeters: 500,
+          park: { id: "park-1", name: "Yala" },
+        },
+        acknowledgements: [{ userId: "secret-user-99", acknowledgedAt: new Date() }],
       });
 
       const res = await request(app).get("/api/alerts/alert-1").expect(200);
       expect(res.body.success).toBe(true);
       expect(res.body.alert.id).toBe("alert-1");
       expect(res.body.alert.title).toContain("CRITICAL Wildlife Alert");
-      expect(res.body.alert.safetyInstructions).toBeDefined();
+      expect(res.body.alert.alertType).toBe("WILDLIFE_PROXIMITY");
+      expect(res.body.alert.severity).toBe("CRITICAL");
+      expect(res.body.alert.location.hasCoordinates).toBe(true);
+      expect(res.body.alert.location.latitude).toBe(6.35);
+      expect(res.body.alert.location.longitude).toBe(81.42);
+      expect(res.body.alert.location.radiusMeters).toBe(500);
+
+      // Verify sanitization: no raw acknowledgements or secret user IDs leaked
+      expect(res.body.alert.acknowledgements).toBeUndefined();
+      expect(res.body.alert.acknowledgementCount).toBe(1);
+
+      // Verify clear, readable safety instructions
+      expect(Array.isArray(res.body.alert.safetyInstructions)).toBe(true);
+      const instructionsText = res.body.alert.safetyInstructions.join(" ");
+      expect(instructionsText).toContain("Stay away from the affected perimeter area");
+      expect(instructionsText).toContain("Do not approach");
+      expect(instructionsText).toContain("Keep children");
+      expect(instructionsText).toContain("Sector 3 Buffer");
+    });
+
+    test("returns resolved alert details with isResolved=true and resolvedAt", async () => {
+      const resolvedDate = new Date();
+      db.alert.findUnique.mockResolvedValue({
+        id: "alert-resolved",
+        riskLevel: "MEDIUM",
+        message: "Deer herd moved back into core sanctuary.",
+        status: "RESOLVED",
+        resolvedAt: resolvedDate,
+        acknowledgements: [],
+      });
+
+      const res = await request(app).get("/api/alerts/alert-resolved").expect(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.alert.status).toBe("RESOLVED");
+      expect(res.body.alert.isResolved).toBe(true);
+      expect(res.body.alert.isExpired).toBe(true);
     });
   });
 

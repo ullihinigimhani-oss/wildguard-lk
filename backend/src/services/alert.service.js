@@ -7,17 +7,25 @@ const badRequest = (message = "Invalid alert parameters.") =>
   Object.assign(new Error(message), { status: 400, authError: true });
 
 // Standardized safety guidance based on risk levels for Sri Lankan wildlife
-function getSafetyInstructions(riskLevel, species) {
+// Standardized safety guidance based on risk levels for Sri Lankan wildlife
+function getSafetyInstructions(riskLevel, species, zoneName) {
+  const areaNotice = zoneName
+    ? `Avoid travel along roads, footpaths, and border perimeters in ${zoneName}.`
+    : "Avoid travel along boundary tracks and buffer perimeter roads.";
+
   const common = [
-    "Keep children and elderly individuals indoors or in safe elevated structures.",
+    "Stay away from the affected perimeter area until park authorities confirm it is safe.",
     "Do not approach, tease, shine flashlights directly at, or provoke the animal.",
-    "Ensure cattle and domestic animals are sheltered in secure enclosures.",
+    "Keep children and elderly individuals indoors or in safe elevated structures.",
+    areaNotice,
+    "Shelter livestock, cattle, and domestic animals in secure enclosures.",
   ];
 
   if (species && species.toLowerCase().includes("elephant")) {
     if (riskLevel === "CRITICAL" || riskLevel === "HIGH") {
       return [
         "CRITICAL: Wild elephant detected within or adjacent to human habitation.",
+        "Immediately notify village coordination committee and stay inside secure shelters.",
         "Avoid using torch lights or shouting aggressively, as it may disorient or anger the animal.",
         "Clear all pathways and avoid travel along jungle border tracks until all-clear is given.",
         ...common,
@@ -71,14 +79,43 @@ function formatAlert(alert, user = null) {
     ? `${alert.message.slice(0, 77)}...`
     : alert.message;
 
+  const alertType = alert.animal?.species ? "WILDLIFE_PROXIMITY" : "ZONE_ADVISORY";
+
+  const hasMapCoordinates = Boolean(
+    alert.riskZone &&
+    alert.riskZone.centerLatitude != null &&
+    alert.riskZone.centerLongitude != null
+  );
+
+  const location = {
+    areaName: zoneName || "Perimeter Zone",
+    parkName: parkName || null,
+    latitude: alert.riskZone?.centerLatitude ?? null,
+    longitude: alert.riskZone?.centerLongitude ?? null,
+    radiusMeters: alert.riskZone?.radiusMeters ?? null,
+    hasCoordinates: hasMapCoordinates,
+  };
+
+  const isResolved = alert.status === "RESOLVED" || Boolean(alert.resolvedAt);
+  const ageMs = Date.now() - new Date(alert.generatedAt || alert.createdAt || Date.now()).getTime();
+  const isExpired = isResolved || ageMs > 72 * 60 * 60 * 1000;
+
+  // Sanitization: omit raw acknowledgements array to prevent leaking user IDs publicly
+  const { acknowledgements, ...cleanAlert } = alert;
+
   return {
-    ...alert,
+    ...cleanAlert,
     title,
+    alertType,
+    severity: alert.riskLevel,
     shortMessage,
     affectedArea,
+    location,
+    isResolved,
+    isExpired,
     isAcknowledged: Boolean(isAcknowledged),
-    acknowledgementCount: alert.acknowledgements ? alert.acknowledgements.length : 0,
-    safetyInstructions: getSafetyInstructions(alert.riskLevel, alert.animal?.species),
+    acknowledgementCount: acknowledgements ? acknowledgements.length : 0,
+    safetyInstructions: getSafetyInstructions(alert.riskLevel, alert.animal?.species, zoneName),
   };
 }
 
@@ -114,7 +151,11 @@ exports.listAlerts = async (query = {}, user = null) => {
 };
 
 exports.getAlertDetails = async (id, user = null) => {
-  const alert = await repository.findAlertById(id);
+  if (!id || typeof id !== "string" || !id.trim() || id.trim().length > 100) {
+    throw badRequest("Invalid alert ID format.");
+  }
+
+  const alert = await repository.findAlertById(id.trim());
   if (!alert) throw notFound();
 
   return formatAlert(alert, user);
@@ -122,11 +163,14 @@ exports.getAlertDetails = async (id, user = null) => {
 
 exports.acknowledgeAlert = async (alertId, user) => {
   if (!user || !user.id) throw badRequest("User authentication required.");
+  if (!alertId || typeof alertId !== "string" || !alertId.trim()) {
+    throw badRequest("Invalid alert ID format.");
+  }
 
-  const alert = await repository.findAlertById(alertId);
+  const alert = await repository.findAlertById(alertId.trim());
   if (!alert) throw notFound();
 
-  const acknowledgement = await repository.acknowledgeAlert(alertId, user.id);
+  const acknowledgement = await repository.acknowledgeAlert(alertId.trim(), user.id);
   return {
     success: true,
     message: "Alert acknowledged successfully.",
