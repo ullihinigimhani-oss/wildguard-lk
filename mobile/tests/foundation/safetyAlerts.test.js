@@ -2,7 +2,10 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
 import { Share, Alert as NativeAlert } from "react-native";
 import AlertsScreen from "../../src/screens/alerts/AlertsScreen";
-import AlertDetailsScreen from "../../src/screens/alerts/AlertDetailsScreen";
+import AlertDetailsScreen, {
+  formatAlertDetailTime,
+  getAlertTypeLabel,
+} from "../../src/screens/alerts/AlertDetailsScreen";
 import AlertCard, {
   formatAlertDate,
   formatAffectedArea,
@@ -327,5 +330,103 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
       expect(alertApi.getAlertById).toHaveBeenCalledWith("alert-1");
       expect(screen.getByText("CRITICAL SAFETY ALERT")).toBeTruthy();
     });
+  });
+
+  test("Task 10 helper functions format detail time and alert type labels accurately", () => {
+    expect(formatAlertDetailTime(null)).toBe("Date not recorded");
+    expect(formatAlertDetailTime("invalid")).toBe("Date not recorded");
+    expect(formatAlertDetailTime("2026-10-08T08:00:00.000Z")).toMatch(/2026/);
+
+    expect(getAlertTypeLabel("WILDLIFE_PROXIMITY")).toBe("Wildlife Proximity Notice");
+    expect(getAlertTypeLabel("ZONE_ADVISORY")).toBe("Perimeter Zone Advisory");
+    expect(getAlertTypeLabel("HUMAN_WILDLIFE_CONFLICT")).toBe("Active Conflict Warning");
+    expect(getAlertTypeLabel(null)).toBe("Community Safety Notice");
+  });
+
+  test("AlertDetailsScreen toggles map view when coordinates are present", () => {
+    const route = { params: { alertData: mockActiveAlerts[0] } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    const mapButton = screen.getByLabelText("View on Map");
+    expect(mapButton).toBeTruthy();
+
+    fireEvent.press(mapButton);
+    expect(screen.getByLabelText("Hide Map")).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText("Hide Map"));
+    expect(screen.getByLabelText("View on Map")).toBeTruthy();
+  });
+
+  test("AlertDetailsScreen handles missing alert (404) with back button", async () => {
+    const route = { params: { alertId: "missing-1" } };
+    alertApi.getAlertById.mockRejectedValueOnce({
+      response: { status: 404, data: { message: "Alert not found." } },
+    });
+
+    const goBack = jest.fn();
+    render(<AlertDetailsScreen route={route} navigation={{ goBack }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Safety Alert Not Found")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Back to Alerts"));
+    expect(goBack).toHaveBeenCalledTimes(1);
+  });
+
+  test("AlertDetailsScreen handles invalid alert ID with appropriate error UI", async () => {
+    const route = { params: { alertId: "   " } };
+    const goBack = jest.fn();
+
+    render(<AlertDetailsScreen route={route} navigation={{ goBack }} />);
+
+    expect(screen.getByText("Invalid Alert Reference")).toBeTruthy();
+    expect(screen.getByText("Invalid alert identifier provided.")).toBeTruthy();
+
+    fireEvent.press(screen.getByText("Back to Alerts"));
+    expect(goBack).toHaveBeenCalledTimes(1);
+  });
+
+  test("AlertDetailsScreen handles network error with retry button", async () => {
+    const route = { params: { alertId: "alert-1" } };
+    alertApi.getAlertById
+      .mockRejectedValueOnce(new Error("Network Error"))
+      .mockResolvedValueOnce(mockActiveAlerts[0]);
+
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Unable to Load Alert")).toBeTruthy();
+      expect(screen.getByText("Retry")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Retry"));
+
+    await waitFor(() => {
+      expect(screen.getByText("CRITICAL SAFETY ALERT")).toBeTruthy();
+    });
+  });
+
+  test("AlertDetailsScreen displays resolved alert banner and resolved time", () => {
+    const route = { params: { alertData: mockResolvedAlert } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    expect(screen.getByText("ALL CLEAR — ALERT RESOLVED")).toBeTruthy();
+    expect(screen.getByText("STATUS: RESOLVED")).toBeTruthy();
+    expect(screen.getByText("Alert Resolved (No Action Needed)")).toBeTruthy();
+  });
+
+  test("AlertDetailsScreen displays expired alert banner when active alert is expired", () => {
+    const expiredAlert = {
+      ...mockActiveAlerts[0],
+      isExpired: true,
+      isResolved: false,
+      status: "ACTIVE",
+    };
+    const route = { params: { alertData: expiredAlert } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    expect(screen.getByText("NOTICE EXPIRED")).toBeTruthy();
+    expect(screen.getByText("STATUS: EXPIRED")).toBeTruthy();
   });
 });
