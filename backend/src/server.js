@@ -35,8 +35,12 @@ function shutdown(exitCode = 0) {
   });
 }
 
-server.on('error', () => {
-  console.error('Unable to start the WildGuard LK API HTTP server');
+server.on('error', (error) => {
+  const reason = error.code ? `${error.code}: ${error.message}` : error.message;
+  console.error(`Unable to start the WildGuard LK API HTTP server on port ${port}: ${reason}`);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Stop the process using port ${port}, or set PORT to an available port.`);
+  }
   shutdown(1);
 });
 process.on('SIGINT', () => shutdown());
