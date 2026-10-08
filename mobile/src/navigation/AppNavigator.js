@@ -11,6 +11,9 @@ import DemoHomeScreen from "../screens/home/DemoHomeScreen";
 import MyPatrolScreen from "../screens/patrol/MyPatrolScreen";
 import PatrolDetailsScreen from "../screens/patrol/PatrolDetailsScreen";
 import RangerIncidentScreen from "../screens/incident/RangerIncidentScreen";
+import ReportIncidentScreen from "../screens/incident/ReportIncidentScreen";
+import MyIncidentReportsScreen from "../screens/incident/MyIncidentReportsScreen";
+import IncidentDetailsScreen from "../screens/incident/IncidentDetailsScreen";
 import RangerShell from "./RangerShell";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import AlertsScreen from "../screens/alerts/AlertsScreen";
@@ -52,6 +55,26 @@ export default function AppNavigator() {
               </RangerShell>
             )}
           </Stack.Screen>
+        ))}
+        {[
+          ["IncidentCreate", "Report Incident", ReportIncidentScreen],
+          ["IncidentReports", "My Incident Reports", MyIncidentReportsScreen],
+          ["IncidentDetails", "Incident Details", IncidentDetailsScreen],
+          ["IncidentEdit", "Edit Incident", ReportIncidentScreen],
+        ].map(([name, title, component]) => (
+          <Stack.Screen
+            key={name}
+            name={name}
+            component={component}
+            getId={({ params }) => params?.incidentId || params?.patrolId}
+            options={{
+              headerShown: true,
+              title,
+              headerTintColor: "#174D3A",
+              headerShadowVisible: false,
+              headerStyle: { backgroundColor: "#F5F6F0" },
+            }}
+          />
         ))}
         <Stack.Screen
           name="PatrolDetails"

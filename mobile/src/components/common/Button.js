@@ -8,6 +8,7 @@ export default function Button({
   secondary = false,
   loading = false,
   disabled = false,
+  color = colors.green,
 }) {
   return (
     <Pressable
@@ -21,19 +22,19 @@ export default function Button({
         padding: 16,
         borderRadius: 11,
         borderWidth: 1,
-        borderColor: colors.green,
-        backgroundColor: secondary ? colors.white : colors.green,
+        borderColor: color,
+        backgroundColor: secondary ? colors.white : color,
         justifyContent: "center",
         alignItems: "center",
         opacity: pressed || disabled ? 0.65 : 1,
       })}
     >
       {loading ? (
-        <ActivityIndicator color={secondary ? colors.green : colors.white} />
+        <ActivityIndicator color={secondary ? color : colors.white} />
       ) : (
         <Text
           style={{
-            color: secondary ? colors.green : colors.white,
+            color: secondary ? color : colors.white,
             fontSize: 15,
             fontWeight: "700",
             textAlign: "center",

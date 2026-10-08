@@ -335,6 +335,16 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
               {error}
             </Text>
           )}
+          {patrol.status === "IN_PROGRESS" && !finished && !accessLost && (
+            <Button
+              title="Report Incident"
+              secondary
+              disabled={busy}
+              onPress={() =>
+                navigation.navigate("IncidentCreate", { patrolId: patrol.id })
+              }
+            />
+          )}
           <Button
             title="View planned route"
             secondary

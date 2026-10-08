@@ -211,6 +211,28 @@ export default function PatrolDetailsScreen({ route, navigation }) {
               }
             />
           )}
+          {display.active && (
+            <Button
+              title="Report Incident"
+              secondary
+              disabled={busy}
+              onPress={() =>
+                navigation.navigate("IncidentCreate", { patrolId: id })
+              }
+            />
+          )}
+          {(display.active ||
+            display.completed ||
+            patrol.status === "CANCELLED") && (
+            <Button
+              title="My Incident Reports"
+              secondary
+              disabled={busy}
+              onPress={() =>
+                navigation.navigate("IncidentReports", { patrolId: id })
+              }
+            />
+          )}
           {display.active &&
             (confirming ? (
               <View style={ui.card}>
