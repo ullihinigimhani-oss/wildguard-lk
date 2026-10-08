@@ -19,6 +19,7 @@ const summarySelect = {
   status: true,
   syncStatus: true,
   withdrawnAt: true,
+  markAsDone: true,
   reporterId: true,
   parkId: true,
   patrolId: true,
@@ -174,5 +175,12 @@ exports.update = async (tx, id, patrolId, reporterId, data) => {
       reporterId
     },
     select: detailSelect
+  });
+};
+
+exports.updateStatus = async (id, status) => {
+  return db().incident.update({
+    where: { id },
+    data: { status }
   });
 };

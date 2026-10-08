@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { MapContainer, TileLayer, Circle, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { createRiskZone, getAllRiskZones, deleteRiskZone, updateRiskZone } from "../../services/riskZoneApi";
+import { listIncidents, markIncidentAsDone, incidentStatuses } from "../../services/incidentApi";
 
 function MapClickHandler({ onLocationSelect }) {
   useMapEvents({
@@ -30,9 +31,12 @@ export default function Reporting() {
   const [zonesLoading, setZonesLoading] = useState(true);
   const [selectedZone, setSelectedZone] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [incidents, setIncidents] = useState([]);
+  const [incidentsLoading, setIncidentsLoading] = useState(true);
 
   useEffect(() => {
     loadRiskZones();
+    loadIncidents();
   }, []);
 
   const loadRiskZones = async () => {
@@ -44,6 +48,23 @@ export default function Reporting() {
       console.error('Error loading risk zones:', err);
     } finally {
       setZonesLoading(false);
+    }
+  };
+
+  const loadIncidents = async () => {
+    try {
+      setIncidentsLoading(true);
+      // Load all incidents and filter out those marked as done
+      const response = await listIncidents({});
+      const activeIncidents = response.incidents.filter(
+        inc => (!inc.markAsDone || inc.markAsDone === false) && inc.status !== 'WITHDRAWN'
+      );
+      setIncidents(activeIncidents || []);
+    } catch (err) {
+      console.error('Error loading incidents:', err);
+      setIncidents([]);
+    } finally {
+      setIncidentsLoading(false);
     }
   };
 
@@ -85,6 +106,29 @@ export default function Reporting() {
       setError('Failed to update risk zone: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMarkAsDone = async (incidentId) => {
+    if (!window.confirm('Mark this incident as done?')) return;
+    try {
+      await markIncidentAsDone(incidentId);
+      setMessage('Incident marked as done!');
+      loadIncidents();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError('Failed to mark incident as done: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleIncidentClick = (incident) => {
+    if (incident.latitude && incident.longitude) {
+      setForm({
+        ...form,
+        centerLatitude: incident.latitude.toString(),
+        centerLongitude: incident.longitude.toString()
+      });
+      setMapMarker([incident.latitude, incident.longitude]);
     }
   };
 
@@ -149,22 +193,84 @@ export default function Reporting() {
 
       <div className="page-content">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          {/* Left - Future Implementation */}
+          {/* Left - Verified Incidents */}
           <div style={{
             background: 'white',
             borderRadius: '12px',
             padding: '30px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
             minHeight: '500px'
           }}>
-            <div style={{ textAlign: 'center', color: '#67756d' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
-              <h2 style={{ color: '#245c45', marginBottom: '12px' }}>Future Implementation</h2>
-              <p>Research reports and analytics will be available here.</p>
-            </div>
+            <h2 style={{ color: '#245c45', marginBottom: '20px', fontSize: '20px' }}>Verified Incidents</h2>
+            <p style={{ color: '#67756d', marginBottom: '20px', fontSize: '14px' }}>
+              Click an incident to populate location in the risk zone form
+            </p>
+            {incidentsLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#67756d' }}>
+                Loading incidents...
+              </div>
+            ) : incidents.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#67756d' }}>
+                No verified incidents found
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '400px', overflow: 'auto' }}>
+                {incidents.map((incident) => (
+                  <div
+                    key={incident.id}
+                    onClick={() => handleIncidentClick(incident)}
+                    style={{
+                      padding: '15px',
+                      border: '1px solid #cbd8cf',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      background: '#fafafa'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f0f4ed'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#fafafa'}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '600', color: '#245c45', marginBottom: '5px', fontSize: '14px' }}>
+                          {incident.title || incident.incidentType}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#67756d', marginBottom: '3px' }}>
+                          Type: {incident.incidentType}
+                        </div>
+                        {incident.latitude && incident.longitude && (
+                          <div style={{ fontSize: '12px', color: '#67756d' }}>
+                            Location: {incident.latitude.toFixed(4)}, {incident.longitude.toFixed(4)}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '11px', color: '#67756d', marginTop: '4px' }}>
+                          {new Date(incident.reportedAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAsDone(incident.id);
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#245c45',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          fontWeight: '500',
+                          marginLeft: '8px'
+                        }}
+                      >
+                        Mark as Done
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Right - Risk Zone Form */}

@@ -136,5 +136,12 @@ async function mutate(id, data, user) {
   });
 }
 exports.edit = (id, data, user) => mutate(id, data, user);
+
+exports.updateStatus = async (id, status, user) => {
+  // Simple status update without complex checks
+  await repository.updateStatus(id, status);
+  return { message: 'Incident status updated successfully' };
+};
+
 // Repeat withdrawal returns 409 consistently; the original timestamp is retained.
 exports.withdraw = (id, user) => mutate(id, null, user);
