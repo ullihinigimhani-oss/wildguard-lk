@@ -29,6 +29,8 @@ router.use(allowRoles("PARK_MANAGER"));
 router.get("/rangers", controller.listAssignableRangers);
 router.post("/", controller.create);
 router.get("/", controller.list);
+router.get("/live", controller.live);
+router.get("/:id/locations", controller.trail);
 router.get("/:id", controller.getById);
 router.patch("/:id", controller.update);
 router.post("/:id/cancel", controller.cancel);

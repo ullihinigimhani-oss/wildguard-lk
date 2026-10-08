@@ -26,3 +26,17 @@ export async function updatePatrol(id, payload) {
 export async function cancelPatrol(id) {
   return (await api.post("/patrols/" + encodeURIComponent(id) + "/cancel")).data;
 }
+export async function listLiveRangers() {
+  const { data } = await api.get("/patrols/live");
+  if (!data.success || !Array.isArray(data.rangers))
+    throw new Error("Live ranger locations unavailable");
+  return data;
+}
+export async function getPatrolTrail(id) {
+  const { data } = await api.get(
+    "/patrols/" + encodeURIComponent(id) + "/locations",
+  );
+  if (!data.success || !Array.isArray(data.locations))
+    throw new Error("Recorded route unavailable");
+  return data.locations;
+}

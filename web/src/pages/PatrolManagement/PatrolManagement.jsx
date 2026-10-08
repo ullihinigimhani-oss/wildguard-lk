@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { cancelPatrol, listAssignableRangers, listPatrols } from "../../services/patrolApi";
+import { useAuth } from "../../hooks/useAuth";
 import LiveTrackingAction from "../../components/patrol/LiveTrackingAction";
 import PatrolActionIcon from "../../components/patrol/PatrolActionIcon";
 import {
@@ -31,6 +32,8 @@ const formatTime = (value) =>
       })
     : "—";
 export default function PatrolManagement() {
+  const { user } = useAuth() || {};
+  const canMonitor = user?.role === "PARK_MANAGER";
   const [filters, setFilters] = useState(initialFilters);
   const [rangers, setRangers] = useState([]);
   const [result, setResult] = useState({ patrols: [], total: 0 });
@@ -127,9 +130,16 @@ export default function PatrolManagement() {
             patrol for full details.
           </p>
         </div>
-        <Link className="button primary" to="/patrols/new">
-          Create Patrol
-        </Link>
+        <div className="patrol-list-heading-actions">
+          {canMonitor && (
+            <Link className="button secondary" to="/patrols/live">
+              Live Ranger Monitoring
+            </Link>
+          )}
+          <Link className="button primary" to="/patrols/new">
+            Create Patrol
+          </Link>
+        </div>
       </div>
       <div className="users-filters">
         <label>

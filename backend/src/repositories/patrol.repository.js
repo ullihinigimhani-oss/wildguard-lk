@@ -76,6 +76,37 @@ exports.findPatrolById = (id) =>
       select: patrolSelect,
     })
     .then(withRoute);
+const livePatrolSelect = {
+  id: true,
+  routeName: true,
+  status: true,
+  patrolType: true,
+  priority: true,
+  startLocation: true,
+  actualStartTime: true,
+  park: { select: { id: true, name: true } },
+  ranger: { select: { id: true, name: true, email: true } },
+};
+exports.findLivePatrols = () =>
+  db().patrol.findMany({
+    where: { status: "IN_PROGRESS" },
+    select: livePatrolSelect,
+    orderBy: [{ actualStartTime: "asc" }, { id: "asc" }],
+    take: 100,
+  });
+exports.findLatestLocation = (patrolId) =>
+  db().patrolLocation.findFirst({
+    where: { patrolId },
+    orderBy: [{ recordedAt: "desc" }, { id: "desc" }],
+    select: { latitude: true, longitude: true, recordedAt: true },
+  });
+exports.findPatrolTrail = (patrolId) =>
+  db().patrolLocation.findMany({
+    where: { patrolId },
+    orderBy: [{ recordedAt: "asc" }, { id: "asc" }],
+    take: 1000,
+    select: { latitude: true, longitude: true, recordedAt: true },
+  });
 const rangerPatrolSelect = {
   id: true,
   routeName: true,

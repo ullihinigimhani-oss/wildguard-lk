@@ -4,6 +4,7 @@ import PatrolManagement from "../pages/PatrolManagement/PatrolManagement";
 import EditPatrol from "../pages/PatrolManagement/EditPatrol";
 import CreatePatrol from "../pages/PatrolManagement/CreatePatrol";
 import PatrolDetails from "../pages/PatrolManagement/PatrolDetails";
+import RangerMonitoring from "../pages/RangerMonitoring/RangerMonitoring";
 import Reporting from "../pages/Reporting/Reporting";
 import FieldMap from "../pages/FieldMap/FieldMap";
 import { Navigate, Route, Routes } from "react-router-dom";
@@ -44,6 +45,7 @@ export default function AppRoutes() {
             <Route path="/users" element={<Users />} />
             <Route path="/patrols" element={<PatrolManagement />} />
             <Route path="/patrols/new" element={<CreatePatrol />} />
+            <Route path="/patrols/live" element={<RangerMonitoring />} />
             <Route path="/patrols/:id/edit" element={<EditPatrol />} />
             <Route path="/patrols/:id" element={<PatrolDetails />} />
             <Route
@@ -72,7 +74,7 @@ export default function AppRoutes() {
             {modules
               .filter(
                 (item) =>
-                  !["users", "patrols", "incidents", "community-reports", "reporting", "map"].includes(
+                  !["users", "patrols", "incidents", "community-reports", "reporting", "map", "patrols/live"].includes(
                     item.path,
                   ),
               )
