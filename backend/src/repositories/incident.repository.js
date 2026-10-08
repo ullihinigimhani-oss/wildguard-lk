@@ -101,7 +101,8 @@ exports.findIncident = (id, user) => db().incident.findFirst({
   select: detailSelect
 });
 exports.listIncidents = (where, page) => db().$transaction(async tx => {
-  const [incidents, total] = await Promise.all([tx.incident.findMany({
+  // An interactive transaction owns one pg client: issue queries sequentially.
+  const incidents = await tx.incident.findMany({
     where,
     select: summarySelect,
     take: 25,
@@ -116,9 +117,10 @@ exports.listIncidents = (where, page) => db().$transaction(async tx => {
     }, {
       id: "desc"
     }]
-  }), tx.incident.count({
+  });
+  const total = await tx.incident.count({
     where
-  })]);
+  });
   return {
     incidents,
     total,

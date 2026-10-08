@@ -142,6 +142,7 @@ test.each([
   ["ranger/patrols/p/incidents", "IncidentReports", "patrolId", "p"],
   ["ranger/incidents/i", "IncidentDetails", "incidentId", "i"],
   ["ranger/incidents/i/edit", "IncidentEdit", "incidentId", "i"],
+  ["ranger/incidents/i/evidence", "IncidentEvidence", "incidentId", "i"],
 ])(
   "incident link %s preserves tab back destination and excludes demo",
   (path, name, key, id) => {

@@ -540,8 +540,8 @@ test("unconfigured storage rejects evidence without fake rows; reads support mul
   };
   const unavailable = await create(payload({
     evidence: [media, media]
-  })).expect(503);
-  expect(unavailable.body.code).toBe("EVIDENCE_STORAGE_UNAVAILABLE");
+  })).expect(409);
+  expect(unavailable.body.code).toBe("EVIDENCE_UPLOAD_REQUIRED");
   expect(incidents.size).toBe(0);
   await create(payload({
     evidence: [{
@@ -571,7 +571,7 @@ test("unconfigured storage rejects evidence without fake rows; reads support mul
   expect(response.body.incident.evidenceCount).toBe(2);
   expect(response.body.incident.evidence).toHaveLength(2);
   expect(response.body.incident.evidence[0]).toMatchObject({
-    fileUrl: "https://media.example/video.mp4",
+    fileUrl: null,
     metadata: {
       source: "CAMERA_TRAP"
     }

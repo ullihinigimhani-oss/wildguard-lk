@@ -68,6 +68,7 @@ test("incident detail routes are available only to authenticated Rangers", () =>
     "IncidentReports",
     "IncidentDetails",
     "IncidentEdit",
+    "IncidentEvidence",
   ])
     expect(ranger.getByTestId(`route-${route}`)).toBeTruthy();
   ranger.unmount();
@@ -81,6 +82,7 @@ test("incident detail routes are available only to authenticated Rangers", () =>
     "IncidentReports",
     "IncidentDetails",
     "IncidentEdit",
+    "IncidentEvidence",
   ])
     expect(manager.queryByTestId(`route-${route}`)).toBeNull();
 });
