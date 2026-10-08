@@ -10,6 +10,7 @@ const reportSelect = {
   longitude: true,
   manualLocation: true,
   status: true,
+  isAnonymous: true,
   reporterName: true,
   reporterPhone: true,
   reporterId: true,

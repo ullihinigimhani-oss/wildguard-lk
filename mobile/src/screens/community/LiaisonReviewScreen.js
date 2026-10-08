@@ -245,13 +245,13 @@ export default function LiaisonReviewScreen() {
                 <View style={{ backgroundColor: colors.background, padding: 10, borderRadius: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <View style={{ gap: 2 }}>
                     <Text style={{ fontSize: 12, fontWeight: "700", color: colors.text }}>
-                      Reporter: {item.reporterName || (item.reporter ? item.reporter.name : "Anonymous")}
+                      Reporter: {item.isAnonymous ? "Anonymous Community Member" : (item.reporterName || (item.reporter ? item.reporter.name : "Anonymous"))}
                     </Text>
                     <Text style={{ fontSize: 12, color: colors.muted }}>
-                      Phone: {item.reporterPhone || "Not provided"}
+                      Phone: {item.isAnonymous ? "Hidden (Anonymous Report)" : (item.reporterPhone || "Not provided")}
                     </Text>
                   </View>
-                  {item.reporterPhone && (
+                  {!item.isAnonymous && item.reporterPhone && (
                     <Pressable
                       accessibilityRole="button"
                       onPress={() => callReporter(item.reporterPhone)}

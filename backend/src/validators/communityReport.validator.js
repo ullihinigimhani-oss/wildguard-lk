@@ -94,17 +94,31 @@ function validateCommunityReportCreation(body) {
     fields.location = "Provide a location description or GPS coordinates.";
   }
 
-  const reporterName = text(input.reporterName || input.reporter_name);
-  if (reporterName && reporterName.length > 120) {
-    fields.reporterName = "Reporter name must not exceed 120 characters.";
-  }
+  const isAnonymous = Boolean(
+    input.isAnonymous === true ||
+    input.is_anonymous === true ||
+    input.anonymous === true ||
+    input.isAnonymous === "true" ||
+    input.is_anonymous === "true" ||
+    input.anonymous === "true"
+  );
 
-  const reporterPhone = text(input.reporterPhone || input.reporter_phone);
-  if (reporterPhone) {
-    if (reporterPhone.length < 7 || reporterPhone.length > 25) {
-      fields.reporterPhone = "Phone number must be between 7 and 25 characters.";
-    } else if (!/^[+0-9\s\-()]+$/.test(reporterPhone)) {
-      fields.reporterPhone = "Phone number contains invalid characters.";
+  let reporterName = null;
+  let reporterPhone = null;
+
+  if (!isAnonymous) {
+    reporterName = text(input.reporterName || input.reporter_name) || null;
+    if (reporterName && reporterName.length > 120) {
+      fields.reporterName = "Reporter name must not exceed 120 characters.";
+    }
+
+    reporterPhone = text(input.reporterPhone || input.reporter_phone) || null;
+    if (reporterPhone) {
+      if (reporterPhone.length < 7 || reporterPhone.length > 25) {
+        fields.reporterPhone = "Phone number must be between 7 and 25 characters.";
+      } else if (!/^[+0-9\s\-()]+$/.test(reporterPhone)) {
+        fields.reporterPhone = "Phone number contains invalid characters.";
+      }
     }
   }
 
@@ -145,6 +159,7 @@ function validateCommunityReportCreation(body) {
     longitude: hasCoords ? longitude : null,
     reporterName: reporterName || null,
     reporterPhone: reporterPhone || null,
+    isAnonymous,
     evidenceItems,
   };
 }

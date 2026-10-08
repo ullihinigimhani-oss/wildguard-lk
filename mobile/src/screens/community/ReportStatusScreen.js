@@ -165,9 +165,16 @@ export default function ReportStatusScreen({ navigation }) {
                 })}
               >
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: colors.dark }}>
-                    {item.reportType.replace(/_/g, " ")}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: colors.dark }}>
+                      {item.reportType.replace(/_/g, " ")}
+                    </Text>
+                    {item.isAnonymous && (
+                      <View style={{ backgroundColor: "#f1f5f9", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "600", color: colors.muted }}>ANONYMOUS</Text>
+                      </View>
+                    )}
+                  </View>
                   <View
                     style={{
                       paddingHorizontal: 8,
@@ -286,6 +293,13 @@ export default function ReportStatusScreen({ navigation }) {
                     <Text style={styles.label}>Submitted On:</Text>
                     <Text style={styles.text}>
                       {new Date(selectedReport.submittedAt || selectedReport.createdAt).toLocaleString()}
+                    </Text>
+                  </View>
+
+                  <View>
+                    <Text style={styles.label}>Submission Mode:</Text>
+                    <Text style={styles.text}>
+                      {selectedReport.isAnonymous ? "Submitted Anonymously" : "Standard (Identified)"}
                     </Text>
                   </View>
 

@@ -60,6 +60,7 @@ export default function CommunityReportScreen({ navigation, route }) {
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [evidence, setEvidence] = useState([]);
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -177,7 +178,8 @@ export default function CommunityReportScreen({ navigation, route }) {
         manualLocation: effectiveLoc || undefined,
         latitude: latTrim ? parseFloat(latTrim) : undefined,
         longitude: lonTrim ? parseFloat(lonTrim) : undefined,
-        reporterName: user?.name || undefined,
+        isAnonymous,
+        reporterName: isAnonymous ? undefined : (user?.name || undefined),
         evidence: preparedEvidence.length ? preparedEvidence : undefined,
       };
 
@@ -212,6 +214,7 @@ export default function CommunityReportScreen({ navigation, route }) {
     setLatitude("");
     setLongitude("");
     setEvidence([]);
+    setIsAnonymous(false);
     setUploadStatus("");
     setErrors({});
     setSubmittedReport(null);
@@ -246,6 +249,9 @@ export default function CommunityReportScreen({ navigation, route }) {
             <Text style={[styles.muted, { fontSize: 12 }]}>Report ID: {submittedReport.id}</Text>
             <Text style={[styles.muted, { fontSize: 12 }]}>Type: {submittedReport.reportType.replace(/_/g, " ")}</Text>
             <Text style={[styles.muted, { fontSize: 12 }]}>Status: {submittedReport.status}</Text>
+            <Text style={[styles.muted, { fontSize: 12 }]}>
+              Submission: {submittedReport.isAnonymous ? "Anonymous" : "Identified"}
+            </Text>
             {Boolean(submittedReport.evidence?.length) && (
               <Text style={[styles.muted, { fontSize: 12 }]}>
                 Attached Evidence: {submittedReport.evidence.length} file{submittedReport.evidence.length > 1 ? "s" : ""}
@@ -456,7 +462,47 @@ export default function CommunityReportScreen({ navigation, route }) {
       />
       {errors.evidence && <Text style={styles.error}>{errors.evidence}</Text>}
 
-      {/* 6. Submit Button */}
+      {/* 6. Anonymous Reporting Option */}
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isAnonymous }}
+        accessibilityLabel="Submit anonymously"
+        disabled={submitting}
+        onPress={() => setIsAnonymous(!isAnonymous)}
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          backgroundColor: isAnonymous ? colors.cream : colors.white,
+          borderWidth: 1.5,
+          borderColor: isAnonymous ? colors.green : colors.border,
+          borderRadius: 12,
+          padding: 14,
+          gap: 12,
+          opacity: pressed || submitting ? 0.8 : 1,
+        })}
+      >
+        <Ionicons
+          name={isAnonymous ? "checkbox" : "square-outline"}
+          size={24}
+          color={isAnonymous ? colors.green : colors.muted}
+        />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: "600",
+              color: isAnonymous ? colors.green : colors.text,
+            }}
+          >
+            Submit anonymously
+          </Text>
+          <Text style={{ fontSize: 12, color: colors.muted }}>
+            Hide your identity on public and community-facing reports. Wildlife officers can still respond to the incident.
+          </Text>
+        </View>
+      </Pressable>
+
+      {/* 7. Submit Button */}
       <View style={{ gap: 8, paddingBottom: 24 }}>
         <Button
           title={submitting ? (uploadStatus || "Submitting Report...") : "Submit Incident Report"}

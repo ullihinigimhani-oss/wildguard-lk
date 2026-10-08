@@ -39,7 +39,7 @@ exports.getReportById = async (req, res, next) => {
 
 exports.listAllReports = async (req, res, next) => {
   try {
-    const result = await service.listReportsForLiaison(req.query);
+    const result = await service.listReportsForLiaison(req.query, req.user || null);
     res.set("Cache-Control", "no-store").json({
       success: true,
       ...result,
