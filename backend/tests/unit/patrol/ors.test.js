@@ -441,3 +441,17 @@ test("intermediate waypoint connector crossing a RiskZone rejects the entire ful
   ).rejects.toMatchObject({ code: "NO_RISK_AVOIDING_ROUTE" });
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+test.each([[true,0,"PATROL_POINT_UNMAPPED"],[false,0,"CURRENT_LOCATION_UNMAPPED"],[false,1,"DESTINATION_POINT_UNMAPPED"]])("2010 safely identifies full=%s point=%s",async(full,index,code)=>{
+ const req=input();
+ if(full)req.waypoints=[{...req.currentLocation,id:"s",type:"START"},req.destination];
+ fetch.mockResolvedValue({ok:false,status:404,json:async()=>({error:{code:2010,message:"Could not find "+(full?"coordinate ":"point ")+index+": PRIVATE COORDINATES within a radius of 350.0 meters. SECRET"}})});
+ let failure;try{await ors.walkingRoute(req);}catch(e){failure=e;}
+ expect(failure).toMatchObject({code,status:422,providerCode:2010,routingPoint:{index}});
+ expect(failure.message).not.toMatch(/PRIVATE|SECRET/);
+ expect(JSON.stringify(failure)).not.toMatch(/PRIVATE|SECRET/);
+});
+test("provider parameter error is distinct from disconnected network",async()=>{
+ fetch.mockResolvedValue({ok:false,status:400,json:async()=>({error:{code:2003,message:"private"}})});
+ await expect(ors.walkingRoute(input())).rejects.toMatchObject({code:"ROUTING_REQUEST_INVALID"});
+});

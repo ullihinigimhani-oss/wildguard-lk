@@ -1,3 +1,4 @@
+import { walkingRouteError } from "../utils/walkingRouteError";
 import { useEffect, useRef, useState } from "react";
 import { getFullPatrolRoute } from "../services/patrolApi";
 import { sessionKey } from "../utils/navigationSession";
@@ -102,7 +103,7 @@ export default function useFullPatrolRoute(
             ...value,
             route: null,
             error:
-              code === "DESTINATION_IN_RISK_ZONE"
+              walkingRouteError(error.response?.data) || (code === "DESTINATION_IN_RISK_ZONE"
                 ? "A required patrol point is inside a known risk zone. Contact the Park Manager; it has not been skipped."
                 : code === "PATROL_POINT_UNMAPPED"
                   ? "Full patrol navigation route cannot be calculated: a required patrol point has no mapped walking connection. Review the saved points with the Park Manager."
@@ -110,7 +111,7 @@ export default function useFullPatrolRoute(
                     ? "Full patrol navigation requires a valid saved route with at most 50 required points. Review the route with the Park Manager."
                     : [401, 403, 404, 409].includes(status)
                       ? "This patrol is no longer available for full-route navigation. Refresh the patrol."
-                      : "Full patrol navigation route cannot currently be calculated. Saved waypoints and available live navigation remain visible.",
+                      : "Full patrol navigation route cannot currently be calculated. Saved waypoints and available live navigation remain visible."),
           }));
       })
       .finally(() => {
