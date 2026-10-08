@@ -7,12 +7,13 @@ import PatrolCard from "../../components/PatrolCard";
 import PatrolLoadState from "../../components/PatrolLoadState";
 import useRangerPatrols from "../../hooks/useRangerPatrols";
 import usePatrolClock from "../../hooks/usePatrolClock";
+import { ScreenHeader, EmptyState } from "../../components/common/FieldUI";
 import {
   matchesFilter,
   patrolFilters,
   classifyPatrol,
 } from "../../utils/rangerPatrol";
-import { styles, colors } from "../../constants/theme";
+import { styles, colors } from "../../constants/rangerTheme";
 import { rangerStyles as ui } from "../../constants/rangerTheme";
 const emptyStates = {
   ALL: "No patrols assigned.",
@@ -32,10 +33,7 @@ export default function MyPatrolScreen({ route, navigation }) {
   const patrols = state.patrols.filter((p) => matchesFilter(p, filter, now));
   return (
     <Screen>
-      <Text style={styles.eyebrow}>FIELD ASSIGNMENTS</Text>
-      <Text style={styles.muted}>
-        Your assigned patrols, organized by status.
-      </Text>
+      <ScreenHeader title="My Patrol" icon="map" eyebrow="FIELD ASSIGNMENTS" description="Your assigned patrols, organized by status." />
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -53,7 +51,7 @@ export default function MyPatrolScreen({ route, navigation }) {
               minHeight: 44,
               paddingHorizontal: 13,
               justifyContent: "center",
-              borderRadius: 10,
+              borderRadius: 22,
               backgroundColor: filter === key ? colors.green : colors.cream,
             }}
           >
@@ -85,9 +83,7 @@ export default function MyPatrolScreen({ route, navigation }) {
             </PatrolCard>
           ))}
           {!patrols.length && (
-            <View style={ui.card}>
-              <Text style={styles.text}>{emptyStates[filter]}</Text>
-            </View>
+            <EmptyState message={emptyStates[filter]} detail="Your assignments will appear here when they are available." />
           )}
           <Button title="Refresh patrols" secondary onPress={state.refresh} />
         </>

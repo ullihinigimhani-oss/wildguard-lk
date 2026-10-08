@@ -2,6 +2,7 @@ import React, { useContext } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { styles } from "../../constants/theme";
+import { RangerVisualContext, fieldColors } from "../../constants/fieldTheme";
 export const RangerLayoutContext = React.createContext(false);
 export default function Screen({
   children,
@@ -10,9 +11,10 @@ export default function Screen({
   refreshControl,
 }) {
   const rangerLayout = useContext(RangerLayoutContext);
+  const rangerVisual = useContext(RangerVisualContext);
   return (
     <SafeAreaView
-      style={[styles.screen, backgroundColor && { backgroundColor }]}
+      style={[styles.screen, rangerVisual && { backgroundColor: fieldColors.background }, backgroundColor && { backgroundColor }]}
       edges={rangerLayout ? ["left", "right"] : ["left", "right", "bottom"]}
     >
       <KeyboardAvoidingView
@@ -25,6 +27,7 @@ export default function Screen({
           contentContainerStyle={[
             styles.content,
             rangerLayout && { padding: 20, gap: 16 },
+            rangerVisual && { padding: 20, gap: 20 },
             contentStyle,
           ]}
         >

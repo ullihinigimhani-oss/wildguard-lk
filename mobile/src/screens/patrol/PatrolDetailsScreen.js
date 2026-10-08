@@ -20,7 +20,7 @@ import {
 import { actualPatrolTime, classifyPatrol } from "../../utils/rangerPatrol";
 import usePatrolClock from "../../hooks/usePatrolClock";
 import { useAuth } from "../../hooks/useAuth";
-import { styles } from "../../constants/theme";
+import { styles } from "../../constants/rangerTheme";
 import { rangerStyles as ui } from "../../constants/rangerTheme";
 function Field({ label, value }) {
   return (

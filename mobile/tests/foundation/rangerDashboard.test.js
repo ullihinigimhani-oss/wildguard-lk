@@ -136,7 +136,7 @@ test("all six filters, completed-late history and removal from overdue", () => {
   });
   loaded([patrol(), next(), overdue(), active, completed]);
   const ui = render(<MyPatrolScreen route={{}} navigation={navigation()} />);
-  expect(ui.getAllByRole("header")).toHaveLength(5);
+  expect(ui.getAllByRole("header")).toHaveLength(6); // Screen title plus five assignments.
   for (const [label, title] of [
     ["Today", "Boundary sweep"],
     ["Upcoming", "Future sweep"],
@@ -145,7 +145,7 @@ test("all six filters, completed-late history and removal from overdue", () => {
     ["Completed", "Finished sweep"],
   ]) {
     fireEvent.press(ui.getByRole("button", { name: label }));
-    expect(ui.getAllByRole("header")).toHaveLength(1);
+    expect(ui.getAllByRole("header")).toHaveLength(2);
     expect(ui.getByText(title)).toBeTruthy();
   }
   expect(ui.getByText("COMPLETED LATE")).toBeTruthy();
@@ -230,4 +230,22 @@ test("dashboard shows loading and error recovery without invented patrol cards",
   fireEvent.press(ui.getByLabelText("Retry"));
   expect(refresh).toHaveBeenCalledTimes(1);
   expect(ui.queryByLabelText("Start Patrol")).toBeNull();
+});
+
+test("recent activity and history use existing patrol records and destinations", () => {
+  loaded([patrol({ id: "finished", routeName: "Real completed activity", status: "COMPLETED" })]);
+  const nav = navigation();
+  const ui = render(<HomeScreen navigation={nav} />);
+  fireEvent.press(ui.getByLabelText("Patrol History"));
+  expect(nav.navigate).toHaveBeenCalledWith("Patrol", { filter: "COMPLETED" });
+  fireEvent.press(ui.getByLabelText("View activity: Real completed activity"));
+  expect(nav.navigate).toHaveBeenCalledWith("PatrolDetails", { patrolId: "finished" });
+  expect(ui.queryByLabelText("Continue Patrol")).toBeNull();
+});
+
+test("empty activity does not fabricate statistics or reports", () => {
+  loaded([]);
+  const ui = render(<HomeScreen navigation={navigation()} />);
+  expect(ui.getByText("No recent patrol activity yet.")).toBeTruthy();
+  expect(ui.queryByText(/Distance travelled/)).toBeNull();
 });

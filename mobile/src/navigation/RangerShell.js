@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors } from "../constants/theme";
 import { RangerLayoutContext } from "../components/common/Screen";
-import { dashboardColors } from "../screens/home/dashboardTheme";
+import { RangerVisualContext, fieldColors as c } from "../constants/fieldTheme";
 const tabs = [
   ["Home", "Dashboard", "grid-outline", "grid"],
   ["Patrol", "My Patrol", "map-outline", "map"],
@@ -13,17 +13,15 @@ const tabs = [
   ["Profile", "Profile", "person-outline", "person"],
 ];
 export default function RangerShell({ navigation, route, children }) {
-  const dashboard = route.name === "Home";
-  const tabColors = dashboard
-    ? {
+  const tabColors = {
         ...colors,
-        background: dashboardColors.background,
-        green: dashboardColors.forest,
-        cream: dashboardColors.sage,
-        border: dashboardColors.border,
-      }
-    : colors;
+        background: c.background,
+        green: c.forest,
+        cream: c.sage,
+        border: c.border,
+      };
   return (
+    <RangerVisualContext.Provider value={true}>
     <RangerLayoutContext.Provider value={true}>
       <SafeAreaView
         edges={["top"]}
@@ -41,10 +39,10 @@ export default function RangerShell({ navigation, route, children }) {
           <View
             style={{
               flexDirection: "row",
-              paddingHorizontal: 8,
-              paddingTop: 6,
-              paddingBottom: 4,
-              gap: 4,
+              paddingHorizontal: 12,
+              paddingTop: 10,
+              paddingBottom: 6,
+              gap: 6,
             }}
           >
             {tabs.map(([name, label, icon, activeIcon]) => {
@@ -58,10 +56,10 @@ export default function RangerShell({ navigation, route, children }) {
                   onPress={() => navigation.navigate(name)}
                   style={({ pressed }) => ({
                     flex: 1,
-                    minHeight: dashboard ? 54 : 48,
+                    minHeight: 56,
                     paddingVertical: 5,
                     paddingHorizontal: 2,
-                    borderRadius: dashboard ? 14 : 10,
+                    borderRadius: 18,
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 3,
@@ -72,8 +70,8 @@ export default function RangerShell({ navigation, route, children }) {
                   <Ionicons
                     accessible={false}
                     name={active ? activeIcon : icon}
-                    size={21}
-                    color={active ? tabColors.green : colors.muted}
+                    size={22}
+                    color={active ? tabColors.green : c.muted}
                   />
                   <Text
                     style={{
@@ -81,7 +79,7 @@ export default function RangerShell({ navigation, route, children }) {
                       lineHeight: 14,
                       fontWeight: active ? "700" : "500",
                       textAlign: "center",
-                      color: active ? tabColors.green : colors.muted,
+                      color: active ? tabColors.green : c.muted,
                     }}
                   >
                     {label}
@@ -93,5 +91,6 @@ export default function RangerShell({ navigation, route, children }) {
         </SafeAreaView>
       </SafeAreaView>
     </RangerLayoutContext.Provider>
+    </RangerVisualContext.Provider>
   );
 }

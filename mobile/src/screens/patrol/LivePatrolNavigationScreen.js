@@ -18,7 +18,7 @@ import useLiveNavigation from "../../hooks/useLiveNavigation";
 import useFullPatrolRoute from "../../hooks/useFullPatrolRoute";
 import { useAuth } from "../../hooks/useAuth";
 import { completeMyPatrol } from "../../services/patrolApi";
-import { styles } from "../../constants/theme";
+import { styles } from "../../constants/rangerTheme";
 import { rangerStyles as ui } from "../../constants/rangerTheme";
 
 export default function LivePatrolNavigationScreen({ route, navigation }) {

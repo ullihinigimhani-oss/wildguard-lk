@@ -11,6 +11,7 @@ import {
   dashboardPatrols,
   classifyPatrol,
   PATROL_TIME_ZONE,
+  patrolDate,
 } from "../../utils/rangerPatrol";
 import usePatrolClock from "../../hooks/usePatrolClock";
 import DashboardPatrolCard from "./DashboardPatrolCard";
@@ -85,6 +86,10 @@ export default function HomeScreen({ navigation }) {
   const greeting =
     hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const firstName = user.name.trim().split(/\s+/)[0];
+  const recent = state.patrols
+    .filter((item) => ["COMPLETED", "CANCELLED"].includes(item.status))
+    .sort((a, b) => (Date.parse(b.actualEndTime || b.scheduledDate) || 0) - (Date.parse(a.actualEndTime || a.scheduledDate) || 0))
+    .slice(0, 3);
   return (
     <Screen backgroundColor={c.background} contentStyle={s.content}>
       <View style={s.header}>
@@ -116,10 +121,15 @@ export default function HomeScreen({ navigation }) {
         </View>
       </View>
       <View style={{ gap: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Avatar user={user} size={48} />
+          <View style={{ flex: 1, gap: 4 }}>
         <Text accessibilityRole="header" style={s.title}>
           {greeting}, {firstName}
         </Text>
         <Text style={s.body}>Ready for your next patrol?</Text>
+          </View>
+        </View>
         <View
           style={{
             flexDirection: "row",
@@ -128,7 +138,7 @@ export default function HomeScreen({ navigation }) {
             marginTop: 4,
           }}
         >
-          <Avatar user={user} size={28} />
+          <Feather accessible={false} name="map-pin" size={15} color={c.secondary} />
           <Text style={[s.body, { fontSize: 12, flex: 1 }]}>
             {user.park?.name || "Not assigned"}
           </Text>
@@ -283,7 +293,20 @@ export default function HomeScreen({ navigation }) {
             onPress={() => navigation.navigate("Incident")}
           />
         </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Patrol History" onPress={() => navigation.navigate("Patrol", { filter: "COMPLETED" })} style={({ pressed }) => [s.card, { flexDirection: "row", alignItems: "center", padding: 16, opacity: pressed ? 0.7 : 1 }]}>
+          <View style={s.iconTile}><Feather accessible={false} name="clock" size={21} color={c.forest} /></View>
+          <View style={{ flex: 1, gap: 3 }}><Text style={[s.section, { fontSize: 15 }]}>Patrol History</Text><Text style={[s.body, { fontSize: 12 }]}>Review completed assignments</Text></View>
+          <Feather accessible={false} name="chevron-right" size={18} color={c.forest} />
+        </Pressable>
       </View>
+      {!state.loading && !state.error && <View style={{ gap: 12 }}>
+        <Text style={s.section}>Recent Activity</Text>
+        {recent.length ? recent.map((item) => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`View activity: ${item.routeName}`} onPress={() => navigation.navigate("PatrolDetails", { patrolId: item.id })} style={({ pressed }) => [s.card, { flexDirection: "row", alignItems: "center", padding: 16, opacity: pressed ? 0.7 : 1 }]}>
+          <View style={s.iconTile}><Feather accessible={false} name={item.status === "COMPLETED" ? "check-circle" : "slash"} size={20} color={c.forest} /></View>
+          <View style={{ flex: 1, gap: 4 }}><Text style={[s.section, { fontSize: 14 }]}>{item.routeName}</Text><Text style={[s.body, { fontSize: 12 }]}>{item.status === "COMPLETED" ? "Completed" : "Cancelled"} · {patrolDate(item.scheduledDate)}</Text></View>
+          <Feather accessible={false} name="chevron-right" size={17} color={c.muted} />
+        </Pressable>) : <View style={s.card}><Text style={s.body}>No recent patrol activity yet.</Text></View>}
+      </View>}
     </Screen>
   );
 }

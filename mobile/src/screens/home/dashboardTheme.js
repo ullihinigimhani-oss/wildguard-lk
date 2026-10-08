@@ -1,16 +1,10 @@
 import { StyleSheet } from "react-native";
 import { typography } from "../../constants/typography";
+import { fieldColors, fieldCard } from "../../constants/fieldTheme";
 export const dashboardColors = {
-  forest: "#174D3A",
-  background: "#F5F6F0",
-  sage: "#DCE9DD",
-  amber: "#E8A24B",
-  danger: "#B63B3B",
-  text: "#203C30",
-  muted: "#5F6E63",
-  border: "#E1E6DC",
+  ...fieldColors,
   white: "#FFFFFF",
-  onForest: "#DCE9DD",
+  onForest: fieldColors.sage,
 };
 const c = dashboardColors;
 export const dashboardStyles = StyleSheet.create({
@@ -34,6 +28,7 @@ export const dashboardStyles = StyleSheet.create({
   body: { ...typography.body, color: c.muted },
   section: { ...typography.section, color: c.text },
   card: {
+    ...fieldCard,
     borderRadius: 22,
     padding: 20,
     gap: 16,
@@ -49,7 +44,7 @@ export const dashboardStyles = StyleSheet.create({
   activeCard: { backgroundColor: c.forest, borderColor: c.forest },
   cardTitle: { ...typography.heading, letterSpacing: -0.4, color: c.text },
   badge: {
-    borderRadius: 8,
+    borderRadius: 20,
     paddingHorizontal: 9,
     paddingVertical: 5,
     backgroundColor: c.sage,

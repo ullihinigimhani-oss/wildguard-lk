@@ -8,7 +8,7 @@ import PatrolRouteMap from "../../components/patrol/PatrolRouteMap";
 import PlannedRouteSummary from "../../components/patrol/PlannedRouteSummary";
 import useAssignedPatrol from "../../hooks/useAssignedPatrol";
 import { readPlannedRoute } from "../../utils/plannedPatrolRoute";
-import { styles } from "../../constants/theme";
+import { styles } from "../../constants/rangerTheme";
 import { rangerStyles as ui } from "../../constants/rangerTheme";
 
 export default function PatrolRouteScreen({ route }) {

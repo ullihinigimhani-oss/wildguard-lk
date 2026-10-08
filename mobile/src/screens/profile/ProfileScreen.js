@@ -1,5 +1,5 @@
 import React from "react";
-import { View } from "react-native";
+import { Image, View } from "react-native";
 import { Text } from "../../components/common/Typography";
 import Avatar from "../../components/common/Avatar";
 import { roleLabel } from "../../constants/registrationRoles";
@@ -8,21 +8,27 @@ import Button from "../../components/common/Button";
 import { useAuth } from "../../hooks/useAuth";
 import { styles } from "../../constants/theme";
 import { rangerStyles as ui } from "../../constants/rangerTheme";
+import { fieldColors as c } from "../../constants/fieldTheme";
+import { ModernCard, FieldIcon } from "../../components/common/FieldUI";
 export default function ProfileScreen() {
   const { user, logout, isDemo } = useAuth();
   if (!isDemo && user.role === "RANGER")
     return (
-      <Screen>
-        <Text style={styles.eyebrow}>YOUR ACCOUNT</Text>
+      <Screen backgroundColor={c.background}>
+        <ModernCard style={{ backgroundColor: c.forest, borderColor: c.forest }}>
+        <Image accessible={false} source={require("../../../assets/images/onboarding-ranger.jpg")} resizeMode="cover" style={{ width: "100%", height: 130, borderRadius: 16 }} />
+        <Text style={[styles.eyebrow, { color: c.sage }]}>YOUR ACCOUNT</Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-          <Avatar user={user} size={56} />
+          <Avatar user={user} size={64} />
           <View style={{ flex: 1, gap: 3 }}>
-            <Text accessibilityRole="header" style={ui.section}>
+            <Text accessibilityRole="header" style={[ui.title, { color: c.white }]}>
               {user.name}
             </Text>
-            <Text style={styles.muted}>Park Ranger</Text>
+            <Text style={[styles.muted, { color: c.sage }]}>Park Ranger</Text>
           </View>
         </View>
+        </ModernCard>
+        <Text style={[ui.section, { marginTop: 4 }]}>Account information</Text>
         <View style={ui.card}>
           {Object.entries({
             Email: user.email,
@@ -32,18 +38,23 @@ export default function ProfileScreen() {
             <View
               key={label}
               style={{
-                gap: 5,
+                gap: 12,
+                flexDirection: "row",
+                alignItems: "center",
                 paddingTop: index ? 12 : 0,
                 borderTopWidth: index ? 1 : 0,
                 borderColor: "#dce4d7",
               }}
             >
-              <Text style={styles.muted}>{label}</Text>
-              <Text style={styles.text}>{value}</Text>
+              <FieldIcon name={index === 0 ? "mail" : index === 1 ? "map-pin" : "shield"} />
+              <View style={{ flex: 1, gap: 5 }}>
+                <Text style={[styles.muted, { color: c.muted }]}>{label}</Text>
+                <Text style={[styles.text, { color: c.text, fontWeight: "600" }]}>{value}</Text>
+              </View>
             </View>
           ))}
         </View>
-        <Button title="Logout" secondary onPress={logout} />
+        <Button title="Logout" icon="log-out" color={c.danger} secondary onPress={logout} />
       </Screen>
     );
   return (
