@@ -1,10 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Linking,
   Pressable,
   ScrollView,
-  Switch,
   Text,
   TextInput,
   View,
@@ -13,7 +10,6 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
 import LocationPicker from "../../components/LocationPicker";
-import EvidencePicker from "../../components/EvidencePicker";
 import { submitReport } from "../../services/communityReportApi";
 import { useAuth } from "../../hooks/useAuth";
 import { colors, styles } from "../../constants/theme";
@@ -43,25 +39,23 @@ const QUICK_SPECIES = ["Elephant", "Leopard", "Sloth Bear", "Wild Boar", "Crocod
 
 export default function CommunityReportScreen({ navigation, route }) {
   const { user } = useAuth();
+  const submittingRef = useRef(false);
 
   const [reportType, setReportType] = useState(
     route?.params?.initialReportType || "WILDLIFE_SIGHTING"
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (route?.params?.initialReportType) {
       setReportType(route.params.initialReportType);
     }
   }, [route?.params?.initialReportType]);
+
   const [species, setSpecies] = useState("");
   const [description, setDescription] = useState("");
   const [manualLocation, setManualLocation] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
-  const [evidence, setEvidence] = useState([]);
-  const [isAnonymous, setIsAnonymous] = useState(false);
-  const [reporterName, setReporterName] = useState(user?.name || "");
-  const [reporterPhone, setReporterPhone] = useState(user?.phone || "");
 
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -71,50 +65,84 @@ export default function CommunityReportScreen({ navigation, route }) {
     setSpecies(s);
   }
 
-  function handleSendSMS() {
-    const loc = manualLocation || "Unknown Location";
-    const body = encodeURIComponent(
-      `[WildGuard] ${reportType} - ${species || "Wildlife"}. Location: ${loc}. Info: ${description || "Immediate review needed"}`
-    );
-    Linking.openURL(`sms:1992?body=${body}`).catch(() => {
-      Alert.alert("SMS Error", "Could not open messaging client. Please dial 1992 directly.");
-    });
-  }
-
   function validate() {
     const errs = {};
-    if (!reportType) errs.reportType = "Please select a report type.";
-    if (!description.trim() || description.trim().length < 5) {
-      errs.description = "Provide a description of at least 5 characters.";
+
+    if (
+      !reportType ||
+      !["WILDLIFE_SIGHTING", "HUMAN_WILDLIFE_CONFLICT", "SUSPICIOUS_ACTIVITY"].includes(reportType)
+    ) {
+      errs.reportType = "Please select a valid report type.";
     }
-    const hasCoords = latitude && longitude;
-    if (!manualLocation.trim() && !hasCoords) {
+
+    const trimmedDesc = description.trim();
+    if (!trimmedDesc || trimmedDesc.length < 5) {
+      errs.description = "Provide a description of at least 5 characters.";
+    } else if (trimmedDesc.length > 2000) {
+      errs.description = "Description must not exceed 2000 characters.";
+    }
+
+    const hasManualLoc = Boolean(manualLocation.trim());
+    const latTrim = latitude.trim();
+    const lonTrim = longitude.trim();
+    const hasLat = latTrim !== "";
+    const hasLon = lonTrim !== "";
+
+    if (hasLat || hasLon) {
+      const latNum = parseFloat(latTrim);
+      const lonNum = parseFloat(lonTrim);
+
+      if (!hasLat) {
+        errs.latitude = "Latitude is required when longitude is provided.";
+      } else if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+        errs.latitude = "Latitude must be between -90 and 90.";
+      }
+
+      if (!hasLon) {
+        errs.longitude = "Longitude is required when latitude is provided.";
+      } else if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
+        errs.longitude = "Longitude must be between -180 and 180.";
+      }
+    }
+
+    const hasValidCoords =
+      hasLat &&
+      hasLon &&
+      !isNaN(parseFloat(latTrim)) &&
+      !isNaN(parseFloat(lonTrim)) &&
+      parseFloat(latTrim) >= -90 &&
+      parseFloat(latTrim) <= 90 &&
+      parseFloat(lonTrim) >= -180 &&
+      parseFloat(lonTrim) <= 180;
+
+    if (!hasManualLoc && !hasValidCoords) {
       errs.location = "Provide a location description or GPS coordinates.";
     }
-    if (!isAnonymous && reporterPhone && !/^[+0-9\s\-()]{7,25}$/.test(reporterPhone.trim())) {
-      errs.reporterPhone = "Provide a valid contact phone number.";
-    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
 
   async function handleSubmit() {
-    if (!validate() || submitting) return;
+    if (submittingRef.current || submitting) return;
+    if (!validate()) return;
 
+    submittingRef.current = true;
     setSubmitting(true);
     setErrors({});
 
     try {
+      const latTrim = latitude.trim();
+      const lonTrim = longitude.trim();
+
       const payload = {
         reportType,
         species: species.trim() || undefined,
         description: description.trim(),
         manualLocation: manualLocation.trim() || undefined,
-        latitude: latitude ? parseFloat(latitude) : undefined,
-        longitude: longitude ? parseFloat(longitude) : undefined,
-        reporterName: isAnonymous ? undefined : reporterName.trim() || undefined,
-        reporterPhone: isAnonymous ? undefined : reporterPhone.trim() || undefined,
-        evidence: evidence.length ? evidence : undefined,
+        latitude: latTrim ? parseFloat(latTrim) : undefined,
+        longitude: lonTrim ? parseFloat(lonTrim) : undefined,
+        reporterName: user?.name || undefined,
       };
 
       const result = await submitReport(payload);
@@ -132,6 +160,7 @@ export default function CommunityReportScreen({ navigation, route }) {
         });
       }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -143,7 +172,6 @@ export default function CommunityReportScreen({ navigation, route }) {
     setManualLocation("");
     setLatitude("");
     setLongitude("");
-    setEvidence([]);
     setErrors({});
     setSubmittedReport(null);
   }
@@ -180,14 +208,24 @@ export default function CommunityReportScreen({ navigation, route }) {
           </View>
 
           <View style={{ width: "100%", gap: 10, marginTop: 8 }}>
-            {navigation?.navigate && user && (
-              <Button
-                title="View My Reports"
-                onPress={() => {
-                  resetForm();
-                  navigation.navigate("MyReports");
-                }}
-              />
+            {navigation?.navigate && (
+              <>
+                <Button
+                  title="View My Reports"
+                  onPress={() => {
+                    resetForm();
+                    navigation.navigate("MyReports");
+                  }}
+                />
+                <Button
+                  title="Return to Home"
+                  secondary
+                  onPress={() => {
+                    resetForm();
+                    navigation.navigate("CommunityDashboard");
+                  }}
+                />
+              </>
             )}
             <Button
               title="Submit Another Report"
@@ -208,41 +246,6 @@ export default function CommunityReportScreen({ navigation, route }) {
         <Text style={styles.muted}>
           Submit sightings, elephant movements, or urgent incidents to wildlife liaison officers.
         </Text>
-      </View>
-
-      {/* SMS Hotline Notice */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: 12,
-          backgroundColor: "#eef6ff",
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: "#bfdbfe",
-        }}
-      >
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "#1e40af" }}>
-            Emergency SMS (Offline)
-          </Text>
-          <Text style={{ fontSize: 12, color: "#1e3a8a" }}>
-            No internet? Send directly to DWC 1992
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={handleSendSMS}
-          style={{
-            backgroundColor: "#2563eb",
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            borderRadius: 8,
-          }}
-        >
-          <Text style={{ color: colors.white, fontSize: 12, fontWeight: "700" }}>Send SMS</Text>
-        </Pressable>
       </View>
 
       {errors.general && (
@@ -315,7 +318,7 @@ export default function CommunityReportScreen({ navigation, route }) {
         {errors.reportType && <Text style={styles.error}>{errors.reportType}</Text>}
       </View>
 
-      {/* 2. Species */}
+      {/* 2. Optional Species / Summary */}
       <View style={{ gap: 8 }}>
         <Text style={styles.label}>Wildlife Species (If known)</Text>
         <TextInput
@@ -394,67 +397,7 @@ export default function CommunityReportScreen({ navigation, route }) {
         disabled={submitting}
       />
 
-      {/* 5. Photo & Evidence */}
-      <EvidencePicker
-        evidence={evidence}
-        onChange={setEvidence}
-        disabled={submitting}
-      />
-
-      {/* 6. Reporter Information / Anonymous Option */}
-      <View style={[styles.card, { gap: 12 }]}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <View style={{ gap: 2, flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.text }}>
-              Anonymous Report
-            </Text>
-            <Text style={styles.muted}>Hide your name and phone from the report</Text>
-          </View>
-          <Switch
-            value={isAnonymous}
-            onValueChange={setIsAnonymous}
-            trackColor={{ false: colors.border, true: colors.green }}
-            thumbColor={colors.white}
-            disabled={submitting}
-          />
-        </View>
-
-        {!isAnonymous && (
-          <View style={{ gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10 }}>
-            <View style={{ gap: 4 }}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.muted }}>Your Name</Text>
-              <TextInput
-                placeholder="Full name"
-                placeholderTextColor={colors.muted}
-                value={reporterName}
-                onChangeText={setReporterName}
-                editable={!submitting}
-                maxLength={120}
-                style={[styles.input, { minHeight: 44, fontSize: 14 }]}
-              />
-            </View>
-
-            <View style={{ gap: 4 }}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.muted }}>
-                Contact Phone (For urgent follow-up)
-              </Text>
-              <TextInput
-                placeholder="07X XXXXXXX"
-                placeholderTextColor={colors.muted}
-                value={reporterPhone}
-                onChangeText={setReporterPhone}
-                keyboardType="phone-pad"
-                editable={!submitting}
-                maxLength={25}
-                style={[styles.input, { minHeight: 44, fontSize: 14 }]}
-              />
-              {errors.reporterPhone && <Text style={styles.error}>{errors.reporterPhone}</Text>}
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* Submit Button */}
+      {/* 5. Submit Button */}
       <View style={{ gap: 8, paddingBottom: 24 }}>
         <Button
           title={submitting ? "Submitting Report..." : "Submit Incident Report"}

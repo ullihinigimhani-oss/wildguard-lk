@@ -86,6 +86,10 @@ function validateCommunityReportCreation(body) {
   }
 
   const hasCoords = latitude !== null && longitude !== null && !Number.isNaN(latitude) && !Number.isNaN(longitude);
+  if ((latitude !== null && longitude === null) || (longitude !== null && latitude === null)) {
+    if (latitude === null) fields.latitude = "Latitude is required when longitude is provided.";
+    if (longitude === null) fields.longitude = "Longitude is required when latitude is provided.";
+  }
   if (!manualLocation && !hasCoords) {
     fields.location = "Provide a location description or GPS coordinates.";
   }
