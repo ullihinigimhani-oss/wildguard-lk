@@ -1,3 +1,7 @@
+jest.mock("../../src/services/offlineGps", () => ({
+  recordOfflineGps: (_owner, patrol, sample, signal) => require("../../src/services/patrolApi").recordPatrolLocation(patrol.id, sample, signal),
+  mergeLocalGps: async (_owner, _patrol, server) => server,
+}));
 import { renderHook, act, waitFor } from "@testing-library/react-native";
 import useLiveNavigation from "../../src/hooks/useLiveNavigation";
 import {

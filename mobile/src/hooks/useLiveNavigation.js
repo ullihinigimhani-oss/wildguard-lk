@@ -1,4 +1,5 @@
 import { walkingRouteError } from "../utils/walkingRouteError";
+import { recordOfflineGps, mergeLocalGps } from '../services/offlineGps';
 import { useEffect, useRef, useState } from "react";
 import { pointInGeometry } from "../../../shared/riskGeometry";
 import {
@@ -112,12 +113,13 @@ export default function useLiveNavigation(patrol, points, userId, location) {
         });
     if (active && key)
       getPatrolLocations(patrol.id, ctx.controller.signal)
-        .then((trail) => {
+        .then(async (serverTrail) => {
+          const trail = await mergeLocalGps(userId, patrol.id, serverTrail);
           if (ctx.cancelled) return;
           ctx.lastSample = trail.at(-1) || null;
           setState((value) => ({ ...value, trail }));
         })
-        .catch((error) => {
+        .catch(async (error) => {
           if (
             !ctx.cancelled &&
             [401, 403, 404, 409].includes(error.response?.status)
@@ -132,12 +134,17 @@ export default function useLiveNavigation(patrol, points, userId, location) {
             }));
             return;
           }
-          if (!ctx.cancelled)
+          if (!ctx.cancelled) {
+            try {
+              const trail = await mergeLocalGps(userId, patrol.id, []);
+              if (!ctx.cancelled) { ctx.lastSample = trail.at(-1) || null; setState(value => ({ ...value, trail })); }
+            } catch { /* Report storage failures without losing the in-memory trail. */ }
             setState((value) => ({
               ...value,
               trailError:
                 "Previous GPS trail could not be loaded. New samples will still be recorded.",
             }));
+          }
         })
         .finally(() => {
           if (!ctx.cancelled) {
@@ -225,16 +232,17 @@ export default function useLiveNavigation(patrol, points, userId, location) {
       shouldRecordSample(ctx.lastSample, sample)
     ) {
       ctx.sampling = true;
-      ctx.lastSample = sample;
-      recordPatrolLocation(patrol.id, sample, ctx.controller.signal)
+      recordOfflineGps(userId, patrol, sample, ctx.controller.signal)
         .then((result) => {
           if (ctx.cancelled) return;
-          if (result.accepted)
+          if (result.accepted) {
+            ctx.lastSample = sample;
             setState((value) => ({
               ...value,
               trail: [...value.trail, result.location].slice(-1000),
               trailError: null,
             }));
+          }
         })
         .catch((error) => {
           if (ctx.cancelled) return;
@@ -251,7 +259,7 @@ export default function useLiveNavigation(patrol, points, userId, location) {
             setState((value) => ({
               ...value,
               trailError:
-                "GPS recording is temporarily unavailable. Check your connection.",
+                "GPS could not be saved on this device. Free storage or retry; this point is not yet safely recorded.",
             }));
         })
         .finally(() => {

@@ -28,7 +28,8 @@
         }
       ],
       "expo-font",
-      "expo-video"
+      "expo-video",
+      "expo-sqlite"
     ],
     "ios": {
       "supportsTablet": true

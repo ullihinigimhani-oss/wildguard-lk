@@ -1,10 +1,12 @@
+import { getAssignedPatrol } from "../services/offlinePatrol";
+import { useOffline } from "./useOffline";
 import { useCallback, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "./useAuth";
-import { getMyPatrol } from "../services/patrolApi";
 
 export default function useAssignedPatrol(id) {
   const { user } = useAuth();
+  const offline = useOffline();
   const [state, setState] = useState({
     patrol: null,
     loading: true,
@@ -24,7 +26,7 @@ export default function useAssignedPatrol(id) {
           error: "This patrol is not available.",
         });
       } else {
-        getMyPatrol(id, controller.signal)
+        getAssignedPatrol(id, user.id, controller.signal, !!offline && !offline.online)
           .then((patrol) => {
             if (attempt === generation.current)
               setState({ patrol, loading: false, error: null });
@@ -45,7 +47,7 @@ export default function useAssignedPatrol(id) {
         generation.current++;
         controller.abort();
       };
-    }, [id, user?.id, revision]),
+    }, [id, user?.id, revision, offline?.online]),
   );
   return { ...state, refresh: () => setRevision((value) => value + 1) };
 }

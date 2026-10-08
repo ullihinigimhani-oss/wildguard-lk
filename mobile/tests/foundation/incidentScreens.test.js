@@ -1,3 +1,10 @@
+import { kickSync } from "../../src/services/offlineSync";
+import LocalDrafts from "../../src/components/incident/LocalDrafts";
+import { useOffline } from "../../src/hooks/useOffline";
+import * as offlineStore from "../../src/storage/offlineStorage";
+jest.mock("../../src/hooks/useOffline", () => ({ useOffline: jest.fn() }));
+jest.mock("../../src/storage/offlineStorage", () => ({ offlineId: jest.fn(() => "local-id"), cachedPatrols: jest.fn(), readDraft: jest.fn(), saveDraft: jest.fn(), listDrafts: jest.fn() }));
+jest.mock("../../src/services/offlineSync", () => ({ kickSync: jest.fn(async () => {}) }));
 import React from "react";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { RefreshControl } from "react-native";
@@ -89,12 +96,17 @@ const incident = {
   evidence: [],
 };
 const nav = () => ({
+  setParams: jest.fn(),
   navigate: jest.fn(),
   replace: jest.fn(),
   dispatch: jest.fn(),
 });
 beforeEach(() => {
   jest.resetAllMocks();
+  useOffline.mockReturnValue(null);
+  offlineStore.listDrafts.mockResolvedValue([]);
+  offlineStore.offlineId.mockReturnValue("local-id");
+  kickSync.mockResolvedValue(undefined);
   mockFocused = true;
   mockPrevent = null;
   File.mockImplementation((parent, name) => ({
@@ -810,4 +822,121 @@ test("details navigates eligible owner to evidence for the saved incident and hi
   );
   await completed.findByText("Read-only report");
   expect(completed.queryByLabelText("Add Evidence")).toBeNull();
+});
+
+test("offline form saves a partial draft without HTTP submission", async () => {
+  useOffline.mockReturnValue({ owner: "r", online: false }); offlineStore.cachedPatrols.mockResolvedValue([patrol]);
+  offlineStore.saveDraft.mockResolvedValue("local-id");
+  const { ui } = await form(); fireEvent.changeText(ui.getByLabelText("Incident title *"), "Offline notes");
+  fireEvent.press(ui.getByLabelText("Save Draft on Device"));
+  await waitFor(() => expect(ui.getByText("Draft saved on device")).toBeTruthy());
+  expect(offlineStore.saveDraft.mock.calls[0][3].title).toBe("Offline notes");
+  expect(offlineStore.saveDraft.mock.calls[0][6]).toBe(false); expect(createIncident).not.toHaveBeenCalled(); expect(getMyPatrol).not.toHaveBeenCalled();
+});
+test("offline submit validates then queues once, without claiming server success", async () => {
+  useOffline.mockReturnValue({ owner: "r", online: false }); offlineStore.cachedPatrols.mockResolvedValue([patrol]);
+  offlineStore.saveDraft.mockResolvedValue("local-id"); offlineStore.readDraft.mockResolvedValue({ status: "PENDING_SYNC" });
+  const { ui, navigation } = await form(); fill(ui);
+  fireEvent.press(ui.getByLabelText("Submit Incident")); fireEvent.press(ui.getByLabelText("Submit Incident"));
+  await waitFor(() => expect(ui.getByText("Saved on device — Pending Sync")).toBeTruthy());
+  expect(offlineStore.saveDraft).toHaveBeenCalledTimes(1); expect(offlineStore.saveDraft.mock.calls[0][6]).toBe(true);
+  expect(createIncident).not.toHaveBeenCalled(); expect(navigation.replace).not.toHaveBeenCalled();
+  expect(navigation.setParams).toHaveBeenCalledWith({ localDraftId: "local-id" });
+  expect(ui.queryByLabelText("Submit Incident")).toBeNull();
+});
+test("saved local draft reopens in the existing form with owned evidence", async () => {
+  useOffline.mockReturnValue({ owner: "r", online: false }); offlineStore.cachedPatrols.mockResolvedValue([patrol]);
+  offlineStore.readDraft.mockResolvedValue({ form: { title: "Stored draft", description: "Offline observations", incidentType: "POACHING_SNARE", date: "2026-01-01", time: "10:00", latitude: "7.2", longitude: "80.2" }, items: [], status: "LOCAL_DRAFT" });
+  const ui = render(<Form route={{ params: { patrolId: "p", localDraftId: "local-id" } }} navigation={nav()} />);
+  await waitFor(() => expect(ui.getByLabelText("Incident title *").props.value).toBe("Stored draft"));
+  expect(offlineStore.readDraft).toHaveBeenCalledWith("r", "local-id"); expect(getMyPatrol).not.toHaveBeenCalled();
+});
+
+test("account switch hides the previous local draft before the new account query resolves", async () => {
+  useOffline.mockReturnValue({ owner: "r", online: false });
+  offlineStore.listDrafts.mockImplementation(owner => owner === "r" ? Promise.resolve([{ id: "local", patrol_id: "p", form: { title: "Private draft" }, status: "LOCAL_DRAFT" }]) : new Promise(() => {}));
+  const navigation = nav(), ui = render(<LocalDrafts navigation={navigation} />);
+  await ui.findByText("Private draft");
+  useOffline.mockReturnValue({ owner: "other", online: false }); ui.rerender(<LocalDrafts navigation={navigation} />);
+  expect(ui.queryByText("Private draft")).toBeNull();
+});
+
+
+test("queued form clears selections immediately without waiting for sync and keeps media referenced", async () => {
+  kickSync.mockReturnValue(new Promise(() => {}));
+  useOffline.mockReturnValue({ owner: "r", online: false });
+  offlineStore.cachedPatrols.mockResolvedValue([patrol]);
+  offlineStore.saveDraft.mockResolvedValue("local-id");
+  offlineStore.readDraft.mockResolvedValue({ status: "PENDING_SYNC" });
+  const { ui } = await form(); fill(ui);
+  fireEvent.press(ui.getByLabelText("Choose from Gallery"));
+  await ui.findByLabelText("Remove selection: a.jpg");
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  await ui.findByLabelText("Retry Sync");
+  expect(ui.queryByLabelText("Submit Incident")).toBeNull();
+  expect(ui.queryByLabelText("Incident title *")).toBeNull();
+  expect(ui.queryByLabelText("Remove selection: a.jpg")).toBeNull();
+  expect(offlineStore.saveDraft.mock.calls[0][5]).toHaveLength(1);
+  expect(File.mock.results.every(result => !result.value.delete.mock.calls.length)).toBe(true);
+});
+
+test("failed local persistence preserves fields and retries the same UUID", async () => {
+  useOffline.mockReturnValue({ owner: "r", online: false });
+  offlineStore.cachedPatrols.mockResolvedValue([patrol]);
+  offlineStore.saveDraft.mockRejectedValueOnce(new Error("Device storage full. Free space and retry.")).mockResolvedValue("local-id");
+  offlineStore.readDraft.mockResolvedValue({ status: "PENDING_SYNC" });
+  const { ui } = await form(); fill(ui);
+  fireEvent.press(ui.getByLabelText("Choose from Gallery"));
+  await ui.findByLabelText("Remove selection: a.jpg");
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  await ui.findByText("Device storage full. Free space and retry.");
+  expect(ui.getByLabelText("Remove selection: a.jpg")).toBeTruthy();
+  expect(ui.getByLabelText("Incident title *").props.value).toBeTruthy();
+  fireEvent.press(ui.getByLabelText("Submit Incident"));
+  await ui.findByLabelText("Retry Sync");
+  expect(offlineStore.offlineId).toHaveBeenCalledTimes(1);
+  expect(offlineStore.saveDraft.mock.calls.map(call => call[2])).toEqual(["local-id", "local-id"]);
+});
+
+test.each(["PENDING_SYNC", "SYNCING", "SYNC_FAILED", "SYNCED", "NEEDS_REVIEW"])("remount of %s shows receipt instead of resubmittable form", async status => {
+  useOffline.mockReturnValue({ owner: "r", online: false });
+  offlineStore.cachedPatrols.mockResolvedValue([patrol]);
+  offlineStore.readDraft.mockResolvedValue({ status, form: { title: "Already submitted" }, items: [], server_id: status === "SYNCED" ? "i" : null });
+  const ui = render(<Form route={{ params: { patrolId: "p", localDraftId: "local-id" } }} navigation={nav()} />);
+  await ui.findByLabelText("Retry Sync");
+  expect(ui.queryByLabelText("Submit Incident")).toBeNull();
+  expect(ui.queryByText("Already submitted")).toBeNull();
+  expect(offlineStore.saveDraft).not.toHaveBeenCalled();
+});
+
+test("a delayed queued receipt read cannot replace a different opened draft", async () => {
+  useOffline.mockReturnValue({ owner: "r", online: false });
+  offlineStore.cachedPatrols.mockResolvedValue([patrol]);
+  let resolveOld;
+  offlineStore.readDraft.mockImplementation((owner, id) => id === "old" ? new Promise(resolve => { resolveOld = resolve; }) : Promise.resolve({ status: "LOCAL_DRAFT", form: { title: "Different draft" }, items: [] }));
+  const navigation = nav();
+  const ui = render(<Form route={{ params: { patrolId: "p", localDraftId: "old" } }} navigation={navigation} />);
+  await waitFor(() => expect(resolveOld).toBeDefined());
+  ui.rerender(<Form route={{ params: { patrolId: "p", localDraftId: "new-draft" } }} navigation={navigation} />);
+  await waitFor(() => expect(ui.getByLabelText("Incident title *").props.value).toBe("Different draft"));
+  await act(async () => resolveOld({ status: "SYNCED", server_id: "i" }));
+  expect(ui.getByLabelText("Incident title *").props.value).toBe("Different draft");
+});
+
+
+
+test("automatic sync refreshes the receipt without restoring fields or creating another report", async () => {
+  useOffline.mockReturnValue({ owner: "r", online: false });
+  offlineStore.cachedPatrols.mockResolvedValue([patrol]);
+  offlineStore.readDraft.mockResolvedValue({ status: "PENDING_SYNC" });
+  const ui = render(<Form route={{ params: { patrolId: "p", localDraftId: "local-id" } }} navigation={nav()} />);
+  await ui.findByLabelText("Retry Sync");
+  await waitFor(() => expect(offlineStore.readDraft).toHaveBeenCalledTimes(2));
+  offlineStore.readDraft.mockResolvedValue({ status: "SYNCED", server_id: "i", form: { title: "Old submitted title" }, items: [] });
+  await ui.findByText("Incident synced", {}, { timeout: 6500 });
+  expect(ui.getByLabelText("View Saved Incident")).toBeTruthy();
+  expect(ui.queryByLabelText("Submit Incident")).toBeNull();
+  expect(ui.queryByText("Old submitted title")).toBeNull();
+  expect(offlineStore.saveDraft).not.toHaveBeenCalled();
+  expect(createIncident).not.toHaveBeenCalled();
 });
