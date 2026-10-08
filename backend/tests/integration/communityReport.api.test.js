@@ -320,7 +320,7 @@ describe("Community Report APIs", () => {
         .expect(404);
     });
 
-    test("returns report details when found", async () => {
+    test("returns report details when found for unauthenticated guest report", async () => {
       db.communityReport.findUnique.mockResolvedValue({
         id: "rep-1",
         description: "Elephant spotted near road",
@@ -333,6 +333,69 @@ describe("Community Report APIs", () => {
 
       expect(res.body.success).toBe(true);
       expect(res.body.report.id).toBe("rep-1");
+    });
+
+    test("allows COMMUNITY_USER to view their own report details", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-own",
+        reportType: "WILDLIFE_SIGHTING",
+        description: "Elephant spotted",
+        status: "PENDING",
+        reporterId: "community-user-1",
+      });
+
+      const res = await request(app)
+        .get("/api/community-reports/rep-own")
+        .set("Authorization", `Bearer ${token("community-user-1")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.report.id).toBe("rep-own");
+    });
+
+    test("forbids COMMUNITY_USER from accessing another user's report (IDOR protection)", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-other",
+        reportType: "WILDLIFE_SIGHTING",
+        description: "Elephant near fence",
+        status: "PENDING",
+        reporterId: "other-user-99",
+      });
+
+      await request(app)
+        .get("/api/community-reports/rep-other")
+        .set("Authorization", `Bearer ${token("community-user-1")}`)
+        .expect(403);
+    });
+
+    test("forbids COMMUNITY_USER from accessing reports without reporterId", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-guest",
+        reportType: "WILDLIFE_SIGHTING",
+        description: "Guest filed report",
+        status: "PENDING",
+        reporterId: null,
+      });
+
+      await request(app)
+        .get("/api/community-reports/rep-guest")
+        .set("Authorization", `Bearer ${token("community-user-1")}`)
+        .expect(403);
+    });
+
+    test("forbids unauthenticated caller from accessing registered user's non-anonymous report", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-registered",
+        reportType: "WILDLIFE_SIGHTING",
+        description: "Registered report",
+        status: "PENDING",
+        isAnonymous: false,
+        reporterId: "community-user-1",
+      });
+
+      await request(app)
+        .get("/api/community-reports/rep-registered")
+        .expect(403);
     });
   });
 });

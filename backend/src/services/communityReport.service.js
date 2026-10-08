@@ -63,9 +63,11 @@ exports.submitReport = async (body, user = null) => {
 
 exports.getMyReports = async (userId, query = {}) => {
   const { status, reportType, page = 1, pageSize = 20 } = query;
+  const filterStatus = status && status !== "ALL" ? String(status).toUpperCase() : undefined;
+  const filterType = reportType && reportType !== "ALL" ? String(reportType).toUpperCase() : undefined;
   const result = await repository.listReportsByReporter(userId, {
-    status: status ? String(status).toUpperCase() : undefined,
-    reportType: reportType ? String(reportType).toUpperCase() : undefined,
+    status: filterStatus,
+    reportType: filterType,
     page: Math.max(1, parseInt(page, 10) || 1),
     pageSize: Math.min(50, Math.max(1, parseInt(pageSize, 10) || 20)),
   });
@@ -80,9 +82,18 @@ exports.getReportDetails = async (id, user = null) => {
   const report = await repository.findReportById(id);
   if (!report) throw notFound();
 
-  // If report was filed by a registered user, non-staff users can only access their own report
-  if (report.reporterId && user && !["COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER"].includes(user.role)) {
-    if (report.reporterId !== user.id) {
+  const isStaff = user && ["COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER"].includes(user.role);
+  const isOwner = user && report.reporterId && user.id === report.reporterId;
+
+  // COMMUNITY_USER can only access reports they own
+  if (user && user.role === "COMMUNITY_USER") {
+    if (!isOwner) {
+      throw forbidden();
+    }
+  } else if (!isStaff && !isOwner) {
+    // For non-staff, non-community users (or unauthenticated requests):
+    // If the report belongs to a registered user and is not anonymous, forbid access
+    if (report.reporterId && !report.isAnonymous) {
       throw forbidden();
     }
   }
@@ -92,9 +103,11 @@ exports.getReportDetails = async (id, user = null) => {
 
 exports.listReportsForLiaison = async (query = {}, user = null) => {
   const { status, reportType, search, page = 1, pageSize = 20 } = query;
+  const filterStatus = status && status !== "ALL" ? String(status).toUpperCase() : undefined;
+  const filterType = reportType && reportType !== "ALL" ? String(reportType).toUpperCase() : undefined;
   const result = await repository.listAllReports({
-    status: status ? String(status).toUpperCase() : undefined,
-    reportType: reportType ? String(reportType).toUpperCase() : undefined,
+    status: filterStatus,
+    reportType: filterType,
     search: typeof search === "string" ? search.slice(0, 120) : undefined,
     page: Math.max(1, parseInt(page, 10) || 1),
     pageSize: Math.min(50, Math.max(1, parseInt(pageSize, 10) || 20)),
@@ -116,10 +129,15 @@ exports.attachEvidence = async (id, payload, user = null) => {
   const report = await repository.findReportById(id);
   if (!report) throw notFound();
 
-  if (report.reporterId && user && !["COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER"].includes(user.role)) {
-    if (report.reporterId !== user.id) {
+  const isStaff = user && ["COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER"].includes(user.role);
+  const isOwner = user && report.reporterId && user.id === report.reporterId;
+
+  if (user && user.role === "COMMUNITY_USER") {
+    if (!isOwner) {
       throw forbidden();
     }
+  } else if (!isStaff && !isOwner && report.reporterId && !report.isAnonymous) {
+    throw forbidden();
   }
 
   const stored = await evidenceStorage.storeEvidence(payload);
