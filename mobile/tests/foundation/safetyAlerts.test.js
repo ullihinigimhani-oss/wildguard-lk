@@ -1,0 +1,331 @@
+import React from "react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { Share, Alert as NativeAlert } from "react-native";
+import AlertsScreen from "../../src/screens/alerts/AlertsScreen";
+import AlertDetailsScreen from "../../src/screens/alerts/AlertDetailsScreen";
+import AlertCard, {
+  formatAlertDate,
+  formatAffectedArea,
+} from "../../src/components/AlertCard";
+import * as alertApi from "../../src/services/alertApi";
+
+jest.mock("../../src/services/alertApi", () => ({
+  listAlerts: jest.fn(),
+  getAlertById: jest.fn(),
+  acknowledgeAlert: jest.fn(),
+}));
+
+jest.mock("../../src/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { id: "user-test-1", name: "Community Member", role: "COMMUNITY_USER" },
+  }),
+}));
+
+describe("Task 9: Community Safety & Wildlife Alerts", () => {
+  const mockActiveAlerts = [
+    {
+      id: "alert-1",
+      riskLevel: "CRITICAL",
+      title: "CRITICAL Wildlife Alert - Sector 3 Buffer",
+      shortMessage: "Elephant herd spotted crossing near residential perimeter.",
+      message: "Elephant herd spotted crossing near residential perimeter.",
+      status: "ACTIVE",
+      isAcknowledged: false,
+      generatedAt: "2026-10-08T08:00:00.000Z",
+      affectedArea: "Sector 3 Buffer (Yala National Park)",
+      animal: { species: "Elephas maximus", animalCode: "ELE-01" },
+      riskZone: {
+        name: "Sector 3 Buffer",
+        centerLatitude: 6.35,
+        centerLongitude: 81.42,
+        radiusMeters: 500,
+        park: { name: "Yala National Park" },
+      },
+      safetyInstructions: [
+        "Avoid using torch lights directly at the herd.",
+        "Clear all pathways and avoid travel along boundary tracks.",
+      ],
+    },
+    {
+      id: "alert-2",
+      riskLevel: "MEDIUM",
+      title: "MEDIUM Wildlife Alert - Northern Ridge",
+      shortMessage: "Leopard track observed near waterhole.",
+      message: "Leopard track observed near waterhole.",
+      status: "ACTIVE",
+      isAcknowledged: true,
+      generatedAt: "2026-10-08T07:30:00.000Z",
+      affectedArea: "Northern Ridge (Yala National Park)",
+      animal: { species: "Panthera pardus kotiya" },
+      riskZone: { name: "Northern Ridge" },
+      safetyInstructions: ["Maintain standard caution around forest buffers."],
+    },
+  ];
+
+  const mockResolvedAlert = {
+    id: "alert-3",
+    riskLevel: "HIGH",
+    title: "HIGH Wildlife Alert - Southern Canal",
+    shortMessage: "Crocodile sighted in irrigation stream.",
+    message: "Crocodile sighted in irrigation stream.",
+    status: "RESOLVED",
+    resolvedAt: "2026-10-08T09:00:00.000Z",
+    isAcknowledged: true,
+    generatedAt: "2026-10-08T06:00:00.000Z",
+    affectedArea: "Southern Canal",
+    riskZone: { name: "Southern Canal" },
+    safetyInstructions: ["Avoid swimming or washing cattle in canal."],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(NativeAlert, "alert").mockImplementation(() => {});
+    jest.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
+  });
+
+  afterEach(() => {
+    NativeAlert.alert.mockRestore();
+    if (Share.share.mockRestore) Share.share.mockRestore();
+  });
+
+  test("helper functions format date and affected area robustly", () => {
+    expect(formatAlertDate(null)).toBe("Date not recorded");
+    expect(formatAlertDate("invalid-date")).toBe("Date not recorded");
+    expect(formatAlertDate("2026-10-08T08:00:00.000Z")).toMatch(/Oct/);
+
+    expect(formatAffectedArea(null)).toBe("Unspecified Perimeter");
+    expect(formatAffectedArea({ affectedArea: "Direct Area Name" })).toBe("Direct Area Name");
+    expect(
+      formatAffectedArea({
+        riskZone: { name: "Buffer Zone", park: { name: "Wilpattu" } },
+      })
+    ).toBe("Buffer Zone (Wilpattu)");
+    expect(
+      formatAffectedArea({
+        riskZone: { centerLatitude: 6.5432, centerLongitude: 80.1234 },
+      })
+    ).toBe("GPS: 6.5432, 80.1234");
+    expect(formatAffectedArea({})).toBe("General Buffer Perimeter");
+  });
+
+  test("AlertCard displays severity, unread pill, title, area, and handles acknowledge action", () => {
+    const onAcknowledge = jest.fn();
+    const onPress = jest.fn();
+
+    render(
+      <AlertCard
+        alert={mockActiveAlerts[0]}
+        onPress={onPress}
+        onAcknowledge={onAcknowledge}
+      />
+    );
+
+    expect(screen.getByText("CRITICAL ALERT")).toBeTruthy();
+    expect(screen.getByText("UNREAD")).toBeTruthy();
+    expect(screen.getByText("CRITICAL Wildlife Alert - Sector 3 Buffer")).toBeTruthy();
+    expect(screen.getByText("Sector 3 Buffer (Yala National Park)")).toBeTruthy();
+    expect(screen.getByText("Elephas maximus")).toBeTruthy();
+
+    const ackButton = screen.getByText("Acknowledge");
+    fireEvent.press(ackButton);
+    expect(onAcknowledge).toHaveBeenCalledTimes(1);
+
+    const guidanceButton = screen.getByText("Safety Guidance");
+    fireEvent.press(guidanceButton);
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  test("AlertCard renders acknowledged read pill for already-acknowledged alert", () => {
+    render(<AlertCard alert={mockActiveAlerts[1]} onPress={jest.fn()} />);
+
+    expect(screen.getByText("MEDIUM ALERT")).toBeTruthy();
+    expect(screen.getByText("READ")).toBeTruthy();
+    expect(screen.getByText("Acknowledged")).toBeTruthy();
+  });
+
+  test("AlertsScreen loads active alerts, displays unread notice banner, and navigates to details", async () => {
+    alertApi.listAlerts.mockResolvedValueOnce({
+      success: true,
+      alerts: mockActiveAlerts,
+    });
+
+    const navigation = { navigate: jest.fn() };
+    render(<AlertsScreen navigation={navigation} />);
+
+    // Initially loading
+    expect(screen.getByText("Checking active safety alerts...")).toBeTruthy();
+
+    await waitFor(() => {
+      expect(screen.getByText("1 unacknowledged safety notice requires your attention.")).toBeTruthy();
+    });
+
+    expect(alertApi.listAlerts).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "ACTIVE" })
+    );
+
+    expect(screen.getByText("CRITICAL Wildlife Alert - Sector 3 Buffer")).toBeTruthy();
+    expect(screen.getByText("MEDIUM Wildlife Alert - Northern Ridge")).toBeTruthy();
+
+    // Click to open details
+    const guidanceButtons = screen.getAllByText("Safety Guidance");
+    fireEvent.press(guidanceButtons[0]);
+    expect(navigation.navigate).toHaveBeenCalledWith("AlertDetails", {
+      alertId: "alert-1",
+      alertData: mockActiveAlerts[0],
+    });
+  });
+
+  test("AlertsScreen acknowledges alert and updates unread status locally", async () => {
+    alertApi.listAlerts.mockResolvedValueOnce({
+      success: true,
+      alerts: [mockActiveAlerts[0]],
+    });
+    alertApi.acknowledgeAlert.mockResolvedValueOnce({ success: true });
+
+    render(<AlertsScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Acknowledge")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Acknowledge"));
+
+    await waitFor(() => {
+      expect(alertApi.acknowledgeAlert).toHaveBeenCalledWith("alert-1");
+      expect(screen.getByText("Acknowledged")).toBeTruthy();
+      expect(screen.getByText("READ")).toBeTruthy();
+    });
+  });
+
+  test("AlertsScreen switches to Alert History tab and queries status=HISTORY", async () => {
+    alertApi.listAlerts
+      .mockResolvedValueOnce({ success: true, alerts: mockActiveAlerts })
+      .mockResolvedValueOnce({ success: true, alerts: [mockResolvedAlert] });
+
+    render(<AlertsScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("CRITICAL Wildlife Alert - Sector 3 Buffer")).toBeTruthy();
+    });
+
+    // Switch to Alert History tab
+    const historyTab = screen.getByLabelText("Alert History");
+    fireEvent.press(historyTab);
+
+    await waitFor(() => {
+      expect(alertApi.listAlerts).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "HISTORY" })
+      );
+      expect(screen.getByText("HIGH Wildlife Alert - Southern Canal")).toBeTruthy();
+      expect(screen.getByText("RESOLVED")).toBeTruthy();
+    });
+  });
+
+  test("AlertsScreen filters by severity (riskLevel)", async () => {
+    alertApi.listAlerts
+      .mockResolvedValueOnce({ success: true, alerts: mockActiveAlerts })
+      .mockResolvedValueOnce({ success: true, alerts: [mockActiveAlerts[0]] });
+
+    render(<AlertsScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("CRITICAL Wildlife Alert - Sector 3 Buffer")).toBeTruthy();
+    });
+
+    // Click Critical filter
+    const criticalFilter = screen.getByLabelText("Filter Critical");
+    fireEvent.press(criticalFilter);
+
+    await waitFor(() => {
+      expect(alertApi.listAlerts).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "ACTIVE", riskLevel: "CRITICAL" })
+      );
+    });
+  });
+
+  test("AlertsScreen handles empty state and refresh button", async () => {
+    alertApi.listAlerts
+      .mockResolvedValueOnce({ success: true, alerts: [] })
+      .mockResolvedValueOnce({ success: true, alerts: mockActiveAlerts });
+
+    render(<AlertsScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Perimeters Clear")).toBeTruthy();
+      expect(
+        screen.getByText("No critical wildlife alerts or active geofence breaches detected in this region.")
+      ).toBeTruthy();
+    });
+
+    const refreshButton = screen.getByText("Refresh Alerts");
+    fireEvent.press(refreshButton);
+
+    await waitFor(() => {
+      expect(alertApi.listAlerts).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("CRITICAL Wildlife Alert - Sector 3 Buffer")).toBeTruthy();
+    });
+  });
+
+  test("AlertsScreen handles network error and allows retry", async () => {
+    alertApi.listAlerts
+      .mockRejectedValueOnce(new Error("Network Error"))
+      .mockResolvedValueOnce({ success: true, alerts: mockActiveAlerts });
+
+    render(<AlertsScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Network Error")).toBeTruthy();
+      expect(screen.getByText("Retry")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Retry"));
+
+    await waitFor(() => {
+      expect(alertApi.listAlerts).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("CRITICAL Wildlife Alert - Sector 3 Buffer")).toBeTruthy();
+    });
+  });
+
+  test("AlertDetailsScreen displays complete alert metadata, guidance, and allows acknowledging", async () => {
+    const route = { params: { alertData: mockActiveAlerts[0] } };
+    alertApi.acknowledgeAlert.mockResolvedValueOnce({ success: true });
+
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    expect(screen.getByText("CRITICAL SAFETY ALERT")).toBeTruthy();
+    expect(screen.getByText("STATUS: ACTIVE")).toBeTruthy();
+    expect(screen.getByText("CRITICAL Wildlife Alert - Sector 3 Buffer")).toBeTruthy();
+    expect(screen.getByText("Species: Elephas maximus")).toBeTruthy();
+    expect(screen.getByText("Collar Tracking Tag: ELE-01")).toBeTruthy();
+    expect(screen.getByText("Area: Sector 3 Buffer (Yala National Park)")).toBeTruthy();
+    expect(screen.getByText("Park: Yala National Park")).toBeTruthy();
+    expect(screen.getByText("Coordinates: 6.3500, 81.4200")).toBeTruthy();
+    expect(screen.getByText("Avoid using torch lights directly at the herd.")).toBeTruthy();
+
+    // Acknowledge button
+    const ackBtn = screen.getByText("Acknowledge This Alert");
+    fireEvent.press(ackBtn);
+
+    await waitFor(() => {
+      expect(alertApi.acknowledgeAlert).toHaveBeenCalledWith("alert-1");
+      expect(screen.getByText("✓ Alert Acknowledged")).toBeTruthy();
+    });
+
+    // Share button
+    const shareBtn = screen.getByText("Share Alert with Community");
+    fireEvent.press(shareBtn);
+    expect(Share.share).toHaveBeenCalled();
+  });
+
+  test("AlertDetailsScreen loads by ID when alertData param is absent", async () => {
+    const route = { params: { alertId: "alert-1" } };
+    alertApi.getAlertById.mockResolvedValueOnce(mockActiveAlerts[0]);
+
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(alertApi.getAlertById).toHaveBeenCalledWith("alert-1");
+      expect(screen.getByText("CRITICAL SAFETY ALERT")).toBeTruthy();
+    });
+  });
+});

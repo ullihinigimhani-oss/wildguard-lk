@@ -72,10 +72,12 @@ export default function AlertDetailsScreen({ route, navigation }) {
   async function handleShare() {
     if (!alert) return;
     try {
-      const message = `🚨 WILDGUARD SAFETY ALERT [${alert.riskLevel}]: ${alert.message}\nArea: ${alert.riskZone?.name || "Perimeter"}\nAnimal: ${alert.animal?.species || "Wildlife"}\nPlease stay alert and share with local community members!`;
+      const title = alert.title || `${alert.riskLevel} Wildlife Alert`;
+      const area = alert.affectedArea || alert.riskZone?.name || "Buffer Perimeter";
+      const message = `🚨 WILDGUARD SAFETY ALERT: ${title}\n${alert.message}\nArea: ${area}\nAnimal: ${alert.animal?.species || "Wildlife"}\nPlease stay alert and share with local community members!`;
       await Share.share({
         message,
-        title: `WildGuard Alert - ${alert.riskLevel}`,
+        title,
       });
     } catch {
       // User cancelled share
@@ -136,10 +138,20 @@ export default function AlertDetailsScreen({ route, navigation }) {
 
       {/* Main Alert Message */}
       <View style={[styles.card, { gap: 10 }]}>
+        {alert.title && (
+          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.green, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            {alert.title}
+          </Text>
+        )}
         <Text style={{ fontSize: 17, fontWeight: "700", color: colors.dark, lineHeight: 24 }}>
           {alert.message}
         </Text>
         <Text style={[styles.muted, { fontSize: 12 }]}>Reported / Detected: {timeStr}</Text>
+        {alert.resolvedAt && (
+          <Text style={{ fontSize: 12, color: "#166534", fontWeight: "600" }}>
+            Resolved: {new Date(alert.resolvedAt).toLocaleString()}
+          </Text>
+        )}
       </View>
 
       {/* Animal & Tracking Info */}
@@ -161,20 +173,25 @@ export default function AlertDetailsScreen({ route, navigation }) {
       )}
 
       {/* Location & Zone Info */}
-      {alert.riskZone && (
+      {(alert.riskZone || alert.affectedArea) && (
         <View style={[styles.card, { gap: 8 }]}>
-          <Text style={styles.heading}>Affected Risk Zone</Text>
+          <Text style={styles.heading}>Affected Area & Location</Text>
           <View style={{ gap: 4 }}>
             <Text style={{ fontSize: 14, color: colors.text }}>
-              <Text style={{ fontWeight: "600" }}>Zone Name: </Text>
-              {alert.riskZone.name}
+              <Text style={{ fontWeight: "600" }}>Area: </Text>
+              {alert.affectedArea || alert.riskZone?.name || "Perimeter Zone"}
             </Text>
-            {alert.riskZone.park?.name && (
+            {alert.riskZone?.park?.name && (
               <Text style={{ fontSize: 13, color: colors.muted }}>
                 Park: {alert.riskZone.park.name}
               </Text>
             )}
-            {alert.riskZone.radiusMeters && (
+            {alert.riskZone?.centerLatitude && alert.riskZone?.centerLongitude && (
+              <Text style={{ fontSize: 12, color: colors.muted }}>
+                Coordinates: {alert.riskZone.centerLatitude.toFixed(4)}, {alert.riskZone.centerLongitude.toFixed(4)}
+              </Text>
+            )}
+            {alert.riskZone?.radiusMeters && (
               <Text style={{ fontSize: 12, color: colors.muted }}>
                 Buffer Perimeter: ~{alert.riskZone.radiusMeters}m radius
               </Text>
