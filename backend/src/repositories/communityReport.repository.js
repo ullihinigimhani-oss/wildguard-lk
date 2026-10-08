@@ -76,11 +76,18 @@ exports.listReportsByReporter = async (reporterId, { status, reportType, page = 
   return { reports, total, page: Number(page), pageSize: Number(pageSize) };
 };
 
-exports.listAllReports = async ({ status, reportType, search, page = 1, pageSize = 20 } = {}) => {
+exports.listAllReports = async ({ status, reportType, search, from, to, page = 1, pageSize = 20 } = {}) => {
   const where = {
     ...(status && { status }),
     ...(reportType && { reportType }),
   };
+
+  if (from || to) {
+    where.submittedAt = {
+      ...(from && { gte: from }),
+      ...(to && { lte: to }),
+    };
+  }
 
   if (search && typeof search === "string" && search.trim()) {
     const term = search.trim();

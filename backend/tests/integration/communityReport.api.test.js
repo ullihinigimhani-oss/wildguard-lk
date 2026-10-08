@@ -303,6 +303,52 @@ describe("Community Report APIs", () => {
       expect(res.body.reports[0].reporterName).toBeNull();
       expect(res.body.reports[0].reporterPhone).toBeNull();
     });
+
+    test("rejects an unsupported status filter with 400", async () => {
+      const res = await request(app)
+        .get("/api/community-reports?status=RESOLVED")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.errors.status).toBe("Select a valid report status.");
+      expect(db.communityReport.findMany).not.toHaveBeenCalled();
+    });
+
+    test("filters reports by submission date range", async () => {
+      db.communityReport.findMany.mockResolvedValue([
+        { id: "rep-date-1", reportType: "SUSPICIOUS_ACTIVITY", status: "PENDING" },
+      ]);
+      db.communityReport.count.mockResolvedValue(1);
+
+      const res = await request(app)
+        .get("/api/community-reports?from=2026-10-01T00:00:00%2B05:30&to=2026-10-30T23:59:59.999%2B05:30")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.reports).toHaveLength(1);
+      expect(db.communityReport.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            submittedAt: {
+              gte: expect.any(Date),
+              lte: expect.any(Date),
+            },
+          }),
+        })
+      );
+    });
+
+    test("rejects a date range where the end precedes the start", async () => {
+      const res = await request(app)
+        .get("/api/community-reports?from=2026-10-30T00:00:00%2B05:30&to=2026-10-01T00:00:00%2B05:30")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.errors.to).toMatch(/End date must not precede/);
+    });
   });
 
   describe("PATCH /api/community-reports/:id/status (Status Transitions)", () => {
@@ -332,24 +378,104 @@ describe("Community Report APIs", () => {
       );
     });
 
-    test("allows COMMUNITY_LIAISON to transition UNDER_REVIEW to RESPONSE_IN_PROGRESS", async () => {
+    test("allows COMMUNITY_LIAISON to transition UNDER_REVIEW to VERIFIED", async () => {
       db.communityReport.findUnique.mockResolvedValue({
         id: "rep-1",
         status: "UNDER_REVIEW",
       });
       db.communityReport.update.mockResolvedValue({
         id: "rep-1",
-        status: "RESPONSE_IN_PROGRESS",
+        status: "VERIFIED",
       });
 
       const res = await request(app)
         .patch("/api/community-reports/rep-1/status")
         .set("Authorization", `Bearer ${token("liaison")}`)
-        .send({ status: "RESPONSE_IN_PROGRESS" })
+        .send({ status: "VERIFIED" })
         .expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(res.body.report.status).toBe("RESPONSE_IN_PROGRESS");
+      expect(res.body.report.status).toBe("VERIFIED");
+    });
+
+    test("allows PARK_MANAGER to transition PENDING to UNDER_REVIEW", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-1",
+        status: "PENDING",
+      });
+      db.communityReport.update.mockResolvedValue({
+        id: "rep-1",
+        status: "UNDER_REVIEW",
+      });
+
+      const res = await request(app)
+        .patch("/api/community-reports/rep-1/status")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({ status: "UNDER_REVIEW" })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.report.status).toBe("UNDER_REVIEW");
+    });
+
+    test("allows PARK_MANAGER to transition UNDER_REVIEW to VERIFIED", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-1",
+        status: "UNDER_REVIEW",
+      });
+      db.communityReport.update.mockResolvedValue({
+        id: "rep-1",
+        status: "VERIFIED",
+      });
+
+      const res = await request(app)
+        .patch("/api/community-reports/rep-1/status")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({ status: "VERIFIED" })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.report.status).toBe("VERIFIED");
+    });
+
+    test("allows PARK_MANAGER to correct a verified report back to UNDER_REVIEW", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-1",
+        status: "VERIFIED",
+      });
+      db.communityReport.update.mockResolvedValue({
+        id: "rep-1",
+        status: "UNDER_REVIEW",
+      });
+
+      const res = await request(app)
+        .patch("/api/community-reports/rep-1/status")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({ status: "UNDER_REVIEW" })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.report.status).toBe("UNDER_REVIEW");
+    });
+
+    test("allows PARK_MANAGER to reject a report while it is under review", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-dup",
+        status: "UNDER_REVIEW",
+      });
+      db.communityReport.update.mockResolvedValue({
+        id: "rep-dup",
+        status: "REJECTED",
+      });
+
+      const res = await request(app)
+        .patch("/api/community-reports/rep-dup/status")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({ status: "REJECTED" })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.report.status).toBe("REJECTED");
     });
 
     test("allows COMMUNITY_LIAISON to flag invalid/duplicate report as REJECTED", async () => {
@@ -388,21 +514,46 @@ describe("Community Report APIs", () => {
       expect(res.body.message).toMatch(/Select a valid report status/);
     });
 
-    test("rejects invalid status transition PENDING to RESOLVED with 400", async () => {
+    test("allows PARK_MANAGER to verify a PENDING report directly", async () => {
       db.communityReport.findUnique.mockResolvedValue({
         id: "rep-1",
         status: "PENDING",
       });
+      db.communityReport.update.mockResolvedValue({
+        id: "rep-1",
+        status: "VERIFIED",
+      });
 
       const res = await request(app)
         .patch("/api/community-reports/rep-1/status")
-        .set("Authorization", `Bearer ${token("liaison")}`)
-        .send({ status: "RESOLVED" })
-        .expect(400);
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({ status: "VERIFIED" })
+        .expect(200);
 
-      expect(res.body.success).toBe(false);
-      expect(res.body.message).toMatch(/Cannot transition report from PENDING to RESOLVED/);
-      expect(db.communityReport.update).not.toHaveBeenCalled();
+      expect(res.body.success).toBe(true);
+      expect(res.body.report.status).toBe("VERIFIED");
+      expect(db.communityReport.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "rep-1" },
+          data: { status: "VERIFIED" },
+        })
+      );
+    });
+
+    test("forbids RANGER from updating community report status with 403", async () => {
+      accounts.ranger = {
+        id: "ranger",
+        name: "Area Ranger",
+        role: "RANGER",
+        approvalStatus: "APPROVED",
+        isActive: true,
+      };
+
+      await request(app)
+        .patch("/api/community-reports/rep-1/status")
+        .set("Authorization", `Bearer ${token("ranger")}`)
+        .send({ status: "UNDER_REVIEW" })
+        .expect(403);
     });
 
     test("forbids COMMUNITY_USER from updating report status with 403", async () => {
@@ -415,7 +566,7 @@ describe("Community Report APIs", () => {
   });
 
   describe("POST /api/community-reports/:id/escalate (Operational Escalation)", () => {
-    test("allows COMMUNITY_LIAISON to escalate report to operational response", async () => {
+    test("allows COMMUNITY_LIAISON to escalate report to verified/operational state", async () => {
       db.communityReport.findUnique.mockResolvedValue({
         id: "rep-esc-1",
         reportType: "HUMAN_WILDLIFE_CONFLICT",
@@ -434,7 +585,7 @@ describe("Community Report APIs", () => {
           species: "Wild Elephant",
           description: "Elephant broke farm boundary fence",
           manualLocation: "Post 12",
-          status: "RESPONSE_IN_PROGRESS",
+          status: "VERIFIED",
           isAnonymous: false,
           evidence: [],
         });
@@ -452,7 +603,62 @@ describe("Community Report APIs", () => {
       expect(res.body.escalation.urgency).toBe("HIGH");
       expect(res.body.escalation.notes).toBe("Immediate dispatch needed");
       expect(res.body.escalation.escalatedBy.role).toBe("COMMUNITY_LIAISON");
-      expect(res.body.report.status).toBe("RESPONSE_IN_PROGRESS");
+      expect(res.body.report.status).toBe("VERIFIED");
+    });
+
+    test("allows PARK_MANAGER to escalate a report under review", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-esc-2",
+        reportType: "WILDLIFE_SIGHTING",
+        species: "Leopard",
+        description: "Leopard sighted on boundary road",
+        manualLocation: "Post 5",
+        status: "UNDER_REVIEW",
+        isAnonymous: true,
+        evidence: [],
+      });
+      db.communityReport.update.mockResolvedValueOnce({
+        id: "rep-esc-2",
+        reportType: "WILDLIFE_SIGHTING",
+        species: "Leopard",
+        description: "Leopard sighted on boundary road",
+        manualLocation: "Post 5",
+        status: "VERIFIED",
+        isAnonymous: true,
+        evidence: [],
+      });
+
+      const res = await request(app)
+        .post("/api/community-reports/rep-esc-2/escalate")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({ urgency: "MEDIUM" })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.escalation.escalatedBy.role).toBe("PARK_MANAGER");
+      expect(res.body.report.status).toBe("VERIFIED");
+      expect(db.communityReport.update).toHaveBeenCalledTimes(1);
+    });
+
+    test("does not update status when report is already verified", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-esc-3",
+        reportType: "WILDLIFE_SIGHTING",
+        description: "Already confirmed",
+        status: "VERIFIED",
+        isAnonymous: false,
+        evidence: [],
+      });
+
+      const res = await request(app)
+        .post("/api/community-reports/rep-esc-3/escalate")
+        .set("Authorization", `Bearer ${token("manager")}`)
+        .send({})
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.report.status).toBe("VERIFIED");
+      expect(db.communityReport.update).not.toHaveBeenCalled();
     });
 
     test("forbids COMMUNITY_USER from escalating report with 403", async () => {

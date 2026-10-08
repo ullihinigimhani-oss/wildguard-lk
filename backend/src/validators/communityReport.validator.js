@@ -7,16 +7,17 @@ const REPORT_TYPES = [
 const REPORT_STATUSES = [
   "PENDING",
   "UNDER_REVIEW",
-  "RESPONSE_IN_PROGRESS",
-  "RESOLVED",
+  "VERIFIED",
   "REJECTED",
 ];
 
+// The Park Manager review flow. A fresh report can be verified or rejected in
+// one step, and a mistaken decision is corrected by returning it to
+// UNDER_REVIEW rather than jumping between terminal states.
 const VALID_TRANSITIONS = {
-  PENDING: ["UNDER_REVIEW", "REJECTED"],
-  UNDER_REVIEW: ["RESPONSE_IN_PROGRESS", "RESOLVED", "REJECTED"],
-  RESPONSE_IN_PROGRESS: ["RESOLVED", "REJECTED", "UNDER_REVIEW"],
-  RESOLVED: ["UNDER_REVIEW"],
+  PENDING: ["UNDER_REVIEW", "VERIFIED", "REJECTED"],
+  UNDER_REVIEW: ["VERIFIED", "REJECTED"],
+  VERIFIED: ["UNDER_REVIEW"],
   REJECTED: ["UNDER_REVIEW"],
 };
 
@@ -181,10 +182,80 @@ function validateReportStatusUpdate(currentStatus, newStatus) {
   return status;
 }
 
+function isoDate(value) {
+  if (typeof value !== "string") return null;
+  const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+    ? value
+    : /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? `${value}T00:00:00Z`
+      : null;
+  if (!iso) return null;
+  const date = new Date(iso);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+// Park Manager / Liaison review list filters. Rejects unknown statuses or
+// report types instead of silently returning empty results, and converts the
+// date range into absolute timestamps on submittedAt.
+function validateListQuery(query) {
+  const input =
+    query && typeof query === "object" && !Array.isArray(query) ? query : {};
+  const fields = {};
+
+  const status = text(input.status).toUpperCase();
+  if (status && !REPORT_STATUSES.includes(status)) {
+    fields.status = "Select a valid report status.";
+  }
+
+  const reportType = text(input.reportType || input.report_type).toUpperCase();
+  if (reportType && !REPORT_TYPES.includes(reportType)) {
+    fields.reportType = "Invalid report type selected.";
+  }
+
+  const search = text(input.search);
+  if (search.length > 120) {
+    fields.search = "Search must not exceed 120 characters.";
+  }
+
+  const pageValue =
+    input.page === undefined || input.page === "" ? "1" : String(input.page);
+  if (!/^\d+$/.test(pageValue) || Number(pageValue) < 1 || Number(pageValue) > 100000) {
+    fields.page = "Enter a page from 1 to 100000.";
+  }
+
+  let from = null;
+  let to = null;
+  if (input.from !== undefined && input.from !== null && input.from !== "") {
+    from = isoDate(input.from);
+    if (!from) fields.from = "Enter a valid ISO date or date/time.";
+  }
+  if (input.to !== undefined && input.to !== null && input.to !== "") {
+    to = isoDate(input.to);
+    if (!to) fields.to = "Enter a valid ISO date or date/time.";
+  }
+  if (from && to && from > to) {
+    fields.to = "End date must not precede the start date.";
+  }
+
+  if (Object.keys(fields).length) {
+    throw fail("Please check the report filters.", fields);
+  }
+
+  return {
+    status: status || undefined,
+    reportType: reportType || undefined,
+    search: search || undefined,
+    from,
+    to,
+    page: Number(pageValue),
+  };
+}
+
 module.exports = {
   REPORT_TYPES,
   REPORT_STATUSES,
   VALID_TRANSITIONS,
   validateCommunityReportCreation,
   validateReportStatusUpdate,
+  validateListQuery,
 };
