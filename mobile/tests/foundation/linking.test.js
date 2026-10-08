@@ -136,3 +136,26 @@ test("live navigation deep links preserve contextual back and reject demo", () =
     ),
   ).toBe("Home");
 });
+
+test.each([
+  ["ranger/patrols/p/incidents/new", "IncidentCreate", "patrolId", "p"],
+  ["ranger/patrols/p/incidents", "IncidentReports", "patrolId", "p"],
+  ["ranger/incidents/i", "IncidentDetails", "incidentId", "i"],
+  ["ranger/incidents/i/edit", "IncidentEdit", "incidentId", "i"],
+])(
+  "incident link %s preserves tab back destination and excludes demo",
+  (path, name, key, id) => {
+    const linking = createLinking({
+      user: { id: "a", role: "RANGER" },
+      isAuthenticated: true,
+    });
+    const state = linking.getStateFromPath(path);
+    expect(state.routes.map((r) => r.name)).toEqual(["Incident", name]);
+    expect(state.routes[1].params[key]).toBe(id);
+    expect(
+      selected(
+        createLinking({ isDemo: true }).getStateFromPath("demo/" + path),
+      ),
+    ).toBe("Home");
+  },
+);

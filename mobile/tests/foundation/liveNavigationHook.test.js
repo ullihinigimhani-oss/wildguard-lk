@@ -253,3 +253,23 @@ test("invalid context blocks progression/routing while real GPS trail continues 
   expect(requestWalkingRoute).not.toHaveBeenCalled();
   await waitFor(() => expect(recordPatrolLocation).toHaveBeenCalled());
 });
+
+test("temporary incident-screen blur resumes reached destinations from the same navigation session", async () => {
+  const hook = mount();
+  await waitFor(() => expect(hook.result.current.route).toBeTruthy());
+  await act(async () => hook.rerender({ loc: location(pos(7.5)) }));
+  await waitFor(() => {
+    expect(hook.result.current.reached.has("0")).toBe(true);
+    expect(hook.result.current.destination.waypointId).toBe("1");
+    expect(hook.result.current.routing).toBe(false);
+  });
+  await act(async () => hook.rerender({ loc: location(null, false) }));
+  await waitFor(() => expect(hook.result.current.reached.has("0")).toBe(true));
+  await act(async () => hook.rerender({ loc: location(pos(7.5), true) }));
+  await waitFor(() => {
+    expect(hook.result.current.reached.has("0")).toBe(true);
+    expect(hook.result.current.route?.destination.waypointId).toBe("1");
+    expect(hook.result.current.routing).toBe(false);
+  });
+  expect(hook.result.current.destination.waypointId).toBe("1");
+});

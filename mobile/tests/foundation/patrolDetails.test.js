@@ -196,10 +196,14 @@ test("pending or failed Start Patrol never opens navigation or changes status op
   expect(ui.queryByLabelText("Open Navigation")).toBeNull();
 });
 
-
 test("refresh receives manager route edits and cancellation removes start and navigation actions", async () => {
-  const ui = mount(); await ui.findByText("Boundary patrol");
-  getMyPatrol.mockResolvedValue({ ...record(), routeName: "Manager changed route", plannedRoute });
+  const ui = mount();
+  await ui.findByText("Boundary patrol");
+  getMyPatrol.mockResolvedValue({
+    ...record(),
+    routeName: "Manager changed route",
+    plannedRoute,
+  });
   fireEvent.press(ui.getByLabelText("Refresh patrol"));
   await ui.findByText("Manager changed route");
   getMyPatrol.mockResolvedValue({ ...record(), status: "CANCELLED" });
@@ -207,4 +211,26 @@ test("refresh receives manager route edits and cancellation removes start and na
   await ui.findByText("CANCELLED");
   expect(ui.queryByLabelText("Start Patrol")).toBeNull();
   expect(ui.queryByLabelText("Open Navigation")).toBeNull();
+});
+
+test("active patrol opens contextual incident form and report list without changing lifecycle", async () => {
+  getMyPatrol.mockResolvedValue({ ...record(), status: "IN_PROGRESS" });
+  const navigation = { navigate: jest.fn() };
+  const ui = render(
+    <PatrolDetailsScreen
+      route={{ params: { patrolId: "assignment" } }}
+      navigation={navigation}
+    />,
+  );
+  await ui.findByLabelText("Report Incident");
+  fireEvent.press(ui.getByLabelText("Report Incident"));
+  expect(navigation.navigate).toHaveBeenLastCalledWith("IncidentCreate", {
+    patrolId: "assignment",
+  });
+  fireEvent.press(ui.getByLabelText("My Incident Reports"));
+  expect(navigation.navigate).toHaveBeenLastCalledWith("IncidentReports", {
+    patrolId: "assignment",
+  });
+  expect(startMyPatrol).not.toHaveBeenCalled();
+  expect(completeMyPatrol).not.toHaveBeenCalled();
 });

@@ -181,3 +181,19 @@ test("Locating state and denied permission recovery are clearly labelled", () =>
   expect(retry).toHaveBeenCalledTimes(1);
   expect(openSettings).toHaveBeenCalledTimes(1);
 });
+
+test("incident entry pushes current patrol context without replacing navigation or completing patrol", () => {
+  const navigation = { navigate: jest.fn(), replace: jest.fn() };
+  const ui = render(
+    <LivePatrolNavigationScreen
+      route={{ params: { patrolId: "p" } }}
+      navigation={navigation}
+    />,
+  );
+  fireEvent.press(ui.getByLabelText("Report Incident"));
+  expect(navigation.navigate).toHaveBeenCalledWith("IncidentCreate", {
+    patrolId: "p",
+  });
+  expect(navigation.replace).not.toHaveBeenCalled();
+  expect(completeMyPatrol).not.toHaveBeenCalled();
+});
