@@ -30,7 +30,13 @@ router.get("/", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), c
 // 4. View single report details
 router.get("/:id", optionalAuth, controller.getReportById);
 
-// 5. Liaison & Manager update report status
+// 5. Upload evidence media
+router.post("/evidence/upload", optionalAuth, controller.uploadEvidence);
+
+// 6. Attach evidence to existing report
+router.post("/:id/evidence", optionalAuth, controller.attachEvidence);
+
+// 7. Liaison & Manager update report status
 router.patch("/:id/status", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.updateStatus);
 
 module.exports = router;

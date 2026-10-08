@@ -6,6 +6,12 @@ export async function submitReport(reportData, signal) {
   return data;
 }
 
+export async function uploadEvidence(evidencePayload, signal) {
+  const { data } = await api.post("/community-reports/evidence/upload", evidencePayload, { signal });
+  if (!data.success) throw new Error(data.message || "Could not upload evidence.");
+  return data;
+}
+
 export async function listMyReports(params = {}, signal) {
   const { data } = await api.get("/community-reports/mine", { params, signal });
   if (!data.success) throw new Error(data.message || "Could not load your reports.");

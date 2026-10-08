@@ -68,6 +68,35 @@ exports.listReportsForLiaison = async (query = {}) => {
   });
 };
 
+const evidenceStorage = require("./evidenceStorage.service");
+
+exports.uploadEvidence = async (payload) => {
+  return evidenceStorage.storeEvidence(payload);
+};
+
+exports.attachEvidence = async (id, payload, user = null) => {
+  const report = await repository.findReportById(id);
+  if (!report) throw notFound();
+
+  if (report.reporterId && user && !["COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER"].includes(user.role)) {
+    if (report.reporterId !== user.id) {
+      throw forbidden();
+    }
+  }
+
+  const stored = await evidenceStorage.storeEvidence(payload);
+  const evidenceRecord = await repository.addEvidence(id, {
+    fileUrl: stored.fileUrl,
+    fileType: stored.fileType,
+  });
+
+  return {
+    ...stored,
+    id: evidenceRecord.id,
+    reportId: id,
+  };
+};
+
 exports.updateReportStatus = async (id, newStatus, user) => {
   const report = await repository.findReportById(id);
   if (!report) throw notFound();

@@ -65,3 +65,29 @@ exports.updateStatus = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.uploadEvidence = async (req, res, next) => {
+  try {
+    const result = await service.uploadEvidence(req.body);
+    res.status(201).json({
+      success: true,
+      message: "Evidence uploaded successfully.",
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.attachEvidence = async (req, res, next) => {
+  try {
+    const result = await service.attachEvidence(req.params.id, req.body, req.user || null);
+    res.status(201).json({
+      success: true,
+      message: "Evidence attached to report successfully.",
+      evidence: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

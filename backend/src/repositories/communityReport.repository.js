@@ -115,3 +115,13 @@ exports.updateReportStatus = async (id, status) => {
     select: reportSelect,
   });
 };
+
+exports.addEvidence = async (reportId, { fileUrl, fileType }) => {
+  return db().communityReportEvidence.create({
+    data: {
+      reportId,
+      fileUrl,
+      fileType,
+    },
+  });
+};

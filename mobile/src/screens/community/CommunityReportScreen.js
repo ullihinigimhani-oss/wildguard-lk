@@ -10,7 +10,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
 import LocationPicker from "../../components/LocationPicker";
-import { submitReport } from "../../services/communityReportApi";
+import EvidencePicker from "../../components/EvidencePicker";
+import { submitReport, uploadEvidence } from "../../services/communityReportApi";
 import { useAuth } from "../../hooks/useAuth";
 import { colors, styles } from "../../constants/theme";
 
@@ -58,9 +59,11 @@ export default function CommunityReportScreen({ navigation, route }) {
   const [landmarkDescription, setLandmarkDescription] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
+  const [evidence, setEvidence] = useState([]);
 
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
   const [submittedReport, setSubmittedReport] = useState(null);
 
   function selectSpecies(s) {
@@ -144,6 +147,29 @@ export default function CommunityReportScreen({ navigation, route }) {
       const lonTrim = longitude.trim();
       const effectiveLoc = getEffectiveManualLocation();
 
+      // Process and upload any pending evidence items
+      const preparedEvidence = [];
+      for (let i = 0; i < evidence.length; i++) {
+        const item = evidence[i];
+        if (item.fileUrl && (item.fileUrl.startsWith("/uploads/") || item.fileUrl.startsWith("http"))) {
+          preparedEvidence.push({ fileUrl: item.fileUrl, fileType: item.fileType });
+        } else if (item.base64) {
+          setUploadStatus(`Uploading evidence ${i + 1} of ${evidence.length}...`);
+          const uploadRes = await uploadEvidence({
+            data: item.base64,
+            mimeType: item.fileType,
+            originalName: item.fileName,
+          });
+          item.fileUrl = uploadRes.fileUrl;
+          preparedEvidence.push({ fileUrl: uploadRes.fileUrl, fileType: uploadRes.fileType });
+        } else {
+          // Local/mock URI
+          preparedEvidence.push({ fileUrl: item.fileUrl, fileType: item.fileType });
+        }
+      }
+
+      setUploadStatus("Submitting report...");
+
       const payload = {
         reportType,
         species: species.trim() || undefined,
@@ -152,6 +178,7 @@ export default function CommunityReportScreen({ navigation, route }) {
         latitude: latTrim ? parseFloat(latTrim) : undefined,
         longitude: lonTrim ? parseFloat(lonTrim) : undefined,
         reporterName: user?.name || undefined,
+        evidence: preparedEvidence.length ? preparedEvidence : undefined,
       };
 
       const result = await submitReport(payload);
@@ -171,6 +198,7 @@ export default function CommunityReportScreen({ navigation, route }) {
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
+      setUploadStatus("");
     }
   }
 
@@ -183,6 +211,8 @@ export default function CommunityReportScreen({ navigation, route }) {
     setLandmarkDescription("");
     setLatitude("");
     setLongitude("");
+    setEvidence([]);
+    setUploadStatus("");
     setErrors({});
     setSubmittedReport(null);
   }
@@ -216,6 +246,11 @@ export default function CommunityReportScreen({ navigation, route }) {
             <Text style={[styles.muted, { fontSize: 12 }]}>Report ID: {submittedReport.id}</Text>
             <Text style={[styles.muted, { fontSize: 12 }]}>Type: {submittedReport.reportType.replace(/_/g, " ")}</Text>
             <Text style={[styles.muted, { fontSize: 12 }]}>Status: {submittedReport.status}</Text>
+            {Boolean(submittedReport.evidence?.length) && (
+              <Text style={[styles.muted, { fontSize: 12 }]}>
+                Attached Evidence: {submittedReport.evidence.length} file{submittedReport.evidence.length > 1 ? "s" : ""}
+              </Text>
+            )}
           </View>
 
           <View style={{ width: "100%", gap: 10, marginTop: 8 }}>
@@ -412,10 +447,19 @@ export default function CommunityReportScreen({ navigation, route }) {
         disabled={submitting}
       />
 
-      {/* 5. Submit Button */}
+      {/* 5. Photo / Video Evidence */}
+      <EvidencePicker
+        evidence={evidence}
+        onChange={setEvidence}
+        disabled={submitting}
+        maxItems={5}
+      />
+      {errors.evidence && <Text style={styles.error}>{errors.evidence}</Text>}
+
+      {/* 6. Submit Button */}
       <View style={{ gap: 8, paddingBottom: 24 }}>
         <Button
-          title={submitting ? "Submitting Report..." : "Submit Incident Report"}
+          title={submitting ? (uploadStatus || "Submitting Report...") : "Submit Incident Report"}
           loading={submitting}
           disabled={submitting}
           onPress={handleSubmit}
