@@ -246,6 +246,7 @@ test("diagnostics confirm receipt of bytes and ordered stages while logging only
           "mimeType",
           "fileSize",
           "elapsedMs",
+          "durationMs",
         ].includes(key),
       ),
     ).toBe(true);
@@ -371,7 +372,7 @@ test("private read returns only time-bound backend ticket; proxy handles bytes/r
   expect(global.fetch).toHaveBeenCalledWith(
     expect.any(String),
     expect.objectContaining({
-      redirect: "error",
+      redirect: "manual",
       headers: { Range: "bytes=0-10" },
     }),
   );
@@ -454,4 +455,34 @@ test("cleanup retries are bounded and a failed provider delete is explicitly rep
   expect(cloud.uploader.destroy).toHaveBeenCalledTimes(3);
   expect(items).toHaveLength(0);
   expect(JSON.stringify(response.body)).not.toContain("mock-only-cloud-secret");
+});
+
+test.each([
+  [401, "", "MEDIA_PROVIDER_UNAUTHORIZED"],
+  [403, "", "MEDIA_PROVIDER_FORBIDDEN"],
+  [404, "", "MEDIA_PROVIDER_NOT_FOUND"],
+  [302, "", "MEDIA_PROVIDER_REDIRECT"],
+  [401, "Invalid signature secret-provider-details", "MEDIA_PROVIDER_SIGNATURE_INVALID"],
+  [403, "Delivery blocked secret-provider-details", "MEDIA_PROVIDER_DELIVERY_RESTRICTED"],
+])("private read classifies provider %s safely", async (status, hint, code) => {
+  await upload();
+  const access = await request(app).get("/api/incidents/i/evidence/e-1/access").set("Authorization", bearer());
+  global.fetch.mockResolvedValue(new Response("secret-provider-body", { status, headers: { "x-cld-error": hint, Location: "https://evil.example/secret" } }));
+  const response = await request(app).get("/api" + access.body.access.path).expect(503);
+  expect(response.body.code).toBe(code);
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(diagnosticLog.mock.calls)).toContain(code);
+  expect(JSON.stringify(diagnosticLog.mock.calls)).not.toMatch(/secret-provider|evil.example|api_key|ticket=/);
+  expect(JSON.stringify(response.body)).not.toMatch(/secret-provider|evil.example|api_key|ticket=/);
+});
+
+test.each([["TypeError", "MEDIA_NETWORK_FAILED"], ["AbortError", "MEDIA_READ_TIMEOUT"]])("private fetch %s is classified and a fresh access retry succeeds", async (name, code) => {
+  await upload();
+  const access = await request(app).get("/api/incidents/i/evidence/e-1/access").set("Authorization", bearer());
+  global.fetch.mockRejectedValueOnce(Object.assign(new Error("secret-provider-url"), { name }));
+  const failure = await request(app).get("/api" + access.body.access.path).expect(503);
+  expect(failure.body.code).toBe(code);
+  const refreshed = await request(app).get("/api/incidents/i/evidence/e-1/access").set("Authorization", bearer());
+  await request(app).get("/api" + refreshed.body.access.path).expect(200);
+  expect(items).toHaveLength(1);
 });

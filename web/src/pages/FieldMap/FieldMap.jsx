@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { getAnimalsWithLatestLocations } from "../../services/sensorApi";
+import { getAllRiskZones } from "../../services/riskZoneApi";
 
 // Species emoji mapping
 const SPECIES_EMOJIS = {
@@ -31,26 +32,41 @@ const createEmojiIcon = (emoji) => {
 
 export default function FieldMap() {
   const [animals, setAnimals] = useState([]);
+  const [riskZones, setRiskZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadAnimals();
+    loadData();
   }, []);
 
-  const loadAnimals = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const response = await getAnimalsWithLatestLocations();
-      const animalsWithLocations = response.data.filter(
+      const [animalsRes, zonesRes] = await Promise.all([
+        getAnimalsWithLatestLocations(),
+        getAllRiskZones()
+      ]);
+      const animalsWithLocations = animalsRes.data.filter(
         animal => animal.locations && animal.locations.length > 0
       );
       setAnimals(animalsWithLocations);
+      setRiskZones(zonesRes.data || []);
     } catch (err) {
-      setError('Failed to load animal data');
-      console.error('Error loading animals:', err);
+      setError('Failed to load data');
+      console.error('Error loading data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getRiskColor = (level) => {
+    switch (level) {
+      case 'LOW': return '#f1c40f';
+      case 'MEDIUM': return '#e67e22';
+      case 'HIGH': return '#e74c3c';
+      case 'CRITICAL': return '#8b0000';
+      default: return '#f1c40f';
     }
   };
 
@@ -91,6 +107,36 @@ export default function FieldMap() {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
+              {riskZones.map((zone) => (
+                <Circle
+                  key={zone.id}
+                  center={[zone.centerLatitude, zone.centerLongitude]}
+                  radius={zone.radiusMeters}
+                  pathOptions={{
+                    color: getRiskColor(zone.riskLevel),
+                    fillColor: getRiskColor(zone.riskLevel),
+                    fillOpacity: 0.3,
+                    weight: 2
+                  }}
+                >
+                  <Popup>
+                    <div style={{ minWidth: '200px' }}>
+                      <strong>{zone.name}</strong>
+                      <div style={{ marginTop: '8px', fontSize: '13px' }}>
+                        <div>Risk Level: <strong style={{ color: getRiskColor(zone.riskLevel) }}>{zone.riskLevel}</strong></div>
+                        {zone.description && (
+                          <div style={{ marginTop: '4px', fontSize: '12px', color: '#666' }}>
+                            {zone.description}
+                          </div>
+                        )}
+                        <div style={{ marginTop: '4px', fontSize: '12px', color: '#666' }}>
+                          Radius: {zone.radiusMeters}m
+                        </div>
+                      </div>
+                    </div>
+                  </Popup>
+                </Circle>
+              ))}
               {animals.map((animal) => {
                 const latestLocation = animal.locations[0];
                 const emoji = SPECIES_EMOJIS[animal.species] || '🐾';

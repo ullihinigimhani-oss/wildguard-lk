@@ -100,8 +100,9 @@ exports.upload = async (
   let asset;
   try {
     trace("cloudinary_upload");
+    const cloudStarted = Date.now();
     asset = await storage.upload(media, publicId);
-    trace("cloudinary_response_validation");
+    trace("cloudinary_response_validation", null, Date.now() - cloudStarted);
     // Cloudinary must have decoded the actual content into the expected private media resource.
     if (
       !asset?.asset_id ||
@@ -134,6 +135,7 @@ exports.upload = async (
         "You cannot upload evidence to this incident.",
       );
     trace("database_finalization");
+    const databaseStarted = Date.now();
     const result = await writable(id, current, async (tx) => {
       const items = await tx.incidentEvidence.findMany({
         where: { incidentId: id },
@@ -173,6 +175,7 @@ exports.upload = async (
       };
     });
     if (result.duplicate) await storage.remove(publicId, media.resourceType);
+    trace("database_finalized", null, Date.now() - databaseStarted);
     return safeEvidence(result.record);
   } catch (error) {
     // Leave the failing stage intact; cleanup must not hide where the upload failed.
@@ -248,17 +251,18 @@ exports.access = async (incidentId, evidenceId, user, sessionExpiresAt) => {
 };
 exports.media = async (incidentId, evidenceId, ticket) => {
   let claims;
+  const secret = ticketSecret();
   try {
-    claims = jwt.verify(ticket, ticketSecret(), {
+    claims = jwt.verify(ticket, secret, {
       algorithms: ["HS256"],
       issuer: "wildguard-lk",
       audience: "wildguard-evidence",
     });
-  } catch {
+  } catch (error) {
     throw evidenceError(
       401,
-      "MEDIA_ACCESS_EXPIRED",
-      "Media access expired. Open the evidence again.",
+      error.name === "TokenExpiredError" ? "MEDIA_ACCESS_EXPIRED" : "MEDIA_ACCESS_INVALID",
+      "Media access is invalid or expired. Open the evidence again.",
     );
   }
   if (

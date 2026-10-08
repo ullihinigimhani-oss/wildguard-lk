@@ -31,7 +31,12 @@ function preparationError(step, key, mimeType, size) {
   );
 }
 export function discardEvidenceFile(item) {
-  if (Platform.OS === "web" || !item?.prepared) return;
+  if (Platform.OS === "web") {
+    if (item?.ownedBlobUri === item?.uri && item.uri?.startsWith("blob:"))
+      URL.revokeObjectURL(item.uri);
+    return;
+  }
+  if (!item?.prepared) return;
   try {
     const prefix = new File(Paths.document, "wg-evidence-").uri;
     if (item.uri !== item.ownedUri || !item.uri.startsWith(prefix)) return;
@@ -41,8 +46,34 @@ export function discardEvidenceFile(item) {
     /* Cleanup must never delete the picker original or mask upload success. */
   }
 }
-export async function prepareEvidenceItem(asset, source, kind, uploadKey) {
-  if (Platform.OS === "web") return selectionItem(asset, source, kind);
+export async function prepareEvidenceItem(asset, source, kind, uploadKey, photoMode = "original") {
+  const started = Date.now();
+  if (Platform.OS === "web") {
+    const item = selectionItem(asset, source, kind);
+    if (photoMode !== "optimized" || item.video) return item;
+    let context, image, savedUri;
+    try {
+      const { ImageManipulator, SaveFormat } = require("expo-image-manipulator");
+      context = ImageManipulator.manipulate(asset.uri);
+      image = await context.renderAsync();
+      const { width, height } = image;
+      if (!(width > 0 && height > 0)) throw new Error();
+      URL.revokeObjectURL(image.uri);
+      image.release(); image = null;
+      if (Math.max(width, height) > 1600)
+        context.resize(width >= height ? { width: 1600 } : { height: 1600 });
+      image = await context.renderAsync();
+      const result = await image.saveAsync({ compress: 0.8, format: SaveFormat.JPEG });
+      savedUri = result.uri;
+      const file = await (await fetch(result.uri)).blob();
+      if (!file.size || file.size > IMAGE_LIMIT) throw new Error();
+      console.info(JSON.stringify({ requestId: item.uploadKey, stage: "mobile_image_preparation", elapsedMs: Date.now() - started, originalSize: item.size, fileSize: file.size, mode: "optimized" }));
+      return { ...item, uri: result.uri, ownedBlobUri: result.uri, file, name: item.name.replace(/\.[^.]+$/, "") + ".jpg", mimeType: "image/jpeg", originalSize: item.size, size: file.size, photoMode: "optimized" };
+    } catch {
+      if (savedUri) URL.revokeObjectURL(savedUri);
+      throw new Error("This photo could not be optimized on this device. Select it again using Original quality; HEIC decoding depends on device support.");
+    } finally { if (image?.uri) URL.revokeObjectURL(image.uri); image?.release(); context?.release(); }
+  }
   const key =
     uploadKey ||
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
@@ -62,15 +93,49 @@ export async function prepareEvidenceItem(asset, source, kind, uploadKey) {
     if (!original.exists) throw new Error();
     size = original.size;
     if (!Number.isFinite(size) || size <= 0) throw new Error();
-    const item = selectionItem({ ...asset, uri, fileSize: size }, source, kind);
+    let item = selectionItem({ ...asset, uri, fileSize: size }, source, kind);
+    let uploadFile = original;
+    let rendered, context, temporary;
+    if (photoMode === "optimized" && !item.video) {
+      step = "image_optimization";
+      try {
+        const { ImageManipulator, SaveFormat } = require("expo-image-manipulator");
+        context = ImageManipulator.manipulate(uri);
+        // Read decoded dimensions, including manually imported HEIC; never upscale.
+        rendered = await context.renderAsync();
+        const { width, height } = rendered;
+        if (!(width > 0 && height > 0)) throw new Error();
+        rendered.release();
+        rendered = null;
+        if (Math.max(width, height) > 1600)
+          context.resize(width >= height ? { width: 1600 } : { height: 1600 });
+        rendered = await context.renderAsync();
+        const saved = await rendered.saveAsync({ compress: 0.8, format: SaveFormat.JPEG });
+        temporary = new File(saved.uri);
+        if (!temporary.exists || !(temporary.size > 0)) throw new Error();
+        uploadFile = temporary;
+        item = { ...item, name: item.name.replace(/\.[^.]+$/, "") + ".jpg", mimeType: "image/jpeg", originalSize: size, photoMode: "optimized" };
+        size = temporary.size;
+        if (size > IMAGE_LIMIT) throw new Error("Photos must be at most 10 MB.");
+        // One copy into owned storage. The camera/gallery original is never changed.
+        destination = new File(Paths.document, `wg-evidence-${key}.jpg`);
+        step = "stable_copy";
+        await uploadFile.copy(destination);
+      } finally {
+        rendered?.release();
+        context?.release();
+        if (temporary?.exists) temporary.delete();
+      }
+    }
     const extension =
       /\.(jpg|jpeg|png|webp|heic|mp4|mov|webm)$/i.exec(item.name)?.[0] || "";
-    destination = new File(Paths.document, `wg-evidence-${key}${extension}`);
+    destination ||= new File(Paths.document, `wg-evidence-${key}${extension}`);
     step = "stable_copy";
     // Expo SDK 57 File.copy is Promise<void>. Never stat before it completes.
-    await original.copy(destination);
+    if (uploadFile === original) await original.copy(destination);
     step = "stable_stat";
     if (!destination.exists || destination.size !== size) throw new Error();
+    console.info(JSON.stringify({ requestId: key, stage: "mobile_image_preparation", elapsedMs: Date.now() - started, fileSize: size, originalSize: item.originalSize || size, mode: item.photoMode || "original" }));
     return {
       ...item,
       uploadKey: key,
@@ -91,6 +156,10 @@ export async function prepareEvidenceItem(asset, source, kind, uploadKey) {
       error.message?.startsWith("Use a JPEG")
     )
       throw error;
+    if (step === "image_optimization") {
+      console.warn(JSON.stringify({ requestId: key, stage: "client_file_prepare", step, code: "IMAGE_OPTIMIZATION_FAILED", elapsedMs: Date.now() - started }));
+      throw new Error("This photo could not be optimized on this device. Select it again using Original quality; HEIC decoding depends on device support.");
+    }
     throw preparationError(step, key, asset.mimeType, size);
   }
 }
