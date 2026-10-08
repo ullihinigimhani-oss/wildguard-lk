@@ -84,6 +84,8 @@ exports.storeEvidence = async ({ data, mimeType, originalName = "" }) => {
   } else {
     const error = new Error("Invalid file data received.");
     error.status = 400;
+    error.validationError = true;
+    error.fields = { data: "Invalid file data received." };
     throw error;
   }
 
@@ -91,6 +93,8 @@ exports.storeEvidence = async ({ data, mimeType, originalName = "" }) => {
   if (buffer.length === 0) {
     const error = new Error("The uploaded file is empty or corrupted.");
     error.status = 400;
+    error.validationError = true;
+    error.fields = { data: "The uploaded file is empty or corrupted." };
     throw error;
   }
 
