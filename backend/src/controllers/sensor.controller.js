@@ -31,6 +31,32 @@ exports.getAnimalsWithLatestLocations = async (req, res, next) => {
     res.json({ success: true, data: animals });
   } catch (error) { next(error); }
 };
+exports.getAnimalLocationsByDateRange = async (req, res, next) => {
+  try {
+    const { animalId } = req.params;
+    const { startDate, endDate } = req.query;
+    const locations = await service.getAnimalLocationsByDateRange(animalId, new Date(startDate), new Date(endDate));
+    res.json({ success: true, data: locations });
+  } catch (error) { next(error); }
+};
+exports.getAllLocationsByDateRange = async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const locations = await service.getAllLocationsByDateRange(new Date(startDate), new Date(endDate));
+    res.json({ success: true, data: locations });
+  } catch (error) { next(error); }
+};
+exports.getDensityZones = async (req, res, next) => {
+  try {
+    const { startDate, endDate, radius } = req.query;
+    const zones = await service.getDensityZones(
+      new Date(startDate),
+      new Date(endDate),
+      radius ? parseInt(radius) : 300
+    );
+    res.json({ success: true, data: zones });
+  } catch (error) { next(error); }
+};
 exports.updateAnimal = async (req, res, next) => {
   try {
     const { id } = req.params;
