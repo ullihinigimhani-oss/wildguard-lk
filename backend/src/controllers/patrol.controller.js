@@ -70,7 +70,7 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
-    const patrol = await service.updatePatrol(req.params.id, validatePatrolCreation(req.body));
+    const patrol = await service.updatePatrol(req.params.id, validatePatrolCreation(req.body), req.user.id);
     res.set("Cache-Control", "no-store").json({ success: true, patrol });
   } catch (error) { next(error); }
 };
@@ -78,5 +78,14 @@ exports.cancel = async (req, res, next) => {
   try {
     const patrol = await service.cancelPatrol(req.params.id);
     res.set("Cache-Control", "no-store").json({ success: true, patrol });
+  } catch (error) { next(error); }
+};
+exports.validateRoute = async (req, res, next) => {
+  try {
+    const parkId = req.body?.park_ranger_area;
+    if (typeof parkId !== 'string' || !parkId || parkId.length > 128 || !await require('../repositories/patrol.repository').findPark(parkId))
+      throw Object.assign(new Error('Select a valid park.'), { status: 400, validationError: true, fields: { park_ranger_area: 'Select a valid park.' } });
+    const route = await require('../services/patrolRouteValidation.service').validate(parkId, req.body?.plannedRoute, req.user.id);
+    res.set('Cache-Control', 'no-store').json({ success: true, route });
   } catch (error) { next(error); }
 };

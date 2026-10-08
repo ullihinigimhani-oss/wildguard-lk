@@ -1,5 +1,7 @@
 const plannedRoute = [{ type: "START", order: 0, latitude: 7.5, longitude: 80.7, label: "Main gate", note: null }, { type: "END", order: 1, latitude: 7.6, longitude: 80.8, label: "End Point", note: null }];
 const request = require("supertest");
+jest.mock('../../src/services/riskZone.service', () => ({ forPark: jest.fn().mockResolvedValue([]) }));
+jest.mock('../../src/services/ors.service', () => ({ walkingRoute: jest.fn() }));
 const jwt = require("jsonwebtoken");
 jest.mock("../../src/config/database", () => ({
   park: { findUnique: jest.fn() },
@@ -33,7 +35,24 @@ const payload = (overrides) => ({
   ...overrides,
 });
 const asManager = () => "Bearer " + token("manager");
+test.each([[0,'START'],[1,'END']])('unmapped %s blocks creation and identifies the original planner point', async (index,type) => {
+  require('../../src/services/ors.service').walkingRoute.mockRejectedValue(Object.assign(new Error('Unmapped walking point'),{navigationError:true,status:422,code:'PATROL_POINT_UNMAPPED',routingPoint:{index,type}}));
+  const {body}=await request(app).post('/api/patrols').set('Authorization',asManager()).send(payload()).expect(422);
+  expect(body.routingPoint).toEqual({index,type}); expect(db.patrol.create).not.toHaveBeenCalled();
+});
+test('route validation is authenticated, manager-only and read-only', async () => {
+  await request(app).post('/api/patrols/validate-route').send(payload()).expect(401);
+  await request(app).post('/api/patrols/validate-route').set('Authorization','Bearer '+token('ranger-1')).send(payload()).expect(403);
+  const {body}=await request(app).post('/api/patrols/validate-route').set('Authorization',asManager()).send(payload()).expect(200);
+  expect(body.route.geometry.type).toBe('LineString'); expect(db.patrol.create).not.toHaveBeenCalled();
+});
+test.each(['NO_WALKING_ROUTE','ROUTING_UNAVAILABLE','NO_RISK_AVOIDING_ROUTE'])('%s blocks saving without DB writes', async code => {
+  require('../../src/services/ors.service').walkingRoute.mockRejectedValue(Object.assign(new Error('Route cannot be verified'),{navigationError:true,status:503,code}));
+  await request(app).post('/api/patrols').set('Authorization',asManager()).send(payload()).expect(503);
+  expect(db.patrol.create).not.toHaveBeenCalled();
+});
 beforeEach(() => {
+  require('../../src/services/ors.service').walkingRoute.mockReset().mockResolvedValue({ geometry: { type: 'LineString', coordinates: [[80.7,7.5],[80.8,7.6]] }, distanceMeters: 1000, durationSeconds: 900 });
   process.env.JWT_SECRET = "isolated-patrol-api-secret-at-least-32-chars";
   accounts = {
     manager: {

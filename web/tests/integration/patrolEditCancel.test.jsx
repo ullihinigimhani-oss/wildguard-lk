@@ -5,10 +5,11 @@ import PatrolManagement from "../../src/pages/PatrolManagement/PatrolManagement"
 import { getPatrol, updatePatrol, createPatrol, cancelPatrol, listPatrols, listAssignableRangers } from "../../src/services/patrolApi";
 import { listParks } from "../../src/services/parkApi";
 import { readFileSync } from "node:fs";
+import { validatePatrolRoute } from '../../src/services/patrolApi';
 import { resolve } from "node:path";
 // Vitest stubs CSS imports; read the actual stylesheet for layout assertions.
 const tableStyles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
-vi.mock("../../src/services/patrolApi", () => ({ getPatrol: vi.fn(), updatePatrol: vi.fn(), createPatrol: vi.fn(), cancelPatrol: vi.fn(), listPatrols: vi.fn(), listAssignableRangers: vi.fn() }));
+vi.mock("../../src/services/patrolApi", () => ({ validatePatrolRoute: vi.fn(), getPatrol: vi.fn(), updatePatrol: vi.fn(), createPatrol: vi.fn(), cancelPatrol: vi.fn(), listPatrols: vi.fn(), listAssignableRangers: vi.fn() }));
 vi.mock("../../src/services/parkApi", () => ({ listParks: vi.fn() }));
 vi.mock("../../src/components/patrol/PatrolMap", () => ({ default: () => <div>Existing map planner</div> }));
 const patrol = {
@@ -19,6 +20,7 @@ const patrol = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  validatePatrolRoute.mockResolvedValue({geometry:{type:'LineString',coordinates:[[80.7,7.5],[80.8,7.6]]},distanceMeters:1000,durationSeconds:900});
   getPatrol.mockResolvedValue(patrol);
   updatePatrol.mockResolvedValue({ success: true, patrol }); cancelPatrol.mockResolvedValue({ success: true, patrol: { ...patrol, status: "CANCELLED" } });
   listParks.mockResolvedValue([patrol.park]);
@@ -44,6 +46,8 @@ test("prepopulates details and route, saves the same ID and reassignment without
   // Saved points have stable UI IDs, allowing the existing planner editor to select them.
   fireEvent.click(screen.getByRole("button", { name: /Gate.*Start Point/ }));
   fireEvent.change(screen.getByLabelText("Point name"), { target: { value: "New gate" } });
+  fireEvent.click(screen.getByRole('button',{name:'Validate walking route'}));
+  await screen.findByText(/Walking route verified/);
   fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
   await screen.findByText("Patrol updated successfully.");
   expect(updatePatrol).toHaveBeenCalledWith("patrol-actual", expect.objectContaining({ patrol_title: "Changed patrol", assigned_ranger: "b", start_time: "08:00", plannedRoute: [expect.objectContaining({ label: "New gate", latitude: 7.5 }), expect.objectContaining({ type: "END" })] }));
@@ -52,6 +56,8 @@ test("prepopulates details and route, saves the same ID and reassignment without
 test("save conflict preserves edits and displays the server conflict", async () => {
   updatePatrol.mockRejectedValue({ response: { status: 409, data: { message: "This patrol changed. Refresh and try again." } } });
   mountEdit(); await screen.findByDisplayValue("Existing patrol");
+  fireEvent.click(screen.getByRole('button',{name:'Validate walking route'}));
+  await screen.findByText(/Walking route verified/);
   fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
   await screen.findByText("This patrol changed. Refresh and try again.");
   expect(screen.getByLabelText("Patrol Title *")).toHaveValue("Existing patrol");

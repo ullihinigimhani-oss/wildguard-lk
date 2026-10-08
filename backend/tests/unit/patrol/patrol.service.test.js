@@ -1,4 +1,5 @@
 jest.mock("../../../src/repositories/patrol.repository");
+jest.mock('../../../src/services/patrolRouteValidation.service', () => ({ validate: jest.fn().mockResolvedValue({}) }));
 const repository = require("../../../src/repositories/patrol.repository");
 const service = require("../../../src/services/patrol.service");
 

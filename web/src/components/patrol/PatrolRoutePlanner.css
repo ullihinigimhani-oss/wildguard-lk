@@ -342,3 +342,5 @@
     height: 310px;
   }
 }
+.route-marker.is-unmapped { background: #b63b3b; outline: 4px solid #f3b5b5; box-shadow: 0 0 0 6px white; }
+.route-validation { margin-bottom: 16px; }
