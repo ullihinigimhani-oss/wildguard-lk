@@ -134,7 +134,7 @@ Migration `backend/prisma/migrations/20261008120000_community_report_status_revi
 | Route | Screen | Review surface |
 | --- | --- | --- |
 | `/community-reports` | `CommunityReports` | Filter bar (status, type, From/To dates, free-text search), results table (type, species, submitted, location, status badge, View link), pagination, refresh, `QueryState` loading/error/empty states. |
-| `/community-reports/:reportId` | `CommunityReportDetailsPage` → `CommunityReportDetails` + `CommunityReportStatusForm` | Everything the community user stored: reference, report type, species, status badge, anonymity, description, manual location + coordinates, reporter name/phone (or "Anonymous"), evidence items (image/video) via composed media URLs, submitted/created/updated times; then the status control with its Update Status button. |
+| `/community-reports/:reportId` | `CommunityReportDetailsPage` → `CommunityReportDetails` + `CommunityReportStatusForm` | Everything the community user stored: reference, report type, species, status badge, anonymity, description, reporter name/phone (or "Anonymous"), evidence items (image/video) via composed media URLs, submitted/created/updated times, the place name plus an OpenStreetMap marker when coordinates exist; then the status control with its Update Status button. |
 
 Both routes sit inside the `PARK_MANAGER` route block, so `role === "PARK_MANAGER" &&
 approvalStatus === "APPROVED"` is checked before any request is made; any other role sees the

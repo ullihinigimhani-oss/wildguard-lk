@@ -15,6 +15,17 @@ import {
 } from "../../src/services/communityReportApi";
 
 const account = vi.hoisted(() => ({ user: null }));
+const map = vi.hoisted(() => ({
+  invalidateSize: vi.fn(),
+  getContainer: () => document.body,
+}));
+vi.mock("react-leaflet", () => ({
+  useMap: () => map,
+  MapContainer: ({ children }) => <div>{children}</div>,
+  TileLayer: () => null,
+  Marker: ({ children }) => <div data-testid="community-marker">{children}</div>,
+  Popup: ({ children }) => <div>{children}</div>,
+}));
 vi.mock("../../src/hooks/useAuth", () => ({ useAuth: () => account }));
 vi.mock("../../src/services/communityReportApi", async () => ({
   ...(await vi.importActual("../../src/services/communityReportApi")),
@@ -131,6 +142,7 @@ test("details page shows report fields, reporter and evidence", async () => {
     "src",
     expect.stringContaining("/uploads/evidence/evidence-1.jpg"),
   );
+  expect(screen.getByTestId("community-marker")).toBeInTheDocument();
 });
 
 test("details page withholds anonymous reporter identity", async () => {

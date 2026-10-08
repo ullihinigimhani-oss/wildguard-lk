@@ -8,6 +8,7 @@ import {
   reportTypes,
 } from "../../services/communityReportApi";
 import { time } from "../incident/incidentPresentation";
+import CommunityReportLocation from "./CommunityReportLocation";
 import CommunityReportStatusForm from "./CommunityReportStatusForm";
 
 export default function CommunityReportDetails({ id }) {
@@ -110,12 +111,19 @@ export default function CommunityReportDetails({ id }) {
           <h3>Description</h3>
           <p className="community-description">{report.description}</p>
           <h3>Location</h3>
-          <p className="community-manual-location">
-            {report.manualLocation ||
-              (report.latitude != null && report.longitude != null
-                ? `${report.latitude}, ${report.longitude}`
-                : "Not recorded")}
-          </p>
+          {report.manualLocation && (
+            <p className="community-manual-location">
+              {report.manualLocation}
+            </p>
+          )}
+          {report.latitude != null && report.longitude != null ? (
+            <CommunityReportLocation
+              latitude={report.latitude}
+              longitude={report.longitude}
+            />
+          ) : (
+            !report.manualLocation && <p>Not recorded</p>
+          )}
           <h3>Evidence ({report.evidence?.length || 0})</h3>
           {report.evidence?.length ? (
             <div className="community-evidence-grid">
