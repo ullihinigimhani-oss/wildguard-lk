@@ -41,7 +41,7 @@ export default function PatrolManagement() {
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [pollError, setPollError] = useState("");
-  const [trackingPatrolId, setTrackingPatrolId] = useState(null);
+  
   const [cancelling, setCancelling] = useState(null);
   const [cancelPending, setCancelPending] = useState(false);
   const [cancelError, setCancelError] = useState("");
@@ -233,11 +233,7 @@ export default function PatrolManagement() {
           {pollError}
         </p>
       )}
-      {trackingPatrolId && (
-        <p role="status" className="muted" data-patrol-id={trackingPatrolId}>
-          Live patrol tracking will be available here.
-        </p>
-      )}
+      
       {cancelling && <div role="dialog" aria-modal="false" aria-labelledby="cancel-patrol-title" className="demo-notice">
         <h3 id="cancel-patrol-title">Cancel this patrol?</h3>
         <p><strong>{cancelling.routeName}</strong></p>
@@ -326,10 +322,15 @@ export default function PatrolManagement() {
                           <button type="button" className="patrol-action patrol-action-cancel" onClick={() => { setCancelling(patrol); setCancelError(""); }}><PatrolActionIcon kind="cancel" />Cancel</button>
                         </>}
                         {patrol.status === "IN_PROGRESS" && (
-                          <LiveTrackingAction
-                            patrolId={patrol.id}
-                            onSelect={setTrackingPatrolId}
-                          />
+                          <LiveTrackingAction patrolId={patrol.id} />
+                        )}
+                        {patrol.status === "COMPLETED" && (
+                          <Link
+                            className="patrol-action live-tracking-action"
+                            to={`/patrols/${patrol.id}/track`}
+                          >
+                            <PatrolActionIcon kind="tracking" />Route history
+                          </Link>
                         )}
                       </div>
                     </td>

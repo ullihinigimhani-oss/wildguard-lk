@@ -214,32 +214,41 @@ test.each(["SCHEDULED", "IN_PROGRESS", "COMPLETED"])(
     listPatrols.mockResolvedValue(pageOf([{ ...patrol, status }]));
     mountPage();
     await screen.findByText(patrol.routeName);
-    const button = screen.queryByRole("button", { name: "Live Tracking" });
-    if (status === "IN_PROGRESS") expect(button).toBeVisible();
-    else expect(button).not.toBeInTheDocument();
+    const link = screen.queryByRole("link", { name: "Live Tracking" });
+    if (status === "IN_PROGRESS") expect(link).toBeVisible();
+    else expect(link).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View" })).toHaveAttribute(
       "href",
       "/patrols/" + patrol.id,
     );
   },
 );
-test("Live Tracking passes the selected row ID to its placeholder without navigating away", async () => {
+test("Live Tracking links the selected row to its per-ranger tracking route", async () => {
   const second = {
     ...patrol,
     id: "another-patrol",
     routeName: "Second active patrol",
   };
   listPatrols.mockResolvedValue(pageOf([patrol, second]));
-  mountPage();
-  const title = await screen.findByText(second.routeName);
-  fireEvent.click(
-    within(title.closest("tr")).getByRole("button", { name: "Live Tracking" }),
+  render(
+    <MemoryRouter initialEntries={["/patrols"]}>
+      <Routes>
+        <Route path="/patrols" element={<PatrolManagement />} />
+        <Route
+          path="/patrols/:id/track"
+          element={<p>Ranger tracking destination</p>}
+        />
+      </Routes>
+    </MemoryRouter>,
   );
-  expect(
-    screen.getByText("Live patrol tracking will be available here."),
-  ).toHaveAttribute("data-patrol-id", second.id);
-  expect(screen.getByRole("table")).toBeVisible();
+  const title = await screen.findByText(second.routeName);
+  const link = within(title.closest("tr")).getByRole("link", {
+    name: "Live Tracking",
+  });
+  expect(link).toHaveAttribute("href", "/patrols/another-patrol/track");
   expect(screen.getAllByRole("link", { name: "View" })).toHaveLength(2);
+  fireEvent.click(link);
+  expect(screen.getByText("Ranger tracking destination")).toBeVisible();
 });
 test("existing View action still navigates to the selected patrol details", async () => {
   render(
@@ -264,15 +273,15 @@ test("polling reflects Ranger status changes and removes the action on completio
     const ui = mountPage();
     await act(async () => vi.advanceTimersByTimeAsync(200));
     expect(
-      screen.queryByRole("button", { name: "Live Tracking" }),
+      screen.queryByRole("link", { name: "Live Tracking" }),
     ).not.toBeInTheDocument();
     await act(async () => vi.advanceTimersByTimeAsync(15000));
-    expect(screen.getByRole("button", { name: "Live Tracking" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Live Tracking" })).toBeVisible();
     expect(screen.getByRole("table")).toBeVisible();
     expect(listPatrols).toHaveBeenCalledTimes(2);
     await act(async () => vi.advanceTimersByTimeAsync(15000));
     expect(
-      screen.queryByRole("button", { name: "Live Tracking" }),
+      screen.queryByRole("link", { name: "Live Tracking" }),
     ).not.toBeInTheDocument();
     ui.unmount();
   } finally {

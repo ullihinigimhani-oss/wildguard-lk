@@ -44,7 +44,10 @@ Response shape of `/live`:
 Added:
 - `backend/tests/integration/liveRanger.api.test.js`
 - `web/src/components/patrol/LiveRangerMap.jsx`
+- `web/src/components/patrol/RangerTrackMap.jsx`
+- `web/src/pages/RangerMonitoring/RangerTrack.jsx`
 - `web/tests/integration/liveMonitoring.test.jsx`
+- `web/tests/integration/rangerTracking.test.jsx`
 
 Changed:
 - `backend/src/repositories/patrol.repository.js` — `findLivePatrols`, `findLatestLocation`, `findPatrolTrail`
@@ -55,10 +58,12 @@ Changed:
 - `web/src/services/patrolApi.js` — `listLiveRangers`, `getPatrolTrail`
 - `web/src/routes/AppRoutes.jsx` — `/patrols/live` inside the PARK_MANAGER gate + placeholder exclusion
 - `web/src/constants/navigation.js` — no sidebar entry is added for live monitoring (removed from nav); the page is reached from Patrol Management
-- `web/src/pages/PatrolManagement/PatrolManagement.jsx` — manager-only link to the page
-- `web/src/styles.css` — appended live-monitoring styles (append-only)
-- `web/vite.config.js` — registered the new test file
+- `web/src/pages/PatrolManagement/PatrolManagement.jsx` — manager-only link to the page; per-row "Live Tracking" link on in-progress patrols and "Route history" link on completed patrols
+- `web/src/components/patrol/LiveTrackingAction.jsx` — now a router link to `/patrols/:id/track`
+- `web/src/styles.css` — appended live-monitoring and per-ranger tracking styles (append-only)
+- `web/vite.config.js` — registered the new test files
 - `web/tests/foundation/app.test.jsx` — added route-protection cases
+- `web/tests/integration/patrolList.test.jsx`, `web/tests/integration/patrolEditCancel.test.jsx` — updated placeholder assertions to the new per-ranger link
 
 ## 5. Update method and frequency
 REST polling every **7 seconds** (spec range 5–10 s) using a `setTimeout` chain
@@ -121,10 +126,8 @@ filters, empty state, error + Retry, and polling with cleanup-on-unmount; plus t
 - Position updates depend on the existing mobile reporting cadence (~60 s stationary,
   more often when moving), so between-report intervals show "Stale" as designed.
 - The page reports the last known position; it is not a continuous stream.
-- Teammate placeholder `LiveTrackingAction` on the Patrol Management table still shows
-  "Live patrol tracking will be available here." — left untouched; the real entry point
-  is the new page ("Live Ranger Monitoring" button on Patrol Management, with a
-  "← Back to patrols" link on the page itself).
+- The table's per-row `LiveTrackingAction` now opens the dedicated per-ranger
+  tracking page (`/patrols/:id/track`) instead of a placeholder.
 - `navigation.js` still grants Patrol Management to RANGER/COMMUNITY_LIAISON (pre-existing
   teammate config); the live-monitoring link itself is Park-Manager-only.
 
@@ -132,3 +135,21 @@ filters, empty state, error + Retry, and polling with cleanup-on-unmount; plus t
 Did not rebuild patrol creation, map-based location selection, or Ranger GPS tracking;
 reused the existing `PatrolLocation` history and polled the existing data through one
 new manager-facing read endpoint. No new phase started.
+
+## 13. Per-ranger route tracking (follow-up)
+Each in-progress patrol row has a "Live Tracking" link to a dedicated manager-only page
+`/patrols/:id/track`; completed rows keep a "Route history" link to the same page.
+The page is frontend-only and adds no backend endpoint — it reuses:
+- `GET /api/patrols/:id` for the **planned route** (`plannedRoute` waypoints) and header
+  metadata (ranger, park, status, type, priority);
+- `GET /api/patrols/:id/locations` for the **recorded route / saved history** (polled
+  every 7 s while `IN_PROGRESS`, stopped on unmount; still read once for completed patrols).
+
+`RangerTrackMap` draws the planned route as a dashed polyline with the standard
+S/E/!/O/number point markers, the recorded route as a solid polyline, and the latest
+point as the current-position marker. Recording and persistence already happen in the
+existing ranger GPS pipeline (`PatrolLocation`), so no new storage was introduced. The
+map is fitted to the combined points once so periodic refreshes do not fight user panning.
+Tests: `web/tests/integration/rangerTracking.test.jsx` (planned/recorded rendering, header,
+back link, freshness, empty state, not-found + Retry, completed-as-history, polling and
+unmount cleanup). Route protection covered in `app.test.jsx`.
