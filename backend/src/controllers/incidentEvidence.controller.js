@@ -1,4 +1,5 @@
 const { Readable } = require("node:stream");
+const { randomUUID } = require("node:crypto");
 const { pipeline } = require("node:stream/promises");
 const jwt = require("jsonwebtoken");
 const auth = require("../services/auth.service");
@@ -42,11 +43,11 @@ exports.upload = async (req, res, next) => {
             media,
             req.user,
             () => auth.authenticate(token),
-            (stage, error) => {
+            (stage, error, durationMs) => {
               if (error) req.evidenceTrace?.fail(error, error.status || 500);
               else {
                 job.stage = stage;
-                req.evidenceTrace?.stage(stage);
+                req.evidenceTrace?.stage(stage, durationMs);
               }
             },
           );
@@ -77,10 +78,10 @@ exports.upload = async (req, res, next) => {
           );
         return auth.authenticate(bearer(req));
       },
-      (stage, error) =>
+      (stage, error, durationMs) =>
         error
           ? req.evidenceTrace?.fail(error, error.status || 500)
-          : req.evidenceTrace?.stage(stage),
+          : req.evidenceTrace?.stage(stage, durationMs),
     );
     req.evidenceTrace?.stage("upload_complete");
     privateHeaders(res).status(201).json({ success: true, evidence });
@@ -139,6 +140,9 @@ exports.access = async (req, res, next) => {
   }
 };
 exports.media = async (req, res, next) => {
+  const started = Date.now(), requestId = randomUUID();
+  let stage = "media_authorization", upstreamStatus;
+  privateHeaders(res).set("X-Evidence-Request-ID", requestId);
   try {
     onlyKeys(req.query, ["ticket"]);
     if (typeof req.query.ticket !== "string" || req.query.ticket.length > 2048)
@@ -159,17 +163,27 @@ exports.media = async (req, res, next) => {
     const timeout = setTimeout(() => controller.abort(), 60000);
     res.once("close", () => controller.abort());
     try {
+      stage = "cloudinary_media_fetch";
       const response = await fetch(service.downloadUrl(asset), {
         signal: controller.signal,
-        redirect: "error",
+        redirect: "manual",
         headers: range ? { Range: range } : {},
       });
-      if (![200, 206].includes(response.status) || !response.body)
+      upstreamStatus = response.status;
+      if (![200, 206].includes(response.status) || !response.body) {
+        const providerHint = response.headers.get("x-cld-error") || "";
+        const code = /invalid signature/i.test(providerHint) ? "MEDIA_PROVIDER_SIGNATURE_INVALID" :
+          /(?:delivery|access).*(?:disabled|blocked|restricted)/i.test(providerHint) ? "MEDIA_PROVIDER_DELIVERY_RESTRICTED" :
+          ({ 401: "MEDIA_PROVIDER_UNAUTHORIZED", 403: "MEDIA_PROVIDER_FORBIDDEN", 404: "MEDIA_PROVIDER_NOT_FOUND" })[response.status] ||
+          (response.status >= 300 && response.status < 400 ? "MEDIA_PROVIDER_REDIRECT" : "MEDIA_PROVIDER_FAILED");
+        // Do not log provider bodies, headers or redirect locations.
+        await response.body?.cancel();
         throw evidenceError(
           503,
-          "MEDIA_READ_FAILED",
+          code,
           "Unable to load private evidence. Refresh media access and retry.",
         );
+      }
       privateHeaders(res)
         .status(response.status)
         .type(evidence.metadata.mimeType);
@@ -181,17 +195,22 @@ exports.media = async (req, res, next) => {
         const value = response.headers.get(header);
         if (value) res.set(header, value);
       }
+      stage = "media_stream";
       await pipeline(Readable.fromWeb(response.body), res);
     } finally {
       clearTimeout(timeout);
     }
   } catch (error) {
+    const known = error.evidenceError || error.incidentError;
+    const code = known ? error.code : error.name === "AbortError" ? "MEDIA_READ_TIMEOUT" : stage === "media_stream" ? "MEDIA_STREAM_FAILED" : "MEDIA_NETWORK_FAILED";
+    console.info(JSON.stringify({ requestId, incidentId: /^[A-Za-z0-9_-]{1,100}$/.test(req.params.incidentId || "") ? req.params.incidentId : "invalid", stage, code, httpStatus: error.status || 503, ...(upstreamStatus && { upstreamStatus }), elapsedMs: Date.now() - started }));
+    if (res.headersSent || res.destroyed) return;
     next(
       error.evidenceError || error.incidentError
         ? error
         : evidenceError(
             503,
-            "MEDIA_READ_FAILED",
+            code,
             "Unable to load private evidence. Open it again to retry.",
           ),
     );

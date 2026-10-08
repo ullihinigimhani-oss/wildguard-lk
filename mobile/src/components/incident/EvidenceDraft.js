@@ -5,6 +5,7 @@ import * as documents from "expo-document-picker";
 import { Text } from "../common/Typography";
 import { LocalEvidencePreview } from "./EvidenceMedia";
 import { IncidentButton, Input, ui } from "./IncidentUI";
+import PhotoUploadMode from "./PhotoUploadMode";
 import {
   prepareEvidenceItem,
   discardEvidenceFile,
@@ -21,6 +22,7 @@ export default function EvidenceDraft({
   const [error, setError] = useState(null),
     [selecting, setSelecting] = useState(false);
   const pending = useRef(false);
+  const [photoMode, setPhotoMode] = useState("original");
   const capacity =
     5 -
     existingCount -
@@ -81,7 +83,7 @@ export default function EvidenceDraft({
       const selected = [];
       try {
         for (const asset of result.assets)
-          selected.push(await prepareEvidenceItem(asset, source));
+          selected.push(await prepareEvidenceItem(asset, source, undefined, undefined, photoMode));
       } catch (failure) {
         selected.forEach(discardEvidenceFile);
         throw failure;
@@ -136,6 +138,7 @@ export default function EvidenceDraft({
           onPress={() => select(mode)}
         />
       ))}
+      <PhotoUploadMode value={photoMode} onChange={setPhotoMode} disabled={disabled || selecting} />
       {error && (
         <Text accessibilityRole="alert" style={ui.error}>
           {error}
@@ -149,6 +152,7 @@ export default function EvidenceDraft({
           <Text style={ui.muted}>
             {item.video ? "VIDEO" : "PHOTO"} · {item.source.replace(/_/g, " ")}{" "}
             · {(item.size / 1024 / 1024).toFixed(1)} MB
+            {item.photoMode === "optimized" ? " · Optimized JPEG" : " · Original quality"}
           </Text>
           <LocalEvidencePreview item={item} />
           <Text accessibilityLiveRegion="polite" style={ui.body}>

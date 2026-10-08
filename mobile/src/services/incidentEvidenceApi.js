@@ -6,6 +6,7 @@ import {
 import { api } from "./api";
 
 export async function uploadIncidentEvidence(incidentId, item, onProgress) {
+  const started = Date.now();
   const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
   const body = new FormData();
   const name = item.name || "evidence";
@@ -30,6 +31,7 @@ export async function uploadIncidentEvidence(incidentId, item, onProgress) {
   ])
     if (item[key]) body.append(key, item[key]);
   let response;
+  const transferStarted = Date.now();
   try {
     response = await api.post(
       `/incidents/${encodeURIComponent(incidentId)}/evidence`,
@@ -56,6 +58,7 @@ export async function uploadIncidentEvidence(incidentId, item, onProgress) {
     throw error;
   }
   let { data } = response;
+  console.info(JSON.stringify({ requestId, incidentId, stage: "multipart_transfer", elapsedMs: Date.now() - transferStarted, fileSize: item.size, httpStatus: response.status }));
   if (data?.success && data.upload?.status === "PROCESSING") {
     const jobId = data.upload.id;
     if (typeof jobId !== "string" || !/^[A-Za-z0-9-]{1,100}$/.test(jobId))
@@ -86,6 +89,7 @@ export async function uploadIncidentEvidence(incidentId, item, onProgress) {
   if (!data?.success || !data.evidence?.id)
     throw new Error("The server did not confirm the evidence.");
   discardEvidenceFile(item);
+  console.info(JSON.stringify({ requestId, incidentId, stage: "client_upload_complete", elapsedMs: Date.now() - started, fileSize: item.size }));
   return data.evidence;
 }
 export async function getEvidenceAccess(incidentId, evidenceId) {
