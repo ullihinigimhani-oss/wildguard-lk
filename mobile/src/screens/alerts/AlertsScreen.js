@@ -19,6 +19,7 @@ import {
 } from "../../services/alertApi";
 import { useAuth } from "../../hooks/useAuth";
 import { colors, styles } from "../../constants/theme";
+import { shareSafetyAlert } from "../../utils/shareAlert";
 
 const VIEW_MODES = [
   { key: "ACTIVE", label: "Active Alerts", icon: "shield-alert" },
@@ -395,6 +396,7 @@ export default function AlertsScreen({ navigation }) {
               alert={item}
               onPress={() => openDetails(item)}
               onAcknowledge={() => handleAcknowledge(item.id)}
+              onShare={() => shareSafetyAlert(item)}
               acknowledging={acknowledgingId === item.id}
             />
           ))}

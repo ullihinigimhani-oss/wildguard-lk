@@ -10,6 +10,10 @@ import AlertCard, {
   formatAlertDate,
   formatAffectedArea,
 } from "../../src/components/AlertCard";
+import {
+  buildShareableAlertText,
+  shareSafetyAlert,
+} from "../../src/utils/shareAlert";
 import * as alertApi from "../../src/services/alertApi";
 
 jest.mock("../../src/services/alertApi", () => ({
@@ -765,5 +769,142 @@ describe("Task 12: Acknowledge Safety Alert (Explicit Acknowledgement)", () => {
     expect(screen.getByText("Notice Expired")).toBeTruthy();
   });
 });
+
+describe("Task 13: Share Safety Alert (Safe Public Sharing & Native Integration)", () => {
+  const sensitiveAlert = {
+    id: "internal-uuid-secret-9999",
+    riskLevel: "CRITICAL",
+    title: "CRITICAL Wildlife Alert - Sector 3 Buffer",
+    message: "Wild elephant herd active near village pathway.",
+    status: "ACTIVE",
+    generatedAt: "2026-10-08T08:00:00.000Z",
+    affectedArea: "Sector 3 Buffer (Yala National Park)",
+    safetyInstructions: [
+      "Stay away from the affected perimeter area.",
+      "Keep children and elderly individuals indoors.",
+    ],
+    // Private / Internal data that MUST NEVER be shared:
+    internalId: "mongo-object-id-1234",
+    reporterId: "user-private-reporter-77",
+    reporterPhone: "+94771234567",
+    rangerPatrolId: "patrol-confidential-01",
+    rangerNotes: "Ranger Silva deployed with deterrent firecrackers at post 4.",
+    cameraTrapId: "TRAP-CAM-09",
+    sensorBattery: "88%",
+    rawTelemetry: { freq: 433.92, rssi: -82 },
+    restrictedGpsCoordinates: { lat: 6.3541234, lon: 81.4219876 },
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(NativeAlert, "alert").mockImplementation(() => {});
+    jest.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
+  });
+
+  afterEach(() => {
+    if (NativeAlert.alert.mockRestore) NativeAlert.alert.mockRestore();
+    if (Share.share.mockRestore) Share.share.mockRestore();
+  });
+
+  test("buildShareableAlertText includes only safe public data and strictly omits internal/private data", () => {
+    const text = buildShareableAlertText(sensitiveAlert);
+
+    // Verified public data present
+    expect(text).toContain("WILDGUARD LK SAFETY ALERT: CRITICAL Wildlife Alert - Sector 3 Buffer");
+    expect(text).toContain("Severity: CRITICAL");
+    expect(text).toContain("Affected Area: Sector 3 Buffer (Yala National Park)");
+    expect(text).toContain("Wild elephant herd active near village pathway.");
+    expect(text).toContain("• Stay away from the affected perimeter area.");
+    expect(text).toContain("• Keep children and elderly individuals indoors.");
+    expect(text).toContain("Issued:");
+    expect(text).toContain("Shared via WildGuard LK Community Safety Network");
+
+    // Strictly prevents leaking sensitive, internal, and private data
+    expect(text).not.toContain("internal-uuid-secret-9999");
+    expect(text).not.toContain("mongo-object-id-1234");
+    expect(text).not.toContain("user-private-reporter-77");
+    expect(text).not.toContain("+94771234567");
+    expect(text).not.toContain("patrol-confidential-01");
+    expect(text).not.toContain("Ranger Silva");
+    expect(text).not.toContain("TRAP-CAM-09");
+    expect(text).not.toContain("rawTelemetry");
+    expect(text).not.toContain("6.3541234");
+  });
+
+  test("shareSafetyAlert invokes native Share.share with sanitized content on success", async () => {
+    const result = await shareSafetyAlert(sensitiveAlert);
+
+    expect(result.success).toBe(true);
+    expect(Share.share).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "CRITICAL Wildlife Alert - Sector 3 Buffer",
+        message: expect.stringContaining("WILDGUARD LK SAFETY ALERT"),
+      }),
+      expect.any(Object)
+    );
+  });
+
+  test("shareSafetyAlert gracefully handles share dismissal/cancellation without error or alert", async () => {
+    Share.share.mockResolvedValueOnce({ action: "dismissedAction" });
+
+    const result = await shareSafetyAlert(sensitiveAlert);
+
+    expect(result.success).toBe(false);
+    expect(result.cancelled).toBe(true);
+    expect(NativeAlert.alert).not.toHaveBeenCalled();
+  });
+
+  test("shareSafetyAlert handles share unavailability and displays user-friendly alert", async () => {
+    Share.share.mockRejectedValueOnce(new Error("Sharing is not available on this platform"));
+
+    const result = await shareSafetyAlert(sensitiveAlert);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Sharing is not available");
+    expect(NativeAlert.alert).toHaveBeenCalledWith(
+      "Sharing Unavailable",
+      expect.stringMatching(/not supported/)
+    );
+  });
+
+  test("shareSafetyAlert gracefully handles malformed or missing alert data", async () => {
+    const resultNull = await shareSafetyAlert(null);
+    expect(resultNull.success).toBe(false);
+    expect(resultNull.reason).toBe("MALFORMED_DATA");
+    expect(NativeAlert.alert).toHaveBeenCalledWith("Unable to Share", expect.stringMatching(/missing or incomplete/));
+
+    const resultEmpty = await shareSafetyAlert({});
+    // Even an empty object gets handled or produces safe text with fallbacks
+    expect(Share.share).toHaveBeenCalled();
+  });
+
+  test("AlertDetailsScreen Share button invokes shareSafetyAlert and triggers native share", async () => {
+    const route = { params: { alertData: sensitiveAlert } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    const shareBtn = screen.getByText("Share Alert with Community");
+    fireEvent.press(shareBtn);
+
+    await waitFor(() => {
+      expect(Share.share).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining("WILDGUARD LK SAFETY ALERT: CRITICAL Wildlife Alert - Sector 3 Buffer"),
+        }),
+        expect.any(Object)
+      );
+    });
+  });
+
+  test("AlertCard quick share button invokes native Share.share", () => {
+    render(<AlertCard alert={sensitiveAlert} onPress={jest.fn()} />);
+
+    const cardShareBtn = screen.getByLabelText("Share alert: CRITICAL Wildlife Alert - Sector 3 Buffer");
+    expect(cardShareBtn).toBeTruthy();
+
+    fireEvent.press(cardShareBtn);
+    expect(Share.share).toHaveBeenCalled();
+  });
+});
+
 
 

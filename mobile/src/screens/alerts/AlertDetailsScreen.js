@@ -20,6 +20,7 @@ import {
 import { useAuth } from "../../hooks/useAuth";
 import { colors, styles } from "../../constants/theme";
 import { buildReportMapDocument } from "../../components/reportMapDocument";
+import { shareSafetyAlert } from "../../utils/shareAlert";
 
 const RISK_THEME = {
   CRITICAL: { bg: "#fee2e2", border: "#f87171", text: "#991b1b", icon: "warning" },
@@ -181,18 +182,7 @@ export default function AlertDetailsScreen({ route, navigation }) {
   }
 
   async function handleShare() {
-    if (!alert) return;
-    try {
-      const title = alert.title || `${alert.riskLevel} Wildlife Alert`;
-      const area = alert.affectedArea || alert.riskZone?.name || "Buffer Perimeter";
-      const message = `🚨 WILDGUARD SAFETY ALERT: ${title}\n${alert.message}\nArea: ${area}\nAnimal: ${alert.animal?.species || "Wildlife"}\nPlease stay alert and share with local community members!`;
-      await Share.share({
-        message,
-        title,
-      });
-    } catch {
-      // User cancelled share
-    }
+    await shareSafetyAlert(alert);
   }
 
   if (loading) {

@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors, styles } from "../constants/theme";
+import { shareSafetyAlert } from "../utils/shareAlert";
 
 const RISK_CONFIG = {
   CRITICAL: {
@@ -65,6 +66,7 @@ export default function AlertCard({
   alert,
   onPress,
   onAcknowledge,
+  onShare,
   acknowledging = false,
 }) {
   const risk = RISK_CONFIG[alert.riskLevel] || RISK_CONFIG.MEDIUM;
@@ -247,14 +249,37 @@ export default function AlertCard({
           paddingTop: 10,
         }}
       >
-        <Pressable
-          accessibilityRole="button"
-          onPress={onPress}
-          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.green }}>Safety Guidance</Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.green} />
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onPress}
+            style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.green }}>Safety Guidance</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.green} />
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Share alert: ${titleStr}`}
+            onPress={(e) => {
+              if (onShare) onShare(alert);
+              else shareSafetyAlert(alert);
+            }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 3,
+              paddingVertical: 4,
+              paddingHorizontal: 6,
+              borderRadius: 6,
+              backgroundColor: "#f8fafc",
+            }}
+          >
+            <Ionicons name="share-social-outline" size={13} color={colors.muted} />
+            <Text style={{ fontSize: 11, fontWeight: "600", color: colors.muted }}>Share</Text>
+          </Pressable>
+        </View>
 
         {isResolved ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
