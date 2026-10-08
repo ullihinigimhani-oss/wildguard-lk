@@ -10,6 +10,13 @@ jest.mock("../../src/config/database", () => ({
     count: jest.fn(),
     update: jest.fn(),
   },
+  incident: {
+    create: jest.fn(),
+    findUnique: jest.fn(),
+  },
+  park: {
+    findFirst: jest.fn(),
+  },
 }));
 
 const db = require("../../src/config/database");
@@ -88,6 +95,14 @@ beforeEach(() => {
   }));
 
   db.communityReport.count.mockResolvedValue(1);
+  db.park.findFirst.mockResolvedValue({ id: "park-yala", name: "Yala National Park" });
+  db.incident.create.mockImplementation(async ({ data }) => ({
+    id: "incident-from-report-1",
+    status: "PENDING",
+    syncStatus: "SYNCED",
+    createdAt: new Date(),
+    ...data,
+  }));
 });
 
 describe("Community Report APIs", () => {
@@ -556,6 +571,196 @@ describe("Community Report APIs", () => {
       await request(app)
         .get("/api/community-reports/rep-registered")
         .expect(403);
+    });
+  });
+
+  describe("POST /api/community-reports/:id/forward-incident (Chanuka Incident Response Integration)", () => {
+    test("rejects unauthenticated request to forward with 401", async () => {
+      await request(app)
+        .post("/api/community-reports/rep-1/forward-incident")
+        .send({})
+        .expect(401);
+    });
+
+    test("forbids COMMUNITY_USER from forwarding report with 403", async () => {
+      await request(app)
+        .post("/api/community-reports/rep-1/forward-incident")
+        .set("Authorization", `Bearer ${token("community-user-1")}`)
+        .send({})
+        .expect(403);
+    });
+
+    test("returns 404 when report does not exist", async () => {
+      db.communityReport.findUnique.mockResolvedValue(null);
+
+      await request(app)
+        .post("/api/community-reports/missing-rep/forward-incident")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({})
+        .expect(404);
+    });
+
+    test("rejects forwarding when report is already RESOLVED with 400", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-res",
+        status: "RESOLVED",
+      });
+
+      const res = await request(app)
+        .post("/api/community-reports/rep-res/forward-incident")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({})
+        .expect(400);
+
+      expect(res.body.message).toMatch(/Cannot forward an already resolved community report/);
+    });
+
+    test("rejects forwarding when report is REJECTED with 400", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-rej",
+        status: "REJECTED",
+      });
+
+      const res = await request(app)
+        .post("/api/community-reports/rep-rej/forward-incident")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({})
+        .expect(400);
+
+      expect(res.body.message).toMatch(/Cannot forward a rejected community report/);
+    });
+
+    test("forwards reviewed report to Incident Response, creating incident with preserved reference and location", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-fwd-1",
+        reportType: "HUMAN_WILDLIFE_CONFLICT",
+        species: "Wild Elephant",
+        description: "Elephant broke farm boundary fence",
+        latitude: 6.273,
+        longitude: 81.334,
+        manualLocation: "Post 12, Katagamuwa",
+        status: "UNDER_REVIEW",
+        isAnonymous: false,
+        reporterName: "Sunil Silva",
+        reporterPhone: "0771234567",
+        submittedAt: new Date("2026-10-08T08:00:00Z"),
+        evidence: [
+          { id: "ev-1", fileUrl: "https://example.test/damage.jpg", fileType: "image/jpeg" },
+        ],
+      });
+
+      db.communityReport.update.mockResolvedValue({
+        id: "rep-fwd-1",
+        reportType: "HUMAN_WILDLIFE_CONFLICT",
+        species: "Wild Elephant",
+        description: "Elephant broke farm boundary fence",
+        status: "RESPONSE_IN_PROGRESS",
+        incidentId: "incident-from-report-1",
+        forwardedAt: new Date(),
+        forwardedById: "liaison",
+        forwardingNotes: "Dispatched patrol unit to secure village border",
+      });
+
+      const res = await request(app)
+        .post("/api/community-reports/rep-fwd-1/forward-incident")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({
+          urgency: "HIGH",
+          notes: "Dispatched patrol unit to secure village border",
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toMatch(/forwarded to Incident Response successfully/);
+      expect(res.body.report.status).toBe("RESPONSE_IN_PROGRESS");
+      expect(res.body.incident).toBeDefined();
+      expect(res.body.handoff.sourceReportId).toBe("rep-fwd-1");
+      expect(res.body.handoff.targetDepartment).toBe("CONSERVATION_OPERATIONS");
+      expect(res.body.handoff.status).toBe("DISPATCHED");
+      expect(res.body.handoff.urgency).toBe("HIGH");
+
+      // Verify incident creation arguments
+      expect(db.incident.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            communityReportId: "rep-fwd-1",
+            incidentType: "WILDLIFE_CONFLICT",
+            latitude: 6.273,
+            longitude: 81.334,
+            reporterId: "liaison",
+            status: "PENDING",
+          }),
+        })
+      );
+    });
+
+    test("respects anonymous-report privacy by withholding reporter personal info from incident", async () => {
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-anon-fwd",
+        reportType: "POACHING",
+        species: "Spotted Deer",
+        description: "Wire snares spotted along forest boundary",
+        latitude: 6.301,
+        longitude: 81.350,
+        manualLocation: "Buffer zone sector 4",
+        status: "UNDER_REVIEW",
+        isAnonymous: true,
+        reporterName: "Secret Whistleblower",
+        reporterPhone: "0779998877",
+        submittedAt: new Date("2026-10-08T09:00:00Z"),
+        evidence: [],
+      });
+
+      db.communityReport.update.mockResolvedValue({
+        id: "rep-anon-fwd",
+        reportType: "POACHING",
+        status: "RESPONSE_IN_PROGRESS",
+        incidentId: "incident-from-report-1",
+        isAnonymous: true,
+      });
+
+      const res = await request(app)
+        .post("/api/community-reports/rep-anon-fwd/forward-incident")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ notes: "Ranger patrol required immediately" })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      // Privacy check: sanitized report output has no private reporter fields
+      expect(res.body.report.reporterName).toBeNull();
+      expect(res.body.report.reporterPhone).toBeNull();
+
+      // Check incident description does not leak the whistleblower's real name/phone
+      const createCall = db.incident.create.mock.calls[db.incident.create.mock.calls.length - 1][0];
+      expect(createCall.data.description).toContain("Anonymous Community Reporter");
+      expect(createCall.data.description).not.toContain("Secret Whistleblower");
+      expect(createCall.data.description).not.toContain("0779998877");
+      expect(createCall.data.incidentType).toBe("POACHING_SNARE");
+    });
+
+    test("prevents duplicate forwarding when report is already forwarded", async () => {
+      db.incident.create.mockClear();
+
+      db.communityReport.findUnique.mockResolvedValue({
+        id: "rep-already-fwd",
+        reportType: "HUMAN_WILDLIFE_CONFLICT",
+        status: "RESPONSE_IN_PROGRESS",
+        incidentId: "existing-incident-999",
+        forwardedAt: new Date("2026-10-08T10:00:00Z"),
+      });
+
+      const res = await request(app)
+        .post("/api/community-reports/rep-already-fwd/forward-incident")
+        .set("Authorization", `Bearer ${token("liaison")}`)
+        .send({ urgency: "HIGH" })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.alreadyForwarded).toBe(true);
+      expect(res.body.incidentId).toBe("existing-incident-999");
+      expect(res.body.message).toMatch(/already been forwarded/);
+      // Verify db.incident.create was NOT called again
+      expect(db.incident.create).not.toHaveBeenCalled();
     });
   });
 });

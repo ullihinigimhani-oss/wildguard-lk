@@ -92,15 +92,21 @@ exports.attachEvidence = async (req, res, next) => {
   }
 };
 
-exports.escalateReport = async (req, res, next) => {
+exports.forwardToIncidentResponse = async (req, res, next) => {
   try {
-    const result = await service.escalateReport(req.params.id, req.user, req.body);
-    res.json({
-      success: true,
-      message: "Community report escalated to operational response.",
-      ...result,
-    });
+    const result = await service.forwardToIncidentResponse(req.params.id, req.user, req.body);
+    res.json(result);
   } catch (error) {
     next(error);
   }
 };
+
+exports.escalateReport = async (req, res, next) => {
+  try {
+    const result = await service.escalateReport(req.params.id, req.user, req.body);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+

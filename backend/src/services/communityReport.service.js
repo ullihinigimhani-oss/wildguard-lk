@@ -7,8 +7,11 @@ const {
 const notFound = (message = "Community report not found.") =>
   Object.assign(new Error(message), { status: 404, authError: true });
 
-const forbidden = (message = "You do not have permission to view this report.") =>
+const forbidden = (message = "You do not have permission to perform this action.") =>
   Object.assign(new Error(message), { status: 403, authError: true });
+
+const badRequest = (message = "Bad request.") =>
+  Object.assign(new Error(message), { status: 400, validationError: true });
 
 function sanitizeReport(report, user = null) {
   if (!report) return report;
@@ -162,49 +165,177 @@ exports.updateReportStatus = async (id, newStatus, user) => {
   return sanitizeReport(updated, user);
 };
 
-exports.escalateReport = async (id, user, options = {}) => {
+function mapReportTypeToIncidentType(reportType) {
+  switch (String(reportType || "").toUpperCase()) {
+    case "POACHING":
+    case "POACHING_ACTIVITY":
+    case "ILLEGAL_SNARE":
+      return "POACHING_SNARE";
+    case "ILLEGAL_CAMP":
+    case "ILLEGAL_CAMPSITE":
+    case "ILLEGAL_LOGGING":
+    case "ENCROACHMENT":
+      return "ILLEGAL_CAMPSITE";
+    case "DEAD_ANIMAL":
+    case "ANIMAL_CARCASS":
+    case "INJURED_ANIMAL":
+    case "ANIMAL_INJURY":
+      return "ANIMAL_CARCASS";
+    case "HUMAN_WILDLIFE_CONFLICT":
+    case "WILDLIFE_CONFLICT":
+    case "CROP_RAIDING":
+    case "WILDLIFE_SIGHTING":
+    default:
+      return "WILDLIFE_CONFLICT";
+  }
+}
+
+exports.forwardToIncidentResponse = async (id, user, options = {}) => {
+  if (!user || !user.id) {
+    throw forbidden("Authentication required.");
+  }
+  if (!["COMMUNITY_LIAISON", "PARK_MANAGER"].includes(user.role)) {
+    throw forbidden("Only authorized Liaison or Manager roles can forward community reports.");
+  }
+
   const report = await repository.findReportById(id);
   if (!report) throw notFound();
 
-  // If report is PENDING, transition it to RESPONSE_IN_PROGRESS via UNDER_REVIEW or direct escalation
-  let updatedReport = report;
-  if (report.status !== "RESPONSE_IN_PROGRESS") {
-    if (report.status === "PENDING") {
-      await repository.updateReportStatus(id, "UNDER_REVIEW");
-    }
-    updatedReport = await repository.updateReportStatus(id, "RESPONSE_IN_PROGRESS");
+  // Status appropriateness validation
+  if (report.status === "RESOLVED") {
+    throw badRequest("Cannot forward an already resolved community report.");
+  }
+  if (report.status === "REJECTED") {
+    throw badRequest("Cannot forward a rejected community report.");
   }
 
-  // Integration point payload for incident / management response
-  const escalation = {
-    reportId: report.id,
-    reportType: report.reportType,
-    species: report.species || null,
-    description: report.description,
+  // Prevent duplicate forwarding
+  if (report.incidentId) {
+    return {
+      success: true,
+      message: "Community report has already been forwarded to Incident Response.",
+      alreadyForwarded: true,
+      report: sanitizeReport(report, user),
+      incidentId: report.incidentId,
+      handoff: {
+        sourceReportId: report.id,
+        incidentId: report.incidentId,
+        targetDepartment: "CONSERVATION_OPERATIONS",
+        status: "ALREADY_FORWARDED",
+        forwardedAt: report.forwardedAt,
+        urgency: options.urgency || "HIGH",
+      },
+      escalation: {
+        reportId: report.id,
+        status: "ALREADY_FORWARDED",
+        incidentId: report.incidentId,
+      },
+    };
+  }
+
+  const urgency = options.urgency || (report.reportType === "HUMAN_WILDLIFE_CONFLICT" ? "HIGH" : "MEDIUM");
+  const notes = options.notes ? String(options.notes).trim().slice(0, 500) : null;
+
+  // Respect anonymous-report privacy
+  let incidentDescription = `[Source: Community Report #${report.id}]\n${report.description}`;
+  if (report.species) {
+    incidentDescription += `\nSpecies: ${report.species}`;
+  }
+  if (report.isAnonymous) {
+    incidentDescription += `\nReporter: Anonymous Community Reporter (Contact details withheld for privacy)`;
+  } else if (report.reporterName) {
+    incidentDescription += `\nReporter: ${report.reporterName}${report.reporterPhone ? ` (${report.reporterPhone})` : ""}`;
+  }
+  if (notes) {
+    incidentDescription += `\nLiaison Review Notes: ${notes}`;
+  }
+
+  const title = `[Community Report] ${report.reportType}${report.species ? ` - ${report.species}` : ""}`.slice(0, 100);
+
+  const evidence = (report.evidence || []).map((e) => ({
+    fileUrl: e.fileUrl,
+    fileType: String(e.fileType).toLowerCase().includes("video") ? "VIDEO" : "PHOTO",
+    caption: `Evidence from Community Report #${report.id}`,
+  }));
+
+  const incidentData = {
+    title,
+    incidentType: mapReportTypeToIncidentType(report.reportType),
+    description: incidentDescription,
+    latitude: report.latitude || null,
+    longitude: report.longitude || null,
+    manualLocation: report.manualLocation || null,
+    occurredAt: report.submittedAt || new Date(),
+    evidence,
+  };
+
+  // If report is PENDING, transition it through UNDER_REVIEW to record the Liaison review stage
+  if (report.status === "PENDING") {
+    await repository.updateReportStatus(report.id, "UNDER_REVIEW");
+  }
+
+  const result = await repository.forwardReportToIncident(report.id, {
+    incidentData,
+    user,
+    notes,
+  });
+
+  const handoff = {
+    sourceReportId: report.id,
+    incidentId: result.incident.id,
+    targetDepartment: "CONSERVATION_OPERATIONS",
+    status: "DISPATCHED",
+    forwardedAt: result.report.forwardedAt || new Date(),
+    forwardedBy: {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+    },
+    urgency,
+    notes,
     location: {
       manualLocation: report.manualLocation || null,
       latitude: report.latitude || null,
       longitude: report.longitude || null,
     },
-    evidence: (report.evidence || []).map((e) => ({
-      fileUrl: e.fileUrl,
-      fileType: e.fileType,
-    })),
-    submittedAt: report.submittedAt,
-    escalatedAt: new Date().toISOString(),
-    escalatedBy: {
-      id: user.id,
-      name: user.name,
-      role: user.role,
-    },
-    status: "ESCALATED_FOR_RESPONSE",
-    urgency: options.urgency || (report.reportType === "HUMAN_WILDLIFE_CONFLICT" ? "HIGH" : "MEDIUM"),
-    notes: options.notes ? String(options.notes).slice(0, 500) : null,
-    source: "COMMUNITY_REPORT",
   };
 
   return {
-    report: sanitizeReport(updatedReport, user),
-    escalation,
+    success: true,
+    message: "Community report forwarded to Incident Response successfully.",
+    report: sanitizeReport(result.report, user),
+    incident: result.incident,
+    handoff,
+    // Preserve backwards-compatible escalation object
+    escalation: {
+      reportId: report.id,
+      incidentId: result.incident.id,
+      status: "ESCALATED_FOR_RESPONSE",
+      urgency,
+      notes,
+      escalatedBy: {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+      },
+    },
   };
 };
+
+exports.escalateReport = async (id, user, options = {}) => {
+  const result = await exports.forwardToIncidentResponse(id, user, options);
+  return {
+    ...result,
+    message: "Community report escalated to operational response.",
+    escalation: {
+      ...result.escalation,
+      escalatedBy: {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+      },
+    },
+  };
+};
+
+
