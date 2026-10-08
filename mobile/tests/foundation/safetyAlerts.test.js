@@ -23,11 +23,16 @@ jest.mock("../../src/services/alertApi", () => ({
   markAlertAsRead: jest.fn(),
   getUnreadAlertsCount: jest.fn(),
   markAllAlertsAsRead: jest.fn(),
+  getAlertsRequiringAttention: jest.fn(),
+  respondToAlert: jest.fn(),
+  forwardAlert: jest.fn(),
 }));
+
+let mockUser = { id: "user-test-1", name: "Community Member", role: "COMMUNITY_USER" };
 
 jest.mock("../../src/hooks/useAuth", () => ({
   useAuth: () => ({
-    user: { id: "user-test-1", name: "Community Member", role: "COMMUNITY_USER" },
+    user: mockUser,
   }),
 }));
 
@@ -905,6 +910,306 @@ describe("Task 13: Share Safety Alert (Safe Public Sharing & Native Integration)
     expect(Share.share).toHaveBeenCalled();
   });
 });
+
+describe("Task 14: Authorized Wildlife Alert Response", () => {
+  const activeAlertForResponse = {
+    id: "alert-op-1",
+    riskLevel: "CRITICAL",
+    title: "CRITICAL Wildlife Alert - Perimeter North",
+    shortMessage: "Elephants breaching agricultural fence.",
+    message: "Elephants breaching agricultural fence.",
+    status: "ACTIVE",
+    isAcknowledged: false,
+    generatedAt: "2026-10-08T09:00:00.000Z",
+    affectedArea: "Perimeter North (Yala)",
+    safetyInstructions: ["Stay in elevated structures."],
+  };
+
+  const alertWithExistingResponse = {
+    id: "alert-op-2",
+    riskLevel: "HIGH",
+    title: "HIGH Wildlife Alert - Sector 4",
+    message: "Leopard near border track.",
+    status: "ACKNOWLEDGED",
+    generatedAt: "2026-10-08T08:00:00.000Z",
+    affectedArea: "Sector 4 (Yala)",
+    safetyInstructions: ["Avoid travel."],
+    responseNote: "Liaison deployed flares and alerted local watch committee.",
+    respondedAt: "2026-10-08T08:30:00.000Z",
+    responder: { id: "liaison-1", name: "Officer Nimal", role: "COMMUNITY_LIAISON" },
+    forwardedTo: "RANGER",
+    forwardedAt: "2026-10-08T08:35:00.000Z",
+  };
+
+  const resolvedAlert = {
+    ...activeAlertForResponse,
+    id: "alert-op-resolved",
+    status: "RESOLVED",
+    resolvedAt: "2026-10-08T10:00:00.000Z",
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(NativeAlert, "alert").mockImplementation(() => {});
+    mockUser = { id: "user-test-1", name: "Community Member", role: "COMMUNITY_USER" };
+    alertApi.respondToAlert.mockResolvedValue({
+      success: true,
+      message: "Operational response recorded successfully.",
+      alert: {
+        ...activeAlertForResponse,
+        status: "ACKNOWLEDGED",
+        responseNote: "Perimeter watch deployed.",
+        respondedAt: "2026-10-08T09:15:00.000Z",
+      },
+    });
+    alertApi.forwardAlert.mockResolvedValue({
+      success: true,
+      message: "Alert forwarded to RANGER successfully.",
+      alert: {
+        ...activeAlertForResponse,
+        status: "ACKNOWLEDGED",
+        forwardedTo: "RANGER",
+        forwardedAt: "2026-10-08T09:20:00.000Z",
+      },
+      handoff: {
+        alertId: "alert-op-1",
+        handoffTarget: "RANGER",
+        recommendedAction: "Mobilize ground patrol to secure perimeter.",
+      },
+    });
+    alertApi.getAlertsRequiringAttention.mockResolvedValue({
+      success: true,
+      alerts: [activeAlertForResponse],
+      total: 1,
+    });
+  });
+
+  afterEach(() => {
+    if (NativeAlert.alert.mockRestore) NativeAlert.alert.mockRestore();
+    mockUser = { id: "user-test-1", name: "Community Member", role: "COMMUNITY_USER" };
+  });
+
+  test("normal COMMUNITY_USER does NOT receive operational response controls", () => {
+    mockUser = { id: "user-test-1", name: "Community Member", role: "COMMUNITY_USER" };
+
+    const route = { params: { alertData: activeAlertForResponse } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    // Public community buttons are present
+    expect(screen.getByText("Acknowledge This Alert")).toBeTruthy();
+    expect(screen.getByText("Share Alert with Community")).toBeTruthy();
+
+    // Operational response controls MUST NOT be present
+    expect(screen.queryByText("Authorized Liaison Response")).toBeNull();
+    expect(screen.queryByText("Submit Operational Response")).toBeNull();
+    expect(screen.queryByText("Forward Alert (Handoff)")).toBeNull();
+  });
+
+  test("normal COMMUNITY_USER does NOT see 'Needs Action' tab on AlertsScreen", async () => {
+    mockUser = { id: "user-test-1", name: "Community Member", role: "COMMUNITY_USER" };
+    alertApi.listAlerts.mockResolvedValueOnce({ success: true, alerts: [activeAlertForResponse] });
+
+    render(<AlertsScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Active Alerts")).toBeTruthy();
+      expect(screen.getByText("Alert History")).toBeTruthy();
+      expect(screen.queryByText("Needs Action")).toBeNull();
+    });
+  });
+
+  test("COMMUNITY_LIAISON sees 'Needs Action' tab on AlertsScreen and can query attention feed", async () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+    alertApi.listAlerts.mockResolvedValueOnce({ success: true, alerts: [activeAlertForResponse] });
+
+    render(<AlertsScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Needs Action")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Needs Action"));
+
+    await waitFor(() => {
+      expect(alertApi.getAlertsRequiringAttention).toHaveBeenCalled();
+      expect(screen.getByText("CRITICAL Wildlife Alert - Perimeter North")).toBeTruthy();
+    });
+  });
+
+  test("COMMUNITY_LIAISON sees operational response controls on AlertDetailsScreen", () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+
+    const route = { params: { alertData: activeAlertForResponse } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    expect(screen.getByText("Authorized Liaison Response")).toBeTruthy();
+    expect(screen.getByText("Target Alert Status:")).toBeTruthy();
+    expect(screen.getByText("Submit Operational Response")).toBeTruthy();
+    expect(screen.getByText("Forward Alert (Handoff)")).toBeTruthy();
+  });
+
+  test("operational response note shorter than 5 chars triggers validation alert without calling API", () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+
+    const route = { params: { alertData: activeAlertForResponse } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    const noteInput = screen.getByPlaceholderText(/Liaison contacted Grama Niladhari/);
+    fireEvent.changeText(noteInput, "ok");
+
+    const submitBtn = screen.getByText("Submit Operational Response");
+    fireEvent.press(submitBtn);
+
+    expect(NativeAlert.alert).toHaveBeenCalledWith(
+      "Invalid Note",
+      expect.stringMatching(/between 5 and 1000 characters/)
+    );
+    expect(alertApi.respondToAlert).not.toHaveBeenCalled();
+  });
+
+  test("COMMUNITY_LIAISON logs valid operational response note and updates alert", async () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+
+    const route = { params: { alertData: activeAlertForResponse } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    const noteInput = screen.getByPlaceholderText(/Liaison contacted Grama Niladhari/);
+    fireEvent.changeText(noteInput, "Perimeter flares deployed and watchtower alerted.");
+
+    const submitBtn = screen.getByText("Submit Operational Response");
+    fireEvent.press(submitBtn);
+
+    await waitFor(() => {
+      expect(alertApi.respondToAlert).toHaveBeenCalledWith(
+        "alert-op-1",
+        expect.objectContaining({
+          status: "ACKNOWLEDGED",
+          responseNote: "Perimeter flares deployed and watchtower alerted.",
+        })
+      );
+      expect(NativeAlert.alert).toHaveBeenCalledWith(
+        "Response Recorded",
+        expect.stringMatching(/recorded successfully/)
+      );
+    });
+  });
+
+  test("COMMUNITY_LIAISON can update permitted status to RESOLVED", async () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+
+    const route = { params: { alertData: activeAlertForResponse } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    // Select Mark Resolved status pill
+    const markResolvedPill = screen.getByLabelText("Status: Resolved");
+    fireEvent.press(markResolvedPill);
+
+    const noteInput = screen.getByPlaceholderText(/Liaison contacted Grama Niladhari/);
+    fireEvent.changeText(noteInput, "Wildlife herd moved away into core forest sanctuary.");
+
+    const submitBtn = screen.getByText("Submit Operational Response");
+    fireEvent.press(submitBtn);
+
+    await waitFor(() => {
+      expect(alertApi.respondToAlert).toHaveBeenCalledWith(
+        "alert-op-1",
+        expect.objectContaining({
+          status: "RESOLVED",
+          responseNote: "Wildlife herd moved away into core forest sanctuary.",
+        })
+      );
+    });
+  });
+
+  test("COMMUNITY_LIAISON forwards alert to Ranger Patrol with clean handoff contract", async () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+
+    const route = { params: { alertData: activeAlertForResponse } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    const forwardRangerBtn = screen.getByText("Forward to Ranger");
+    fireEvent.press(forwardRangerBtn);
+
+    await waitFor(() => {
+      expect(alertApi.forwardAlert).toHaveBeenCalledWith(
+        "alert-op-1",
+        expect.objectContaining({
+          forwardTo: "RANGER",
+        })
+      );
+      expect(NativeAlert.alert).toHaveBeenCalledWith(
+        "Alert Forwarded",
+        expect.stringMatching(/forwarded to RANGER/i)
+      );
+      // Confirms handoff confirmation feedback
+      expect(screen.getByText("Handoff Confirmed (RANGER)")).toBeTruthy();
+      expect(screen.getByText(/Mobilize ground patrol/)).toBeTruthy();
+    });
+  });
+
+  test("COMMUNITY_LIAISON forwards alert to Park Manager", async () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+    alertApi.forwardAlert.mockResolvedValueOnce({
+      success: true,
+      message: "Alert forwarded to PARK_MANAGER successfully.",
+      alert: {
+        ...activeAlertForResponse,
+        status: "ACKNOWLEDGED",
+        forwardedTo: "PARK_MANAGER",
+      },
+      handoff: {
+        alertId: "alert-op-1",
+        handoffTarget: "PARK_MANAGER",
+        recommendedAction: "Review community buffer zone boundary.",
+      },
+    });
+
+    const route = { params: { alertData: activeAlertForResponse } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    // Select Park Manager target
+    const mgrPill = screen.getByLabelText("Forward to Park Manager");
+    fireEvent.press(mgrPill);
+
+    const forwardMgrBtn = screen.getByText("Forward to Manager");
+    fireEvent.press(forwardMgrBtn);
+
+    await waitFor(() => {
+      expect(alertApi.forwardAlert).toHaveBeenCalledWith(
+        "alert-op-1",
+        expect.objectContaining({
+          forwardTo: "PARK_MANAGER",
+        })
+      );
+      expect(screen.getByText("Handoff Confirmed (PARK_MANAGER)")).toBeTruthy();
+    });
+  });
+
+  test("displays existing operational action record when present on alert", () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+
+    const route = { params: { alertData: alertWithExistingResponse } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    expect(screen.getByText("Operational Action Record")).toBeTruthy();
+    expect(screen.getByText(/Officer Nimal/)).toBeTruthy();
+    expect(screen.getByText(/"Liaison deployed flares and alerted local watch committee."/)).toBeTruthy();
+    expect(screen.getByText("FORWARDED TO RANGER")).toBeTruthy();
+    expect(screen.getByText(/Forwarded to Ranger Patrol Division/)).toBeTruthy();
+  });
+
+  test("operational response controls are closed for resolved alert", () => {
+    mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
+
+    const route = { params: { alertData: resolvedAlert } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    // Response controls must be closed
+    expect(screen.queryByText("Submit Operational Response")).toBeNull();
+    expect(screen.queryByText("Forward Alert (Handoff)")).toBeNull();
+  });
+});
+
 
 
 

@@ -14,17 +14,13 @@ import Button from "../../components/common/Button";
 import AlertCard from "../../components/AlertCard";
 import {
   listAlerts,
+  getAlertsRequiringAttention,
   acknowledgeAlert,
   markAllAlertsAsRead,
 } from "../../services/alertApi";
 import { useAuth } from "../../hooks/useAuth";
 import { colors, styles } from "../../constants/theme";
 import { shareSafetyAlert } from "../../utils/shareAlert";
-
-const VIEW_MODES = [
-  { key: "ACTIVE", label: "Active Alerts", icon: "shield-alert" },
-  { key: "HISTORY", label: "Alert History", icon: "time" },
-];
 
 const RISK_FILTERS = [
   { key: "ALL", label: "All" },
@@ -36,6 +32,19 @@ const RISK_FILTERS = [
 
 export default function AlertsScreen({ navigation }) {
   const { user } = useAuth();
+  const isAuthorizedResponder =
+    user?.role === "COMMUNITY_LIAISON" || user?.role === "PARK_MANAGER";
+
+  const viewModes = isAuthorizedResponder
+    ? [
+        { key: "ACTIVE", label: "Active Alerts", icon: "shield-alert" },
+        { key: "ATTENTION", label: "Needs Action", icon: "flash" },
+        { key: "HISTORY", label: "Alert History", icon: "time" },
+      ]
+    : [
+        { key: "ACTIVE", label: "Active Alerts", icon: "shield-alert" },
+        { key: "HISTORY", label: "Alert History", icon: "time" },
+      ];
 
   const [viewMode, setViewMode] = useState("ACTIVE");
   const [riskFilter, setRiskFilter] = useState("ALL");
@@ -55,7 +64,10 @@ export default function AlertsScreen({ navigation }) {
         status: viewMode,
         ...(riskFilter !== "ALL" && { riskLevel: riskFilter }),
       };
-      const data = await listAlerts(params);
+      const data =
+        viewMode === "ATTENTION"
+          ? await getAlertsRequiringAttention(params)
+          : await listAlerts(params);
       setAlerts(data.alerts || []);
     } catch (err) {
       const message =
@@ -185,7 +197,7 @@ export default function AlertsScreen({ navigation }) {
           padding: 3,
         }}
       >
-        {VIEW_MODES.map((mode) => {
+        {viewModes.map((mode) => {
           const active = viewMode === mode.key;
           return (
             <Pressable
@@ -353,6 +365,8 @@ export default function AlertsScreen({ navigation }) {
           <Text style={styles.muted}>
             {viewMode === "ACTIVE"
               ? "Checking active safety alerts..."
+              : viewMode === "ATTENTION"
+              ? "Checking alerts requiring operational attention..."
               : "Loading alert history..."}
           </Text>
         </View>
@@ -369,19 +383,31 @@ export default function AlertsScreen({ navigation }) {
             }}
           >
             <Ionicons
-              name={viewMode === "ACTIVE" ? "shield-checkmark" : "file-tray"}
+              name={
+                viewMode === "ACTIVE"
+                  ? "shield-checkmark"
+                  : viewMode === "ATTENTION"
+                  ? "checkmark-done-circle"
+                  : "file-tray"
+              }
               size={30}
               color={colors.green}
             />
           </View>
           <Text style={[styles.heading, { textAlign: "center" }]}>
-            {viewMode === "ACTIVE" ? "Perimeters Clear" : "No Alert History"}
+            {viewMode === "ACTIVE"
+              ? "Perimeters Clear"
+              : viewMode === "ATTENTION"
+              ? "No Pending Action"
+              : "No Alert History"}
           </Text>
           <Text style={[styles.muted, { textAlign: "center", fontSize: 13 }]}>
             {viewMode === "ACTIVE"
               ? riskFilter === "ALL"
                 ? "No critical wildlife alerts or active geofence breaches detected in this region."
                 : `No active ${riskFilter.toLowerCase()} alerts at this time.`
+              : viewMode === "ATTENTION"
+              ? "All active alerts have operational responses logged or forwarded."
               : riskFilter === "ALL"
               ? "No resolved or past wildlife alerts recorded in history."
               : `No past ${riskFilter.toLowerCase()} alerts found.`}

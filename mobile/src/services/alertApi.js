@@ -41,3 +41,22 @@ export async function updateAlertStatus(id, status, signal) {
   if (!data.success) throw new Error(data.message || "Could not update alert status.");
   return data;
 }
+
+export async function getAlertsRequiringAttention(params = {}, signal) {
+  const { data } = await api.get("/alerts/attention", { params, signal });
+  if (!data.success) throw new Error(data.message || "Could not load alerts requiring attention.");
+  return data;
+}
+
+export async function respondToAlert(id, payload = {}, signal) {
+  const { data } = await api.post(`/alerts/${id}/respond`, payload, { signal });
+  if (!data.success) throw new Error(data.message || "Could not record operational response.");
+  return data;
+}
+
+export async function forwardAlert(id, payload = {}, signal) {
+  const { data } = await api.post(`/alerts/${id}/forward`, payload, { signal });
+  if (!data.success) throw new Error(data.message || "Could not forward alert.");
+  return data;
+}
+

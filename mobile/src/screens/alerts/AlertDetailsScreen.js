@@ -6,6 +6,7 @@ import {
   ScrollView,
   Share,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -16,6 +17,8 @@ import {
   getAlertById,
   acknowledgeAlert,
   markAlertAsRead,
+  respondToAlert,
+  forwardAlert,
 } from "../../services/alertApi";
 import { useAuth } from "../../hooks/useAuth";
 import { colors, styles } from "../../constants/theme";
@@ -67,6 +70,17 @@ export default function AlertDetailsScreen({ route, navigation }) {
   const [acknowledging, setAcknowledging] = useState(false);
   const [error, setError] = useState("");
   const [showMap, setShowMap] = useState(false);
+
+  const isAuthorizedResponder =
+    user?.role === "COMMUNITY_LIAISON" || user?.role === "PARK_MANAGER";
+
+  const [responseNote, setResponseNote] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("ACKNOWLEDGED");
+  const [selectedForwardTarget, setSelectedForwardTarget] = useState("RANGER");
+  const [forwardNote, setForwardNote] = useState("");
+  const [responding, setResponding] = useState(false);
+  const [forwarding, setForwarding] = useState(false);
+  const [handoffData, setHandoffData] = useState(null);
 
   useEffect(() => {
     if (!alertParam) {
@@ -183,6 +197,90 @@ export default function AlertDetailsScreen({ route, navigation }) {
 
   async function handleShare() {
     await shareSafetyAlert(alert);
+  }
+
+  async function handleOperationalResponse() {
+    if (!isAuthorizedResponder) return;
+    if (isResolved || isExpired) {
+      NativeAlert.alert("Closed", "Operational response is closed for resolved or expired alerts.");
+      return;
+    }
+
+    const trimmed = responseNote.trim();
+    if (trimmed && (trimmed.length < 5 || trimmed.length > 1000)) {
+      NativeAlert.alert("Invalid Note", "Response note must be between 5 and 1000 characters.");
+      return;
+    }
+
+    if (!trimmed && selectedStatus === alert.status) {
+      NativeAlert.alert("Required", "Please provide a response note or select a status transition.");
+      return;
+    }
+
+    setResponding(true);
+    try {
+      const res = await respondToAlert(alert.id, {
+        status: selectedStatus,
+        responseNote: trimmed || undefined,
+      });
+
+      if (res.alert) {
+        setAlert(res.alert);
+      }
+      setResponseNote("");
+      NativeAlert.alert(
+        "Response Recorded",
+        res.message || "Operational response recorded successfully."
+      );
+    } catch (err) {
+      NativeAlert.alert(
+        "Response Failed",
+        err.response?.data?.message || err.message || "Could not record operational response."
+      );
+    } finally {
+      setResponding(false);
+    }
+  }
+
+  async function handleForwardAlert() {
+    if (!isAuthorizedResponder) return;
+    if (isResolved || isExpired) {
+      NativeAlert.alert("Closed", "Cannot forward resolved or expired alerts.");
+      return;
+    }
+
+    const noteToUse = (forwardNote || responseNote).trim();
+    if (noteToUse && (noteToUse.length < 5 || noteToUse.length > 1000)) {
+      NativeAlert.alert("Invalid Note", "Forwarding note must be between 5 and 1000 characters.");
+      return;
+    }
+
+    setForwarding(true);
+    try {
+      const res = await forwardAlert(alert.id, {
+        forwardTo: selectedForwardTarget,
+        note: noteToUse || undefined,
+      });
+
+      if (res.alert) {
+        setAlert(res.alert);
+      }
+      if (res.handoff) {
+        setHandoffData(res.handoff);
+      }
+      setForwardNote("");
+      NativeAlert.alert(
+        "Alert Forwarded",
+        res.message || `Alert forwarded to ${selectedForwardTarget} successfully.`
+      );
+    } catch (err) {
+      NativeAlert.alert(
+        "Forward Failed",
+        err.response?.data?.message || err.message || "Could not forward alert."
+      );
+    } finally {
+      setForwarding(false);
+    }
   }
 
   if (loading) {
@@ -587,6 +685,292 @@ export default function AlertDetailsScreen({ route, navigation }) {
                 ? `You confirmed understanding on ${formatAlertDetailTime(alert.acknowledgedAt)}.`
                 : "You have confirmed and logged understanding of these safety instructions."}
             </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Existing Operational Response Record (if logged) */}
+      {(alert.responseNote || alert.respondedAt || alert.forwardedTo) && (
+        <View style={[styles.card, { gap: 10, borderColor: "#3b82f6", borderWidth: 1 }]}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Ionicons name="clipboard-outline" size={18} color="#2563eb" />
+              <Text style={[styles.heading, { fontSize: 15, color: "#1e40af" }]}>
+                Operational Action Record
+              </Text>
+            </View>
+            {alert.forwardedTo ? (
+              <View style={{ backgroundColor: "#dbeafe", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 10, fontWeight: "700", color: "#1e40af" }}>
+                  FORWARDED TO {alert.forwardedTo}
+                </Text>
+              </View>
+            ) : alert.status === "RESOLVED" ? (
+              <View style={{ backgroundColor: "#dcfce7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 10, fontWeight: "700", color: "#15803d" }}>
+                  RESOLVED
+                </Text>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: "#fef3c7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 10, fontWeight: "700", color: "#92400e" }}>
+                  OPERATIONAL NOTE
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {alert.responder && (
+            <Text style={{ fontSize: 13, color: colors.text }}>
+              <Text style={{ fontWeight: "600" }}>Responder: </Text>
+              {alert.responder.name} ({alert.responder.role?.replace(/_/g, " ")})
+            </Text>
+          )}
+
+          {alert.respondedAt && (
+            <Text style={{ fontSize: 12, color: colors.muted }}>
+              Response logged: {formatAlertDetailTime(alert.respondedAt)}
+            </Text>
+          )}
+
+          {alert.responseNote && (
+            <View style={{ backgroundColor: "#eff6ff", padding: 10, borderRadius: 8 }}>
+              <Text style={{ fontSize: 13, color: "#1e3a8a", fontStyle: "italic", lineHeight: 18 }}>
+                "{alert.responseNote}"
+              </Text>
+            </View>
+          )}
+
+          {alert.forwardedTo && (
+            <View style={{ gap: 2, borderTopWidth: 1, borderTopColor: "#e2e8f0", paddingTop: 8 }}>
+              <Text style={{ fontSize: 12, color: "#1e40af", fontWeight: "600" }}>
+                Forwarded to {alert.forwardedTo === "RANGER" ? "Ranger Patrol Division" : "Park Manager Office"}
+              </Text>
+              {alert.forwardedAt && (
+                <Text style={{ fontSize: 11, color: colors.muted }}>
+                  Handoff timestamp: {formatAlertDetailTime(alert.forwardedAt)}
+                </Text>
+              )}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Immediate Session Handoff Feedback */}
+      {handoffData && (
+        <View style={{ backgroundColor: "#ecfdf5", borderColor: "#6ee7b7", borderWidth: 1, borderRadius: 10, padding: 12, gap: 6 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="checkmark-done" size={18} color="#059669" />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#065f46" }}>
+              Handoff Confirmed ({handoffData.handoffTarget})
+            </Text>
+          </View>
+          <Text style={{ fontSize: 12, color: "#047857" }}>
+            Recommended Action: {handoffData.recommendedAction}
+          </Text>
+        </View>
+      )}
+
+      {/* Authorized Liaison Response Controls (Role Protected: only COMMUNITY_LIAISON or PARK_MANAGER) */}
+      {isAuthorizedResponder && !isResolved && !isExpired && (
+        <View style={[styles.card, { gap: 14, borderColor: "#3b82f6", borderWidth: 1.5 }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: "#dbeafe",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name="shield" size={18} color="#2563eb" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.heading, { fontSize: 16, color: "#1e3a8a" }]}>
+                Authorized Liaison Response
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.muted }}>
+                Operational controls for Community Liaison & Park Manager
+              </Text>
+            </View>
+          </View>
+
+          {/* Status Transition Selector */}
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: colors.text }}>
+              Target Alert Status:
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Status: Acknowledged"
+                onPress={() => setSelectedStatus("ACKNOWLEDGED")}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: selectedStatus === "ACKNOWLEDGED" ? "#2563eb" : colors.border,
+                  backgroundColor: selectedStatus === "ACKNOWLEDGED" ? "#eff6ff" : colors.white,
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: selectedStatus === "ACKNOWLEDGED" ? "700" : "500",
+                    color: selectedStatus === "ACKNOWLEDGED" ? "#1d4ed8" : colors.text,
+                  }}
+                >
+                  Acknowledged
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Status: Resolved"
+                onPress={() => setSelectedStatus("RESOLVED")}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: selectedStatus === "RESOLVED" ? "#16a34a" : colors.border,
+                  backgroundColor: selectedStatus === "RESOLVED" ? "#f0fdf4" : colors.white,
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: selectedStatus === "RESOLVED" ? "700" : "500",
+                    color: selectedStatus === "RESOLVED" ? "#15803d" : colors.text,
+                  }}
+                >
+                  Mark Resolved
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Operational Response Note Input */}
+          <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.text }}>
+                Response Note:
+              </Text>
+              <Text style={{ fontSize: 11, color: colors.muted }}>
+                {responseNote.length}/1000
+              </Text>
+            </View>
+
+            <TextInput
+              style={{
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 8,
+                padding: 10,
+                fontSize: 13,
+                color: colors.dark,
+                backgroundColor: "#f8fafc",
+                minHeight: 70,
+                textAlignVertical: "top",
+              }}
+              multiline
+              numberOfLines={3}
+              placeholder="e.g. Liaison contacted Grama Niladhari; flares and loudspeakers deployed..."
+              placeholderTextColor="#94a3b8"
+              value={responseNote}
+              onChangeText={setResponseNote}
+              maxLength={1000}
+            />
+          </View>
+
+          {/* Button: Submit Response Note / Status Update */}
+          <Button
+            title="Submit Operational Response"
+            loading={responding}
+            disabled={responding}
+            onPress={handleOperationalResponse}
+          />
+
+          {/* Forward / Escalation Section */}
+          <View style={{ borderTopWidth: 1, borderTopColor: "#e2e8f0", paddingTop: 12, gap: 10 }}>
+            <View style={{ gap: 2 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.dark }}>
+                Forward Alert (Handoff)
+              </Text>
+              <Text style={{ fontSize: 11, color: colors.muted }}>
+                Escalate requiring Ranger patrol mobilization or Park Manager action
+              </Text>
+            </View>
+
+            {/* Target Select */}
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Forward to Ranger"
+                onPress={() => setSelectedForwardTarget("RANGER")}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: selectedForwardTarget === "RANGER" ? colors.green : colors.border,
+                  backgroundColor: selectedForwardTarget === "RANGER" ? colors.cream : colors.white,
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: selectedForwardTarget === "RANGER" ? "700" : "500",
+                    color: selectedForwardTarget === "RANGER" ? colors.green : colors.text,
+                  }}
+                >
+                  Ranger Patrol
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Forward to Park Manager"
+                onPress={() => setSelectedForwardTarget("PARK_MANAGER")}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: selectedForwardTarget === "PARK_MANAGER" ? colors.green : colors.border,
+                  backgroundColor: selectedForwardTarget === "PARK_MANAGER" ? colors.cream : colors.white,
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: selectedForwardTarget === "PARK_MANAGER" ? "700" : "500",
+                    color: selectedForwardTarget === "PARK_MANAGER" ? colors.green : colors.text,
+                  }}
+                >
+                  Park Manager
+                </Text>
+              </Pressable>
+            </View>
+
+            <Button
+              title={`Forward to ${selectedForwardTarget === "RANGER" ? "Ranger" : "Manager"}`}
+              secondary
+              loading={forwarding}
+              disabled={forwarding}
+              onPress={handleForwardAlert}
+            />
           </View>
         </View>
       )}
