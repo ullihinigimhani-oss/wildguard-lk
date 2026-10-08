@@ -1,3 +1,9 @@
+import { useOffline } from "../../src/hooks/useOffline";
+import useOfflinePatrolMap from "../../src/hooks/useOfflinePatrolMap";
+jest.mock("../../src/hooks/useOffline",()=>({useOffline:jest.fn()}));
+jest.mock("../../src/hooks/useOfflinePatrolMap",()=>jest.fn());
+let mockOnlinePayload, mockOfflinePayload;
+jest.mock("../../src/components/patrol/OfflinePatrolMap",()=>props=>{mockOfflinePayload=props.navigationData;return require('react').createElement(require('react-native').Text,null,'Offline Patrol View — No Basemap');});
 import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import LivePatrolNavigationScreen from "../../src/screens/patrol/LivePatrolNavigationScreen";
@@ -20,7 +26,7 @@ jest.mock("../../src/hooks/useFullPatrolRoute", () => () => ({
 jest.mock("../../src/services/patrolApi", () => ({
   completeMyPatrol: jest.fn(),
 }));
-jest.mock("../../src/components/patrol/PatrolRouteMap", () => () => null);
+jest.mock("../../src/components/patrol/PatrolRouteMap", () => props => { mockOnlinePayload=props.navigationData; return require("react").createElement(require("react-native").Text,null,"Online Leaflet map"); });
 const patrol = {
   id: "p",
   routeName: "Boundary walk",
@@ -37,6 +43,9 @@ const patrol = {
   ),
 };
 beforeEach(() => {
+  useOffline.mockReturnValue(null);
+  useOfflinePatrolMap.mockReturnValue({snapshot:null,error:null});
+  mockOnlinePayload=null;mockOfflinePayload=null;
   useAssignedPatrol.mockReturnValue({
     patrol,
     loading: false,
@@ -196,4 +205,44 @@ test("incident entry pushes current patrol context without replacing navigation 
   });
   expect(navigation.replace).not.toHaveBeenCalled();
   expect(completeMyPatrol).not.toHaveBeenCalled();
+});
+
+
+test("online/offline/reconnect swaps views without retaining blue directions or changing GPS activation",()=>{
+  const blue={geometry:{type:'LineString',coordinates:[[80,7],[80.01,7.01]]}};
+  const green={geometry:{type:'LineString',coordinates:[[80,7],[80.02,7.02]]}};
+  const trail=[{latitude:7,longitude:80},{latitude:7.001,longitude:80.001}];
+  useLiveNavigation.mockReturnValue({route:blue,destinations:[],reached:new Set(),trail});
+  useForegroundLocation.mockReturnValue({active:true,position:{latitude:7,longitude:80},retry:jest.fn()});
+  const props={route:{params:{patrolId:'p'}},navigation:{navigate:jest.fn()}};
+  const ui=render(<LivePatrolNavigationScreen {...props}/>);
+  expect(ui.getByText('Online Leaflet map')).toBeTruthy();
+  expect(mockOnlinePayload.geometry).toEqual(blue.geometry);
+  useOffline.mockReturnValue({owner:'a',online:false});
+  useOfflinePatrolMap.mockReturnValue({snapshot:{route:green,zones:[],warning:'Cached hazards may have changed.'}});
+  ui.rerender(<LivePatrolNavigationScreen {...props}/>);
+  expect(ui.queryByText('Online Leaflet map')).toBeNull();
+  expect(ui.getByText('Offline Patrol View — No Basemap')).toBeTruthy();
+  expect(mockOfflinePayload.geometry).toBeNull();
+  expect(mockOfflinePayload.fullRoute).toBe(green);
+  expect(mockOfflinePayload.trail).toEqual(trail);
+  expect(mockOfflinePayload.currentLocation).toEqual({latitude:7,longitude:80});
+  expect(ui.getByText('Cached hazards may have changed.')).toBeTruthy();
+  expect(ui.queryByLabelText('Download Offline Map')).toBeNull();
+  expect(ui.queryByText(/provider is not configured/)).toBeNull();
+  useOffline.mockReturnValue({owner:'a',online:true});
+  ui.rerender(<LivePatrolNavigationScreen {...props}/>);
+  expect(ui.queryByText('Offline Patrol View — No Basemap')).toBeNull();
+  expect(ui.getByText('Online Leaflet map')).toBeTruthy();
+  expect(mockOnlinePayload.geometry).toEqual(blue.geometry);
+  expect(mockOnlinePayload.trail).toEqual(trail);
+  expect(useForegroundLocation.mock.calls.every(([active])=>active===true)).toBe(true);
+});
+test.each(['No matching route','Patrol waypoints changed'])('missing/stale green remains unavailable: %s',warning=>{
+  useOffline.mockReturnValue({owner:'a',online:false});
+  useOfflinePatrolMap.mockReturnValue({snapshot:{route:null,zones:[],warning}});
+  const ui=render(<LivePatrolNavigationScreen route={{params:{patrolId:'p'}}} navigation={{navigate:jest.fn()}}/>);
+  expect(mockOfflinePayload.fullRoute).toBeNull();
+  expect(ui.getByText(/No matching verified planned route is cached/)).toBeTruthy();
+  expect(ui.getByText(warning)).toBeTruthy();
 });

@@ -1,3 +1,5 @@
+import { useOffline } from "./useOffline";
+import { cacheNavigation } from "../services/offlineMaps";
 import { walkingRouteError } from "../utils/walkingRouteError";
 import { useEffect, useRef, useState } from "react";
 import { getFullPatrolRoute } from "../services/patrolApi";
@@ -20,6 +22,8 @@ export default function useFullPatrolRoute(
   live,
   active,
 ) {
+  const offline = useOffline();
+  active = active && (!offline || offline.online);
   const signature = JSON.stringify({
     session: patrol ? sessionKey(userId, patrol) : null,
     points: points.map(({ waypointId, type, order, latitude, longitude }) => ({
@@ -79,7 +83,7 @@ export default function useFullPatrolRoute(
     ctx.inFlight = true;
     setState((value) => ({ ...value, loading: true, error: null }));
     getFullPatrolRoute(patrol.id, ctx.controller.signal)
-      .then((route) => {
+      .then(async (route) => {
         if (ctx.cancelled) return;
         if (
           JSON.stringify(route.riskZones || []) !==
@@ -93,8 +97,11 @@ export default function useFullPatrolRoute(
           }));
           return;
         }
+        if (offline) await cacheNavigation(userId,patrol,live.riskZones || [],route).catch(() => {});
+        if (ctx.cancelled) return;
         setState((value) => ({ ...value, route, error: null }));
         routeCache.set(signature, { route, at: Date.now() });
+
         while (routeCache.size > 20) routeCache.delete(routeCache.keys().next().value);
       })
       .catch((error) => {
