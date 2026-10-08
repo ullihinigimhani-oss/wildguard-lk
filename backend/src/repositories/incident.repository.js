@@ -11,7 +11,7 @@ const summarySelect = {
   title: true,
   incidentType: true,
   description: true,
-  occurredAt: true,
+  occurredAt: true, 
   reportedAt: true,
   latitude: true,
   longitude: true,
@@ -19,6 +19,7 @@ const summarySelect = {
   status: true,
   syncStatus: true,
   withdrawnAt: true,
+  markAsDone: true,
   reporterId: true,
   parkId: true,
   patrolId: true,
@@ -176,6 +177,7 @@ exports.update = async (tx, id, patrolId, reporterId, data) => {
     select: detailSelect
   });
 };
+
 // Manager review does not touch Patrol, Reporter ownership or the active-patrol
 // lock: a review can happen after the patrol has finished. The guard repeats the
 // withdrawn check so a report withdrawn mid-request is never re-stated.
@@ -201,3 +203,10 @@ exports.setStatus = async (id, status) => db().$transaction(async tx => {
   maxWait: 5000,
   timeout: 10000
 });
+
+exports.updateStatus = async (id, status) => {
+  return db().incident.update({
+    where: { id },
+    data: { status }
+  });
+};

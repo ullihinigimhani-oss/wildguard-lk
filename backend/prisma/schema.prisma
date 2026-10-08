@@ -48,6 +48,8 @@ enum PatrolPriority {
 enum IncidentStatus {
   PENDING
   UNDER_REVIEW
+  RESPONDING
+  RESOLVED
   VERIFIED
   REJECTED
 }
@@ -237,6 +239,8 @@ model Incident {
   reportedAt DateTime  @default(now())
   withdrawnAt DateTime?
 
+  markAsDone Boolean @default(false)
+
   reporterId String
   reporter   User   @relation(fields: [reporterId], references: [id])
 
@@ -256,6 +260,7 @@ model Incident {
   @@index([patrolId])
   @@index([incidentType])
   @@index([status])
+  @@index([markAsDone])
 }
 
 model IncidentEvidence {

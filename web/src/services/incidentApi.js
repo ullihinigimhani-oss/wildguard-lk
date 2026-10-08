@@ -29,7 +29,7 @@ export async function listIncidents(filters, signal) {
       .filter((key) => filters[key] !== "" && filters[key] !== undefined)
       .map((key) => [key, filters[key]]),
   );
-  const { data } = await api.get("/incidents", { params, signal });
+  const { data } = await api.get("/incidents/ranger", { params, signal });
   if (
     !data?.success ||
     !Array.isArray(data.incidents) ||
@@ -125,4 +125,20 @@ export function incidentError(error) {
         : status === 400
           ? "Check the selected filters and date range."
           : "Unable to load incidents or private evidence. Please retry.";
+}
+
+export async function updateIncident(id, data, signal) {
+  const { data: responseData } = await api.patch(`/incidents/${pathId(id)}/status`, data, { signal });
+  if (!responseData?.success)
+    throw new Error("Failed to update incident.");
+  return responseData;
+}
+
+export async function markIncidentAsDone(id, signal) {
+  console.log('markIncidentAsDone called for id:', id);
+  const { data: responseData } = await api.patch(`/incidents/${pathId(id)}/status`, { markAsDone: true }, { signal });
+  console.log('markIncidentAsDone response:', responseData);
+  if (!responseData?.success)
+    throw new Error("Failed to mark incident as done.");
+  return responseData;
 }

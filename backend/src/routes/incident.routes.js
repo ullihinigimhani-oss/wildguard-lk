@@ -14,7 +14,7 @@ router.use(authenticate);
 router.get(
   "/:incidentId/evidence/uploads/:uploadId",
   allowRoles("RANGER"),
-  evidence.uploadStatus,
+  evidence.uploadStatus, 
 );
 router.post(
   "/:incidentId/evidence",
@@ -32,16 +32,13 @@ router.get(
   evidence.access,
 );
 router.get("/", allowRoles("PARK_MANAGER"), controller.listManager);
+router.get("/ranger", controller.listForRanger);
+router.patch("/:incidentId/status", controller.updateStatus);
 router.get(
   "/:incidentId",
   allowRoles("RANGER", "PARK_MANAGER"),
   controller.details,
 );
-router.patch("/:incidentId", allowRoles("RANGER"), controller.edit);
-router.patch(
-  "/:incidentId/status",
-  allowRoles("PARK_MANAGER"),
-  controller.updateStatus,
-);
+router.patch("/:incidentId", controller.edit);
 router.post("/:incidentId/withdraw", allowRoles("RANGER"), controller.withdraw);
 module.exports = router;
