@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { addSensorData, createAnimal, getAllAnimals, updateAnimal } from './services/api';
+import { addSensorData, createAnimal, getAllAnimals, updateAnimal, deleteAnimal } from './services/api';
 
 // Fix for default marker icon
 delete L.Icon.Default.prototype._getIconUrl;
@@ -223,6 +223,18 @@ export default function App() {
       setError('Failed to update animal: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteAnimal = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this animal? This action cannot be undone.')) return;
+    try {
+      await deleteAnimal(id);
+      setMessage('Animal deleted successfully!');
+      loadAnimals();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError('Failed to delete animal: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -506,29 +518,50 @@ export default function App() {
               {animals.map((animal) => (
                 <div
                   key={animal.id}
-                  onClick={() => handleAnimalClick(animal)}
                   style={{
                     padding: '15px',
                     border: '1px solid #e3e8e2',
                     borderRadius: '8px',
-                    cursor: 'pointer',
                     transition: 'all 0.2s',
                     background: '#fafafa'
                   }}
-                  onMouseEnter={(e) => e.target.style.background = '#f0f4ed'}
-                  onMouseLeave={(e) => e.target.style.background = '#fafafa'}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#f0f4ed'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#fafafa'}
                 >
-                  <div style={{ fontWeight: '600', color: '#245c45', marginBottom: '5px', fontSize: '14px' }}>
-                    {animal.animalCode}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#67756d', marginBottom: '3px' }}>
-                    {animal.species}
-                  </div>
-                  {animal.name && (
-                    <div style={{ fontSize: '12px', color: '#67756d' }}>
-                      Name: {animal.name}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => handleAnimalClick(animal)}>
+                      <div style={{ fontWeight: '600', color: '#245c45', marginBottom: '5px', fontSize: '14px' }}>
+                        {animal.animalCode}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#67756d', marginBottom: '3px' }}>
+                        {animal.species}
+                      </div>
+                      {animal.name && (
+                        <div style={{ fontSize: '12px', color: '#67756d' }}>
+                          Name: {animal.name}
+                        </div>
+                      )}
                     </div>
-                  )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteAnimal(animal.id);
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        background: '#e74c3c',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        marginLeft: '8px'
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                   {animal.locations && animal.locations.length > 0 && (
                     <div style={{ fontSize: '11px', color: '#67756d', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e3e8e2' }}>
                       Last location: {animal.locations[0].latitude.toFixed(4)}, {animal.locations[0].longitude.toFixed(4)}

@@ -100,3 +100,7 @@ exports.getDensityZones = async (startDate, endDate, radiusMeters = 300) => {
 exports.updateAnimal = async (id, { species, name, sex, notes }) => {
   return await repository.updateAnimal(id, { species, name, sex, notes });
 };
+
+exports.deleteAnimal = async (id) => {
+  return await repository.deleteAnimal(id);
+};

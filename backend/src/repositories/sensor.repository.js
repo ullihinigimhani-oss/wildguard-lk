@@ -138,3 +138,8 @@ exports.updateAnimal = (id, data) =>
     where: { id },
     data
   });
+
+exports.deleteAnimal = (id) =>
+  db().animal.delete({
+    where: { id }
+  });

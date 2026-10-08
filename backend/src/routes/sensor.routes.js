@@ -7,4 +7,5 @@ router.get('/animals/:animalId/locations', require('../controllers/sensor.contro
 router.get('/locations', require('../controllers/sensor.controller').getAllLocationsByDateRange);
 router.get('/zones/density', require('../controllers/sensor.controller').getDensityZones);
 router.put('/animals/:id', require('../controllers/sensor.controller').updateAnimal);
+router.delete('/animals/:id', require('../controllers/sensor.controller').deleteAnimal);
 module.exports = router;
