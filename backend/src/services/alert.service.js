@@ -53,11 +53,40 @@ function getSafetyInstructions(riskLevel, species) {
   ];
 }
 
+function formatAlert(alert, user = null) {
+  const isAcknowledged = user
+    ? alert.acknowledgements?.some((ack) => ack.userId === user.id)
+    : false;
+
+  const species = alert.animal?.name || alert.animal?.species;
+  const zoneName = alert.riskZone?.name;
+  const parkName = alert.riskZone?.park?.name;
+
+  const affectedArea = zoneName
+    ? `${zoneName}${parkName ? ` (${parkName})` : ""}`
+    : (parkName || "Surrounding Community Perimeter");
+
+  const title = `${alert.riskLevel} Wildlife Alert${zoneName ? ` - ${zoneName}` : species ? ` - ${species}` : ""}`;
+  const shortMessage = alert.message && alert.message.length > 80
+    ? `${alert.message.slice(0, 77)}...`
+    : alert.message;
+
+  return {
+    ...alert,
+    title,
+    shortMessage,
+    affectedArea,
+    isAcknowledged: Boolean(isAcknowledged),
+    acknowledgementCount: alert.acknowledgements ? alert.acknowledgements.length : 0,
+    safetyInstructions: getSafetyInstructions(alert.riskLevel, alert.animal?.species),
+  };
+}
+
 exports.listAlerts = async (query = {}, user = null) => {
   const { riskLevel, parkId, status = "ACTIVE", page = 1, pageSize = 20 } = query;
 
   const validRiskLevels = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
-  const validStatuses = ["ACTIVE", "ACKNOWLEDGED", "RESOLVED", "ALL"];
+  const validStatuses = ["ACTIVE", "ACKNOWLEDGED", "RESOLVED", "ALL", "HISTORY"];
 
   if (riskLevel && !validRiskLevels.includes(riskLevel.toUpperCase())) {
     throw badRequest("Invalid riskLevel filter.");
@@ -74,17 +103,7 @@ exports.listAlerts = async (query = {}, user = null) => {
     pageSize: Math.min(50, Math.max(1, parseInt(pageSize, 10) || 20)),
   });
 
-  const alerts = result.alerts.map((a) => {
-    const isAcknowledged = user
-      ? a.acknowledgements.some((ack) => ack.userId === user.id)
-      : false;
-    return {
-      ...a,
-      isAcknowledged,
-      acknowledgementCount: a.acknowledgements.length,
-      safetyInstructions: getSafetyInstructions(a.riskLevel, a.animal?.species),
-    };
-  });
+  const alerts = result.alerts.map((a) => formatAlert(a, user));
 
   return {
     alerts,
@@ -98,16 +117,7 @@ exports.getAlertDetails = async (id, user = null) => {
   const alert = await repository.findAlertById(id);
   if (!alert) throw notFound();
 
-  const isAcknowledged = user
-    ? alert.acknowledgements.some((ack) => ack.userId === user.id)
-    : false;
-
-  return {
-    ...alert,
-    isAcknowledged,
-    acknowledgementCount: alert.acknowledgements.length,
-    safetyInstructions: getSafetyInstructions(alert.riskLevel, alert.animal?.species),
-  };
+  return formatAlert(alert, user);
 };
 
 exports.acknowledgeAlert = async (alertId, user) => {

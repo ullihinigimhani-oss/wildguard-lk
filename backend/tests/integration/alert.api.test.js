@@ -82,6 +82,9 @@ describe("Safety Alert APIs", () => {
 
       expect(res.body.success).toBe(true);
       expect(res.body.alerts).toHaveLength(2);
+      expect(res.body.alerts[0].title).toContain("CRITICAL Wildlife Alert");
+      expect(res.body.alerts[0].affectedArea).toContain("Sector 3 Buffer");
+      expect(res.body.alerts[0].shortMessage).toBeDefined();
       expect(res.body.alerts[0].safetyInstructions).toBeDefined();
       expect(Array.isArray(res.body.alerts[0].safetyInstructions)).toBe(true);
       expect(res.body.alerts[0].isAcknowledged).toBe(false);
@@ -97,6 +100,14 @@ describe("Safety Alert APIs", () => {
       expect(res.body.success).toBe(true);
       expect(res.body.alerts[0].isAcknowledged).toBe(true);
       expect(res.body.alerts[1].isAcknowledged).toBe(false);
+    });
+
+    test("accepts status=HISTORY filter and status=RESOLVED filter", async () => {
+      const resHistory = await request(app).get("/api/alerts?status=HISTORY").expect(200);
+      expect(resHistory.body.success).toBe(true);
+
+      const resResolved = await request(app).get("/api/alerts?status=RESOLVED").expect(200);
+      expect(resResolved.body.success).toBe(true);
     });
 
     test("rejects invalid riskLevel filter with 400", async () => {
@@ -125,6 +136,7 @@ describe("Safety Alert APIs", () => {
       const res = await request(app).get("/api/alerts/alert-1").expect(200);
       expect(res.body.success).toBe(true);
       expect(res.body.alert.id).toBe("alert-1");
+      expect(res.body.alert.title).toContain("CRITICAL Wildlife Alert");
       expect(res.body.alert.safetyInstructions).toBeDefined();
     });
   });

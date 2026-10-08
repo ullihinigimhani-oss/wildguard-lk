@@ -45,8 +45,9 @@ const alertSelect = {
 };
 
 exports.listAlerts = async ({ riskLevel, parkId, status = "ACTIVE", page = 1, pageSize = 20 } = {}) => {
+  const normalizedStatus = status === "HISTORY" ? "RESOLVED" : status;
   const where = {
-    ...(status && status !== "ALL" && { status }),
+    ...(normalizedStatus && normalizedStatus !== "ALL" && { status: normalizedStatus }),
     ...(riskLevel && { riskLevel }),
     ...(parkId && {
       riskZone: {
