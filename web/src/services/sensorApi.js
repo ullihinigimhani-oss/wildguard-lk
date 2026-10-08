@@ -10,4 +10,30 @@ export const getAnimalsWithLatestLocations = async () => {
   return response.data;
 };
 
+export const getAllAnimals = async () => {
+  const response = await api.get('/sensors/animals');
+  return response.data;
+};
+
+export const getAnimalLocationsByDateRange = async (animalId, startDate, endDate) => {
+  const response = await api.get(`/sensors/animals/${animalId}/locations`, {
+    params: { startDate, endDate }
+  });
+  return response.data;
+};
+
+export const getAllLocationsByDateRange = async (startDate, endDate) => {
+  const response = await api.get('/sensors/locations', {
+    params: { startDate, endDate }
+  });
+  return response.data;
+};
+
+export const getDensityZones = async (startDate, endDate, radius = 300) => {
+  const response = await api.get('/sensors/zones/density', {
+    params: { startDate, endDate, radius }
+  });
+  return response.data;
+};
+
 export default api;

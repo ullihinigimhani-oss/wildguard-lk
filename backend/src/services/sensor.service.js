@@ -84,6 +84,19 @@ exports.getAnimalsWithLatestLocations = async () => {
   return await repository.getAnimalsWithLatestLocations();
 };
 
+exports.getAnimalLocationsByDateRange = async (animalId, startDate, endDate) => {
+  return await repository.getAnimalLocationsByDateRange(animalId, startDate, endDate);
+};
+
+exports.getAllLocationsByDateRange = async (startDate, endDate) => {
+  return await repository.getAllLocationsByDateRange(startDate, endDate);
+};
+
+exports.getDensityZones = async (startDate, endDate, radiusMeters = 300) => {
+  const locations = await repository.getAllLocationsByDateRange(startDate, endDate);
+  return repository.calculateDensityZones(locations, radiusMeters);
+};
+
 exports.updateAnimal = async (id, { species, name, sex, notes }) => {
   return await repository.updateAnimal(id, { species, name, sex, notes });
 };

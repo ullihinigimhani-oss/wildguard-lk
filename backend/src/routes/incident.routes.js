@@ -1,0 +1,10 @@
+const router = require("express").Router();
+const authenticate = require("../middleware/auth.middleware");
+const allowRoles = require("../middleware/role.middleware");
+const controller = require("../controllers/incident.controller");
+router.use(authenticate);
+router.get("/", allowRoles("PARK_MANAGER"), controller.listManager);
+router.get("/:incidentId", allowRoles("RANGER", "PARK_MANAGER"), controller.details);
+router.patch("/:incidentId", allowRoles("RANGER"), controller.edit);
+router.post("/:incidentId/withdraw", allowRoles("RANGER"), controller.withdraw);
+module.exports = router;

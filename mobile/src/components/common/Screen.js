@@ -3,7 +3,12 @@ import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { styles } from "../../constants/theme";
 export const RangerLayoutContext = React.createContext(false);
-export default function Screen({ children, backgroundColor, contentStyle }) {
+export default function Screen({
+  children,
+  backgroundColor,
+  contentStyle,
+  refreshControl,
+}) {
   const rangerLayout = useContext(RangerLayoutContext);
   return (
     <SafeAreaView
@@ -15,6 +20,7 @@ export default function Screen({ children, backgroundColor, contentStyle }) {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
+          refreshControl={refreshControl}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[
             styles.content,

@@ -16,6 +16,10 @@ export const rangerPaths = {
   PatrolRoute: "ranger/patrols/:patrolId/route",
   PatrolNavigation: "ranger/patrols/:patrolId/navigation",
   Incident: "ranger/incidents",
+  IncidentCreate: "ranger/patrols/:patrolId/incidents/new",
+  IncidentReports: "ranger/patrols/:patrolId/incidents",
+  IncidentDetails: "ranger/incidents/:incidentId",
+  IncidentEdit: "ranger/incidents/:incidentId/edit",
   Alerts: "ranger/alerts",
   Sync: "ranger/sync",
 };
@@ -85,9 +89,32 @@ export function createLinking({
         return stateFor("Home");
       if (
         isDemo &&
-        ["PatrolDetails", "PatrolRoute", "PatrolNavigation"].includes(name)
+        [
+          "PatrolDetails",
+          "PatrolRoute",
+          "PatrolNavigation",
+          "IncidentCreate",
+          "IncidentReports",
+          "IncidentDetails",
+          "IncidentEdit",
+        ].includes(name)
       )
         return stateFor("Home");
+      if (
+        [
+          "IncidentCreate",
+          "IncidentReports",
+          "IncidentDetails",
+          "IncidentEdit",
+        ].includes(name)
+      )
+        return {
+          index: 1,
+          routes: [
+            { name: "Incident" },
+            parsed.routes[parsed.index ?? parsed.routes.length - 1],
+          ],
+        };
       if (["PatrolRoute", "PatrolNavigation"].includes(name)) {
         const route = parsed.routes[parsed.index ?? parsed.routes.length - 1];
         return {
