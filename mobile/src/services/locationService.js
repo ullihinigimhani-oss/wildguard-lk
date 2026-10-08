@@ -76,20 +76,22 @@ export async function getCurrentDeviceLocation(options = {}) {
   }
 
   // 3. Retrieve position with timeout
+  let timeoutId;
   try {
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => {
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
         const err = new Error("Location request timed out.");
         err.name = "TimeoutError";
         reject(err);
-      }, timeoutMs)
-    );
+      }, timeoutMs);
+    });
 
     const positionPromise = Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
     });
 
     const location = await Promise.race([positionPromise, timeoutPromise]);
+    clearTimeout(timeoutId);
 
     if (!location || !location.coords) {
       return {
@@ -141,5 +143,7 @@ export async function getCurrentDeviceLocation(options = {}) {
       errorCode: LocationErrorCode.UNAVAILABLE,
       error: "Unable to retrieve device GPS location. Please enter location manually or retry.",
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
