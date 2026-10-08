@@ -5,7 +5,7 @@ import {
 } from "../utils/incidentEvidence";
 import { api } from "./api";
 
-export async function uploadIncidentEvidence(incidentId, item, onProgress) {
+export async function uploadIncidentEvidence(incidentId, item, onProgress, options = {}) {
   const started = Date.now();
   const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
   const body = new FormData();
@@ -38,6 +38,7 @@ export async function uploadIncidentEvidence(incidentId, item, onProgress) {
       body,
       {
         timeout: 300000,
+        signal: options.signal,
         ...(Platform.OS !== "web" && { adapter: "xhr" }),
         // The RN/browser adapter owns Content-Type and its boundary.
         headers: {
@@ -69,7 +70,7 @@ export async function uploadIncidentEvidence(incidentId, item, onProgress) {
       try {
         const status = await api.get(
           `/incidents/${encodeURIComponent(incidentId)}/evidence/uploads/${encodeURIComponent(jobId)}`,
-          { timeout: 15000 },
+          { timeout: 15000, signal: options.signal },
         );
         data = status.data;
       } catch (error) {
@@ -88,7 +89,7 @@ export async function uploadIncidentEvidence(incidentId, item, onProgress) {
   }
   if (!data?.success || !data.evidence?.id)
     throw new Error("The server did not confirm the evidence.");
-  discardEvidenceFile(item);
+  if (!options.retainLocal) discardEvidenceFile(item);
   console.info(JSON.stringify({ requestId, incidentId, stage: "client_upload_complete", elapsedMs: Date.now() - started, fileSize: item.size }));
   return data.evidence;
 }

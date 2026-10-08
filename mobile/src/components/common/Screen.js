@@ -1,3 +1,4 @@
+import OfflineStatus from "./OfflineStatus";
 import React, { useContext } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,6 +23,7 @@ export default function Screen({
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        <OfflineStatus />
         {scroll ? <ScrollView
           refreshControl={refreshControl}
           keyboardShouldPersistTaps="handled"

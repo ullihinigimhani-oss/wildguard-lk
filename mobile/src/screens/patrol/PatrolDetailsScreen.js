@@ -1,3 +1,6 @@
+import { cachePatrol } from "../../storage/offlineStorage";
+import { getAssignedPatrol } from "../../services/offlinePatrol";
+import { useOffline } from "../../hooks/useOffline";
 import PlannedRouteSummary from "../../components/patrol/PlannedRouteSummary";
 import {
   clearNavigationSession,
@@ -13,7 +16,6 @@ import Button from "../../components/common/Button";
 import PatrolCard from "../../components/PatrolCard";
 import PatrolLoadState from "../../components/PatrolLoadState";
 import {
-  getMyPatrol,
   startMyPatrol,
   completeMyPatrol,
 } from "../../services/patrolApi";
@@ -32,6 +34,7 @@ function Field({ label, value }) {
 }
 export default function PatrolDetailsScreen({ route, navigation }) {
   const { user } = useAuth();
+  const offline = useOffline();
   const id = route.params?.patrolId;
   const now = usePatrolClock();
   const [state, setState] = useState({
@@ -62,7 +65,7 @@ export default function PatrolDetailsScreen({ route, navigation }) {
           error: "This patrol is not available.",
         });
       else
-        getMyPatrol(id, controller.signal)
+        getAssignedPatrol(id, user.id, controller.signal, !!offline && !offline.online)
           .then((patrol) => {
             if (attempt === generation.current)
               setState({ patrol, loading: false, error: null });
@@ -82,7 +85,7 @@ export default function PatrolDetailsScreen({ route, navigation }) {
         generation.current += 1;
         controller.abort();
       };
-    }, [id, user.id, revision]),
+    }, [id, user.id, revision, offline?.online]),
   );
   async function update(action) {
     if (busyRef.current) return;
@@ -95,6 +98,8 @@ export default function PatrolDetailsScreen({ route, navigation }) {
         ? startMyPatrol(id)
         : completeMyPatrol(id));
       if (attempt === generation.current) {
+        await cachePatrol(user.id, patrol).catch(() => {});
+        if (attempt !== generation.current) return;
         setState({ patrol, loading: false, error: null });
         setConfirming(false);
         if (action === "complete" && patrol.status === "COMPLETED")

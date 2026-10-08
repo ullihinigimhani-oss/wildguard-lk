@@ -4,6 +4,9 @@ import { useIsFocused, usePreventRemove } from "@react-navigation/native";
 import { Text } from "../../components/common/Typography";
 import Screen from "../../components/common/Screen";
 import { useAuth } from "../../hooks/useAuth";
+import { useOffline } from "../../hooks/useOffline";
+import * as offlineStore from "../../storage/offlineStorage";
+import { kickSync } from "../../services/offlineSync";
 import useIncidentResource from "../../hooks/useIncidentResource";
 import useForegroundLocation from "../../hooks/useForegroundLocation";
 import { getMyPatrol } from "../../services/patrolApi";
@@ -42,22 +45,46 @@ import {
 } from "../../components/incident/IncidentUI";
 
 // Save the incident once, then upload private evidence against its confirmed ID.
-export default function ReportIncidentScreen({ route, navigation }) {
+export default function ReportIncidentScreen(props) {
+  const { user } = useAuth();
+  const p = props.route.params;
+  return <IncidentForm key={`${user?.id}:${p?.incidentId || p?.localDraftId || "new"}:${p?.patrolId}`} {...props} />;
+}
+function IncidentForm({ route, navigation }) {
   const { width, fontScale } = useWindowDimensions();
   const { user } = useAuth(),
     focused = useIsFocused();
   const incidentId = route.params?.incidentId,
     patrolId = route.params?.patrolId;
   const editing = !!incidentId;
+  const offline = useOffline();
+  const localId = useRef(route.params?.localDraftId || null);
+  const [localStatus, setLocalStatus] = useState(null);
+  const [submitted, setSubmitted] = useState(false);
+  const submittedRef = useRef(false);
   const [items, setItems] = useState([]),
     [savedIncident, setSavedIncident] = useState(null),
     [progress, setProgress] = useState(null),
     [selecting, setSelecting] = useState(false);
-  const savedRef = useRef(null);
+  const savedRef = useRef(null), draftLoaded = useRef(false), savedSelections = useRef(null);
   const loader = useCallback(
-    (signal) =>
-      editing ? getIncident(incidentId, signal) : getMyPatrol(patrolId, signal),
-    [editing, incidentId, patrolId],
+    async (signal) => {
+      if (editing) return getIncident(incidentId, signal);
+      if (offline && !offline.online) {
+        const cached = (await offlineStore.cachedPatrols(user.id)).find(p => p.id === patrolId);
+        if (cached) return cached;
+        throw new Error("Open this assigned patrol online once before reporting offline.");
+      }
+      try { return await getMyPatrol(patrolId, signal); }
+      catch (failure) {
+        if (offline && !failure.response && !signal?.aborted) {
+          const cached = (await offlineStore.cachedPatrols(user.id)).find(p => p.id === patrolId);
+          if (cached) return cached;
+        }
+        throw failure;
+      }
+    },
+    [editing, incidentId, patrolId, user?.id, !!offline, offline?.online],
   );
   const authority = useIncidentResource(loader);
   const [form, setForm] = useState(() => formFor()),
@@ -94,6 +121,25 @@ export default function ReportIncidentScreen({ route, navigation }) {
     if (editing) setManual(true);
   }, [authority.data, editing]);
   useEffect(() => {
+    if (!offline || !localId.current || !authority.data || editing || draftLoaded.current) return;
+    let cancelled = false;
+    offlineStore.readDraft(user.id, localId.current).then(draft => {
+      if (!draft || cancelled) return;
+      draftLoaded.current = true;
+      if (draft.status !== "LOCAL_DRAFT") {
+        submittedRef.current = true; setSubmitted(true); setLocalStatus(draft.status);
+        setProgress("Saved on device — Pending Sync");
+        if (draft.server_id) setSavedIncident({ id: draft.server_id });
+        return;
+      }
+      setForm(draft.form); setInitial(JSON.stringify(draft.form)); setItems(draft.items);
+      savedSelections.current = JSON.stringify(draft.items.map(({ uploadKey, caption, notes }) => ({ uploadKey, caption, notes })));
+      setLocalStatus(draft.status); setManual(true);
+      if (draft.server_id) { savedRef.current = { id: draft.server_id }; setSavedIncident({ id: draft.server_id }); }
+    }).catch(() => { if (!cancelled) setError("The saved local draft could not be opened."); });
+    return () => { cancelled = true; };
+  }, [authority.data, editing, user?.id]);
+  useEffect(() => {
     if (!capture || !location.position || !freshFix(location.position)) return;
     const snapshot = { ...location.position };
     setFix(snapshot);
@@ -109,7 +155,9 @@ export default function ReportIncidentScreen({ route, navigation }) {
   }, [capture, location.position]);
   const dirty =
     (initial !== null && JSON.stringify(form) !== initial) ||
-    items.some((item) => item.status !== "uploaded");
+    (localId.current && savedSelections.current !== null
+      ? JSON.stringify(items.map(({ uploadKey, caption, notes }) => ({ uploadKey, caption, notes }))) !== savedSelections.current
+      : items.some((item) => item.status !== "uploaded"));
   usePreventRemove(!allowLeave && (dirty || busy || selecting), ({ data }) => {
     if (!pending.current && !selecting) {
       Keyboard.dismiss();
@@ -129,6 +177,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
   const eligible =
     !authority.loading &&
     !authority.error &&
+    (!route.params?.localDraftId || draftLoaded.current) &&
     (editing
       ? canChangeIncident(authority.data, user?.id)
       : patrol?.status === "IN_PROGRESS");
@@ -144,8 +193,51 @@ export default function ReportIncidentScreen({ route, navigation }) {
     setForm((previous) => ({ ...previous, [key]: value }));
     setErrors((previous) => ({ ...previous, [key]: undefined }));
   }
+  useEffect(() => {
+    if (!submitted || !offline || !focused) return;
+    let cancelled = false;
+    const id = localId.current;
+    const load = () => offlineStore.readDraft(user.id, id).then(record => {
+      if (cancelled || !record) return;
+      setLocalStatus(record.status);
+      setProgress(record.status === "SYNCED" ? "Incident synced" : "Saved on device — Pending Sync");
+      setError(record.error || null);
+      if (record.server_id) setSavedIncident({ id: record.server_id });
+    }).catch(() => { if (!cancelled) setError("Your report is saved on this device. Reopen Reports to check sync status."); });
+    load();
+    const timer = setInterval(load, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [submitted, focused, user.id, !!offline]);
+  async function saveLocal(submitForSync = false, body = null) {
+    if (submittedRef.current) return;
+    if (!localId.current) localId.current = offlineStore.offlineId();
+    const id = await offlineStore.saveDraft(user.id, patrolId, localId.current, form, body, items, submitForSync);
+    localId.current = id;
+    if (!mounted.current) { if (submitForSync) void kickSync().catch(() => {}); return; }
+    draftLoaded.current = true;
+    if (!submitForSync) {
+      savedSelections.current = JSON.stringify(items.map(({ uploadKey, caption, notes }) => ({ uploadKey, caption, notes })));
+      setInitial(JSON.stringify(form)); setLocalStatus("LOCAL_DRAFT"); setProgress("Draft saved on device"); return;
+    }
+    submittedRef.current = true; setSubmitted(true);
+    const empty = formFor();
+    setForm(empty); setInitial(JSON.stringify(empty)); setItems([]);
+    savedSelections.current = JSON.stringify([]);
+    setErrors({}); setError(null); setCapture(false); setFix(null); setManual(false);
+    setAcknowledged(false); setLocationWarning(false);
+    setLocalStatus("PENDING_SYNC"); setProgress("Saved on device — Pending Sync");
+    navigation.setParams?.({ localDraftId: id });
+    void kickSync().catch(() => {});
+  }
+  async function saveLocalDraft() {
+    if (submittedRef.current || pending.current || busy || selecting || !eligible) return;
+    pending.current = true; setBusy(true); setError(null);
+    try { await saveLocal(false); }
+    catch (failure) { setError(failure.message || "Could not save this draft on the device."); }
+    finally { pending.current = false; setBusy(false); }
+  }
   async function submit() {
-    if (pending.current || !eligible || selecting) return;
+    if (submittedRef.current || pending.current || !eligible || selecting) return;
     const validated = validateForm(form);
     setErrors(validated.errors);
     setError(null);
@@ -181,6 +273,10 @@ export default function ReportIncidentScreen({ route, navigation }) {
           remaining,
           savedRef.current ? 0 : existingCount + localSaved,
         );
+      if (offline && !editing) {
+        await saveLocal(true, body);
+        return;
+      }
       if (savedRef.current) {
         const current = await getIncident(savedRef.current.id);
         if (!canChangeIncident(current, user?.id))
@@ -325,7 +421,15 @@ export default function ReportIncidentScreen({ route, navigation }) {
           />
         </View>
       )}
-      {initial !== null && (
+      {submitted && <View style={ui.card}>
+        <Text accessibilityLiveRegion="polite" style={ui.body}>{progress}</Text>
+        <Text style={ui.muted}>{localStatus?.replaceAll("_", " ")}</Text>
+        {error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
+        <Text style={ui.muted}>Your submitted report and evidence remain saved. Retry Sync uses this same report.</Text>
+        <IncidentButton title="Retry Sync" secondary onPress={() => offline?.retry()} />
+        {savedIncident && <IncidentButton title="View Saved Incident" onPress={() => navigation.navigate("IncidentDetails", { incidentId: savedIncident.id })} />}
+      </View>}
+      {initial !== null && !submitted && (
         <>
           <Text style={ui.section}>Incident type *</Text>
           <View style={{ gap: 10 }}>
@@ -518,6 +622,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
           </View>
           <EvidenceDraft
             items={items}
+            retainFiles={!!localId.current}
             setItems={setItems}
             existing={existingEvidence}
             existingCount={existingCount}
@@ -579,9 +684,10 @@ export default function ReportIncidentScreen({ route, navigation }) {
             }
             onPress={submit}
           />
+          {offline && !editing && !savedIncident && <IncidentButton title="Save Draft on Device" secondary disabled={busy || selecting || !eligible} onPress={saveLocalDraft} />}
+          {localStatus && <Text accessibilityLiveRegion="polite" style={ui.muted}>{localStatus.replaceAll("_", " ")}</Text>}
           <Text style={ui.muted}>
-            A report is saved only after the server confirms it. No offline
-            submission queue is available.
+            {offline ? "Drafts and queued evidence stay on this device. Submission is confirmed only after server sync. Offline patrol status is a cached snapshot; server authorization is checked again during sync." : "A report is saved only after the server confirms it."}
           </Text>
         </>
       )}
@@ -615,7 +721,7 @@ export default function ReportIncidentScreen({ route, navigation }) {
               secondary
               color={palette.danger}
               onPress={() => {
-                items.forEach(discardEvidenceFile);
+                if (!localId.current) items.forEach(discardEvidenceFile);
                 if (leaveAction?.type === "VIEW_SAVED_INCIDENT")
                   setSuccess(savedIncident);
                 setAllowLeave(true);

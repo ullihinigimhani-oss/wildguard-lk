@@ -67,8 +67,26 @@ exports.list = async (filters) => {
     incidents: result.incidents.map((incident) => present(incident, true)),
   };
 };
-exports.create = (patrolId, input, user) =>
-  repository.withActivePatrol(patrolId, user.id, async (tx, patrol) => {
+exports.create = async (patrolId, input, user, clientKey) => {
+  let stableId;
+  if (clientKey !== undefined) {
+    if (typeof clientKey !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientKey))
+      throw incidentError(409,'INVALID_IDEMPOTENCY_KEY','Use a valid client incident UUID.');
+    stableId = 'offline_' + require('node:crypto').createHash('sha256').update(user.id + '|' + patrolId + '|' + clientKey.toLowerCase()).digest('hex');
+    const previous = await repository.findIncident(stableId, user);
+    if (previous) return replay(previous,input);
+  }
+  function replay(previous,body) {
+    const match=previous.patrolId===patrolId && previous.reporterId===user.id && ['title','incidentType','description','latitude','longitude'].every(k=>previous[k]===body[k]) && new Date(previous.occurredAt).getTime()===new Date(body.occurredAt).getTime() && (previous.manualLocation ?? null)===(body.manualLocation ?? null) && !body.evidence?.length;
+    if(!match)throw incidentError(409,'IDEMPOTENCY_CONFLICT','This client incident already exists with different content. Open the saved report.');
+    return present(previous);
+  }
+  try {
+    return await repository.withActivePatrol(patrolId, user.id, async (tx, patrol) => {
+    if (stableId) {
+      const previous = await tx.incident.findUnique({where:{id:stableId},include:{evidence:true}});
+      if(previous)return replay(previous,input);
+    }
     const { evidence, ...details } = input;
     if (evidence.length)
       throw incidentError(
@@ -78,6 +96,7 @@ exports.create = (patrolId, input, user) =>
       );
     return present(
       await repository.create(tx, {
+        ...(stableId && {id:stableId}),
         ...details,
         reporterId: user.id,
         patrolId: patrol.id,
@@ -87,6 +106,16 @@ exports.create = (patrolId, input, user) =>
       }),
     );
   });
+  } catch (error) {
+    // Completion can win the lock after the first replay read. Recover only an
+    // already-persisted, owned matching report; never create after completion.
+    if (stableId && (error.code === "PATROL_NOT_ACTIVE" || error.code === "P2002")) {
+      const previous = await repository.findIncident(stableId, user);
+      if (previous) return replay(previous, input);
+    }
+    throw error;
+  }
+};
 async function mutate(id, data, user) {
   const existing = await repository.findIncident(id, user);
   if (!existing)
