@@ -273,3 +273,12 @@ test("temporary incident-screen blur resumes reached destinations from the same 
   });
   expect(hook.result.current.destination.waypointId).toBe("1");
 });
+
+test("unmapped START is actionable while GPS recording continues",async()=>{
+ requestWalkingRoute.mockRejectedValue({response:{status:422,data:{code:"DESTINATION_POINT_UNMAPPED",routingPoint:{index:1,type:"START",waypointId:"0"},message:"PRIVATE PROVIDER CONTENT"}}});
+ const hook=mount();
+ await waitFor(()=>expect(hook.result.current.error).toContain("Start Point"));
+ expect(hook.result.current.route).toBeNull();
+ expect(hook.result.current.error).not.toContain("PRIVATE");
+ await waitFor(()=>expect(recordPatrolLocation).toHaveBeenCalled());
+});

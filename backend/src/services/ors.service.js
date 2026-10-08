@@ -201,40 +201,15 @@ exports.walkingRoute = async ({
         "Walking routing is temporarily busy. Try again in a minute.",
         60,
       );
-    if (riskZones.length && [400, 404, 413].includes(response.status)) {
-      let providerCode;
-      try {
-        providerCode = (await response.json()).error?.code;
-      } catch {
-        /* Never return upstream content. */
-      }
-      if (full && providerCode === 2010)
-        throw routeError(
-          422,
-          "PATROL_POINT_UNMAPPED",
-          "A required patrol point has no mapped walking connection. Review the saved patrol points with the Park Manager.",
-        );
-      if (
-        [2000, 2001, 2002, 2003, 2004].includes(providerCode) ||
-        response.status === 413
-      )
-        throw routeError(
-          422,
-          "RISK_AVOIDANCE_UNAVAILABLE",
-          "Known risk areas could not be used within walking routing limits. Review the planned route and contact the Park Manager.",
-        );
-      throw routeError(
-        422,
-        "NO_RISK_AVOIDING_ROUTE",
-        "No route avoiding the known high-risk area could be found. Review the planned patrol route and contact the Park Manager if needed.",
-      );
+    if ([400, 404, 413].includes(response.status)) {
+      let provider;
+      try { provider = (await response.json()).error; } catch { /* Never expose upstream content. */ }
+      const error = require("./orsFailure")(response.status, provider, {
+        full, points: full ? waypoints : [currentLocation, destination], risk: riskZones.length > 0,
+      });
+      console.warn(JSON.stringify({ stage: "ors_response", httpStatus: response.status, code: error.code, providerCode: error.providerCode, waypointIndex: error.routingPoint?.index, pointType: error.routingPoint?.type }));
+      throw error;
     }
-    if ([400, 404].includes(response.status))
-      throw routeError(
-        422,
-        "NO_WALKING_ROUTE",
-        "No mapped walking route is available to this patrol point. The planned points remain visible.",
-      );
     if (!response.ok)
       throw routeError(
         503,
