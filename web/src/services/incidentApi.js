@@ -142,3 +142,10 @@ export async function markIncidentAsDone(id, signal) {
     throw new Error("Failed to mark incident as done.");
   return responseData;
 }
+
+export async function getVerifiedIncidentsCount(signal) {
+  const { data } = await api.get("/incidents/verified/count", { signal });
+  if (!data?.success || typeof data.data?.count !== 'number')
+    throw new Error("Verified incidents count unavailable.");
+  return data.data.count;
+}

@@ -71,3 +71,9 @@ exports.deleteAnimal = async (req, res, next) => {
     res.json({ success: true, message: 'Animal deleted successfully', data });
   } catch (error) { next(error); }
 };
+exports.getAnimalsNearHighRiskZones = async (req, res, next) => {
+  try {
+    const count = await service.getAnimalsNearHighRiskZones();
+    res.json({ success: true, data: { count } });
+  } catch (error) { next(error); }
+};
