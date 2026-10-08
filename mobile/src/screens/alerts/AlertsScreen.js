@@ -11,7 +11,11 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
 import AlertCard from "../../components/AlertCard";
-import { listAlerts, acknowledgeAlert } from "../../services/alertApi";
+import {
+  listAlerts,
+  acknowledgeAlert,
+  markAllAlertsAsRead,
+} from "../../services/alertApi";
 import { useAuth } from "../../hooks/useAuth";
 import { colors, styles } from "../../constants/theme";
 
@@ -73,16 +77,58 @@ export default function AlertsScreen({ navigation }) {
       return;
     }
 
+    const previousAlerts = [...alerts];
     setAcknowledgingId(alertId);
+
+    // Optimistically update UI immediately
+    setAlerts((prev) =>
+      prev.map((a) =>
+        a.id === alertId
+          ? {
+              ...a,
+              isAcknowledged: true,
+              isRead: true,
+              readAt: new Date().toISOString(),
+            }
+          : a
+      )
+    );
+
     try {
       await acknowledgeAlert(alertId);
-      setAlerts((prev) =>
-        prev.map((a) => (a.id === alertId ? { ...a, isAcknowledged: true } : a))
-      );
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to acknowledge alert.");
+      // Revert optimistic state if backend request fails
+      setAlerts(previousAlerts);
+      setError(err.response?.data?.message || err.message || "Failed to acknowledge alert.");
     } finally {
       setAcknowledgingId(null);
+    }
+  }
+
+  async function handleMarkAllAsRead() {
+    if (!user) {
+      if (navigation?.navigate) navigation.navigate("Login");
+      return;
+    }
+
+    const previousAlerts = [...alerts];
+    const nowIso = new Date().toISOString();
+
+    // Optimistically update all active alerts
+    setAlerts((prev) =>
+      prev.map((a) =>
+        a.status === "ACTIVE"
+          ? { ...a, isAcknowledged: true, isRead: true, readAt: nowIso }
+          : a
+      )
+    );
+
+    try {
+      await markAllAlertsAsRead();
+    } catch (err) {
+      // Revert optimistic state if backend request fails
+      setAlerts(previousAlerts);
+      setError(err.response?.data?.message || err.message || "Failed to mark all alerts as read.");
     }
   }
 
@@ -93,7 +139,7 @@ export default function AlertsScreen({ navigation }) {
   }
 
   const unacknowledgedCount = alerts.filter(
-    (a) => !a.isAcknowledged && a.status === "ACTIVE"
+    (a) => !a.isAcknowledged && !a.isRead && a.status === "ACTIVE"
   ).length;
 
   return (
@@ -173,6 +219,7 @@ export default function AlertsScreen({ navigation }) {
           style={{
             flexDirection: "row",
             alignItems: "center",
+            justifyContent: "space-between",
             gap: 8,
             backgroundColor: "#fef2f2",
             borderColor: "#fecaca",
@@ -182,10 +229,30 @@ export default function AlertsScreen({ navigation }) {
             borderRadius: 8,
           }}
         >
-          <Ionicons name="warning" size={16} color="#dc2626" />
-          <Text style={{ fontSize: 12, fontWeight: "600", color: "#991b1b", flex: 1 }}>
-            {`${unacknowledgedCount} unacknowledged safety notice${unacknowledgedCount > 1 ? "s" : ""} ${unacknowledgedCount > 1 ? "require" : "requires"} your attention.`}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+            <Ionicons name="warning" size={16} color="#dc2626" />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#991b1b", flex: 1 }}>
+              {`${unacknowledgedCount} unacknowledged safety notice${unacknowledgedCount > 1 ? "s" : ""} ${unacknowledgedCount > 1 ? "require" : "requires"} your attention.`}
+            </Text>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Mark all alerts as read"
+            onPress={handleMarkAllAsRead}
+            style={{
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              backgroundColor: "#fee2e2",
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: "#fca5a5",
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "700", color: "#b91c1c" }}>
+              Mark All Read
+            </Text>
+          </Pressable>
         </View>
       )}
 
@@ -227,8 +294,32 @@ export default function AlertsScreen({ navigation }) {
         })}
       </ScrollView>
 
+      {/* Action Error Banner if alerts are loaded */}
+      {error && alerts.length > 0 && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            backgroundColor: "#fef2f2",
+            borderColor: "#fecaca",
+            borderWidth: 1,
+            padding: 12,
+            borderRadius: 8,
+          }}
+        >
+          <Ionicons name="alert-circle" size={18} color="#dc2626" />
+          <Text style={{ fontSize: 13, color: "#991b1b", flex: 1, fontWeight: "500" }}>
+            {error}
+          </Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Dismiss error" onPress={() => setError("")}>
+            <Ionicons name="close" size={16} color="#991b1b" />
+          </Pressable>
+        </View>
+      )}
+
       {/* Content Area: Error / Loading / Empty / List */}
-      {error ? (
+      {error && alerts.length === 0 ? (
         <View style={[styles.card, { alignItems: "center", gap: 10, padding: 20 }]}>
           <Ionicons name="cloud-offline" size={32} color="#dc2626" />
           <Text style={[styles.error, { textAlign: "center" }]}>{error}</Text>

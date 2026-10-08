@@ -67,7 +67,7 @@ export default function AlertCard({
   acknowledging = false,
 }) {
   const risk = RISK_CONFIG[alert.riskLevel] || RISK_CONFIG.MEDIUM;
-  const isAck = Boolean(alert.isAcknowledged);
+  const isAck = Boolean(alert.isAcknowledged || alert.isRead);
   const isResolved = alert.status === "RESOLVED";
 
   const dateStr = formatAlertDate(alert.generatedAt || alert.createdAt);

@@ -12,7 +12,11 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { WebView } from "react-native-webview";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
-import { getAlertById, acknowledgeAlert } from "../../services/alertApi";
+import {
+  getAlertById,
+  acknowledgeAlert,
+  markAlertAsRead,
+} from "../../services/alertApi";
 import { useAuth } from "../../hooks/useAuth";
 import { colors, styles } from "../../constants/theme";
 import { buildReportMapDocument } from "../../components/reportMapDocument";
@@ -74,6 +78,33 @@ export default function AlertDetailsScreen({ route, navigation }) {
     }
   }, [alertId]);
 
+  // When viewing details of an unread active alert, automatically mark as read
+  useEffect(() => {
+    let isMounted = true;
+    if (user && alert && !alert.isRead && alert.status === "ACTIVE") {
+      markAlertAsRead(alert.id)
+        .then((res) => {
+          if (isMounted) {
+            setAlert((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    isRead: true,
+                    readAt: res?.readAt || new Date().toISOString(),
+                  }
+                : prev
+            );
+          }
+        })
+        .catch(() => {
+          // Silent background failure, user can still acknowledge manually
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, alert?.id, alert?.isRead]);
+
   async function loadAlert() {
     if (!alertId) {
       setError("Invalid alert identifier provided.");
@@ -107,13 +138,24 @@ export default function AlertDetailsScreen({ route, navigation }) {
       return;
     }
 
+    const previousAlert = { ...alert };
     setAcknowledging(true);
+
+    // Optimistically update UI immediately
+    setAlert((prev) => ({
+      ...prev,
+      isAcknowledged: true,
+      isRead: true,
+      readAt: new Date().toISOString(),
+    }));
+
     try {
       await acknowledgeAlert(alert.id);
-      setAlert((prev) => ({ ...prev, isAcknowledged: true }));
       NativeAlert.alert("Acknowledged", "Your acknowledgement has been logged for this alert.");
     } catch (err) {
-      NativeAlert.alert("Error", err.response?.data?.message || "Could not acknowledge alert.");
+      // Revert optimistic update on failure
+      setAlert(previousAlert);
+      NativeAlert.alert("Error", err.response?.data?.message || err.message || "Could not acknowledge alert.");
     } finally {
       setAcknowledging(false);
     }
@@ -171,6 +213,7 @@ export default function AlertDetailsScreen({ route, navigation }) {
 
   const theme = RISK_THEME[alert.riskLevel] || RISK_THEME.MEDIUM;
   const isAck = Boolean(alert.isAcknowledged);
+  const isRead = Boolean(alert.isRead || alert.isAcknowledged);
   const isResolved = alert.status === "RESOLVED" || Boolean(alert.isResolved);
   const isExpired = Boolean(alert.isExpired) && !isResolved;
 
@@ -299,6 +342,23 @@ export default function AlertDetailsScreen({ route, navigation }) {
               <Ionicons name="checkmark-circle" size={15} color={colors.green} />
               <Text style={{ fontSize: 11, fontWeight: "700", color: colors.green }}>
                 ACKNOWLEDGED
+              </Text>
+            </View>
+          ) : isRead ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                backgroundColor: colors.cream,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 4,
+              }}
+            >
+              <Ionicons name="eye-outline" size={13} color={colors.green} />
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.green }}>
+                READ
               </Text>
             </View>
           ) : (

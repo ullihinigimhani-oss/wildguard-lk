@@ -16,6 +16,9 @@ jest.mock("../../src/services/alertApi", () => ({
   listAlerts: jest.fn(),
   getAlertById: jest.fn(),
   acknowledgeAlert: jest.fn(),
+  markAlertAsRead: jest.fn(),
+  getUnreadAlertsCount: jest.fn(),
+  markAllAlertsAsRead: jest.fn(),
 }));
 
 jest.mock("../../src/hooks/useAuth", () => ({
@@ -84,6 +87,9 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
     jest.clearAllMocks();
     jest.spyOn(NativeAlert, "alert").mockImplementation(() => {});
     jest.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
+    alertApi.markAlertAsRead.mockResolvedValue({ success: true, readAt: "2026-10-08T08:30:00.000Z" });
+    alertApi.getUnreadAlertsCount.mockResolvedValue({ success: true, unreadCount: 1 });
+    alertApi.markAllAlertsAsRead.mockResolvedValue({ success: true });
   });
 
   afterEach(() => {
@@ -430,3 +436,176 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
     expect(screen.getByText("STATUS: EXPIRED")).toBeTruthy();
   });
 });
+
+describe("Task 11: Alert Read/Unread Management", () => {
+  const unreadAlert = {
+    id: "alert-unread-1",
+    riskLevel: "HIGH",
+    title: "HIGH Wildlife Alert - Sector 5",
+    shortMessage: "Elephant herd spotted near village border.",
+    message: "Elephant herd spotted near village border.",
+    status: "ACTIVE",
+    isAcknowledged: false,
+    isRead: false,
+    generatedAt: "2026-10-08T09:00:00.000Z",
+    affectedArea: "Sector 5 (Yala)",
+    riskZone: { name: "Sector 5" },
+    safetyInstructions: ["Stay indoors."],
+  };
+
+  const readAlert = {
+    id: "alert-read-2",
+    riskLevel: "LOW",
+    title: "LOW Wildlife Alert - Sector 2",
+    shortMessage: "Deer spotted near road.",
+    message: "Deer spotted near road.",
+    status: "ACTIVE",
+    isAcknowledged: true,
+    isRead: true,
+    readAt: "2026-10-08T09:15:00.000Z",
+    generatedAt: "2026-10-08T08:00:00.000Z",
+    affectedArea: "Sector 2 (Yala)",
+    riskZone: { name: "Sector 2" },
+    safetyInstructions: ["Drive carefully."],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(NativeAlert, "alert").mockImplementation(() => {});
+    alertApi.markAlertAsRead.mockResolvedValue({
+      success: true,
+      readAt: "2026-10-08T09:30:00.000Z",
+    });
+    alertApi.getUnreadAlertsCount.mockResolvedValue({ success: true, unreadCount: 1 });
+    alertApi.markAllAlertsAsRead.mockResolvedValue({ success: true });
+    alertApi.acknowledgeAlert.mockResolvedValue({ success: true });
+  });
+
+  afterEach(() => {
+    if (NativeAlert.alert.mockRestore) NativeAlert.alert.mockRestore();
+  });
+
+  test("AlertCard displays UNREAD badge for unread alert and READ badge when marked as read", () => {
+    const { unmount } = render(<AlertCard alert={unreadAlert} onPress={jest.fn()} />);
+    expect(screen.getByText("UNREAD")).toBeTruthy();
+    expect(screen.queryByText("READ")).toBeNull();
+    unmount();
+
+    render(<AlertCard alert={readAlert} onPress={jest.fn()} />);
+    expect(screen.getByText("READ")).toBeTruthy();
+    expect(screen.queryByText("UNREAD")).toBeNull();
+  });
+
+  test("AlertDetailsScreen automatically calls markAlertAsRead on mount for an unread active alert", async () => {
+    const route = { params: { alertData: unreadAlert } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(alertApi.markAlertAsRead).toHaveBeenCalledWith("alert-unread-1");
+    });
+  });
+
+  test("AlertDetailsScreen does NOT call markAlertAsRead when alert is already read or acknowledged", async () => {
+    const route = { params: { alertData: readAlert } };
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(alertApi.markAlertAsRead).not.toHaveBeenCalled();
+    });
+  });
+
+  test("AlertDetailsScreen handleAcknowledge optimistically marks alert acknowledged with rollback on error", async () => {
+    const route = { params: { alertData: unreadAlert } };
+    alertApi.acknowledgeAlert.mockRejectedValueOnce(new Error("Network timeout"));
+
+    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+
+    // Click acknowledge button
+    const ackBtn = screen.getByText("Acknowledge This Alert");
+    fireEvent.press(ackBtn);
+
+    // Immediately updates optimistically
+    expect(screen.getByLabelText("✓ Alert Acknowledged")).toBeTruthy();
+
+    // After failure, rolls back
+    await waitFor(() => {
+      expect(screen.getByText("Acknowledge This Alert")).toBeTruthy();
+      expect(NativeAlert.alert).toHaveBeenCalledWith(
+        "Error",
+        expect.stringMatching(/Network timeout/)
+      );
+    });
+  });
+
+  test("AlertsScreen handleAcknowledge optimistically marks alert as read/acknowledged with rollback on error", async () => {
+    alertApi.listAlerts.mockResolvedValueOnce({
+      success: true,
+      alerts: [unreadAlert],
+    });
+    alertApi.acknowledgeAlert.mockRejectedValueOnce(new Error("Server error"));
+
+    render(<AlertsScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Acknowledge")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Acknowledge"));
+
+    // Optimistically shows Acknowledged
+    expect(screen.getByText("Acknowledged")).toBeTruthy();
+
+    // Reverts on error
+    await waitFor(() => {
+      expect(screen.getByText("Acknowledge")).toBeTruthy();
+      expect(screen.getByText("Server error")).toBeTruthy();
+    });
+  });
+
+  test("AlertsScreen Mark All Read button optimistically clears unread notice and updates alerts", async () => {
+    alertApi.listAlerts.mockResolvedValueOnce({
+      success: true,
+      alerts: [unreadAlert],
+    });
+    alertApi.markAllAlertsAsRead.mockResolvedValueOnce({ success: true });
+
+    render(<AlertsScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("1 unacknowledged safety notice requires your attention.")).toBeTruthy();
+      expect(screen.getByText("Mark All Read")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Mark All Read"));
+
+    // Optimistically clears unread banner and shows acknowledged
+    await waitFor(() => {
+      expect(alertApi.markAllAlertsAsRead).toHaveBeenCalled();
+      expect(screen.queryByText("1 unacknowledged safety notice requires your attention.")).toBeNull();
+      expect(screen.getByText("Acknowledged")).toBeTruthy();
+    });
+  });
+
+  test("AlertsScreen Mark All Read button rolls back and displays error when backend call fails", async () => {
+    alertApi.listAlerts.mockResolvedValueOnce({
+      success: true,
+      alerts: [unreadAlert],
+    });
+    alertApi.markAllAlertsAsRead.mockRejectedValueOnce(new Error("Failed to mark all read"));
+
+    render(<AlertsScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Mark All Read")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Mark All Read"));
+
+    // Reverts back on error and displays message
+    await waitFor(() => {
+      expect(screen.getByText("1 unacknowledged safety notice requires your attention.")).toBeTruthy();
+      expect(screen.getByText("Failed to mark all read")).toBeTruthy();
+    });
+  });
+});
+
