@@ -7,6 +7,8 @@ import PatrolManagement from "../pages/PatrolManagement/PatrolManagement";
 import EditPatrol from "../pages/PatrolManagement/EditPatrol";
 import CreatePatrol from "../pages/PatrolManagement/CreatePatrol";
 import PatrolDetails from "../pages/PatrolManagement/PatrolDetails";
+import CommunityReports from "../pages/CommunityReports/CommunityReports";
+import CommunityReportDetailsPage from "../pages/CommunityReports/CommunityReportDetailsPage";
 import RangerMonitoring from "../pages/RangerMonitoring/RangerMonitoring";
 import RangerTrack from "../pages/RangerMonitoring/RangerTrack";
 import Reporting from "../pages/Reporting/Reporting";
@@ -61,16 +63,8 @@ export default function AppRoutes() {
             <Route path="/incidents/patrol/:patrolId" element={<PatrolReports />} />
             <Route path="/incidents/patrol/:patrolId/:incidentId" element={<IncidentDetailsPage />} />
             <Route path="/incidents/unassigned/:incidentId" element={<IncidentDetailsPage />} />
-          </Route>
-          <Route
-            element={
-              <ProtectedRoute allowedRoles={["COMMUNITY_LIAISON"]} />
-            }
-          >
-            <Route
-              path="/community-reports"
-              element={<Placeholder title="Community Reports" />}
-            />
+            <Route path="/community-reports" element={<CommunityReports />} />
+            <Route path="/community-reports/:reportId" element={<CommunityReportDetailsPage />} />
           </Route>
           <Route
             element={

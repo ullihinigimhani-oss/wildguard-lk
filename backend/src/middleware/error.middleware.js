@@ -24,6 +24,7 @@ function errorHandler(error, req, res, next) {
       success: false,
       code: error.code,
       message: error.message,
+      ...(error.routingPoint && { routingPoint: error.routingPoint }),
       ...(Array.isArray(error.riskZones) && { riskZones: error.riskZones }),
       ...(error.retryAfterSeconds && {
         retryAfterSeconds: error.retryAfterSeconds,

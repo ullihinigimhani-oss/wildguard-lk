@@ -41,4 +41,5 @@ router.get(
 );
 router.patch("/:incidentId", controller.edit);
 router.post("/:incidentId/withdraw", allowRoles("RANGER"), controller.withdraw);
+router.get("/verified/count", controller.getVerifiedIncidentsCount);
 module.exports = router;

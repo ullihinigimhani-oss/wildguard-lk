@@ -90,10 +90,11 @@ exports.createPatrol = async (input, createdById) => {
     !ranger.isActive
   )
     throw invalid({ assigned_ranger: "Select an approved ranger." });
+  await require('./patrolRouteValidation.service').validate(input.parkId, input.waypoints?.create, createdById);
   return repository.createPatrol({ ...input, status: "SCHEDULED", createdById });
 };
 
-exports.updatePatrol = async (id, input) => {
+exports.updatePatrol = async (id, input, managerId) => {
   const patrol = await exports.getPatrol(id);
   if (patrol.status !== "SCHEDULED") throw patrolError(409, "Only scheduled patrols can be edited.");
   const park = await repository.findPark(input.parkId);
@@ -105,6 +106,7 @@ exports.updatePatrol = async (id, input) => {
   // must match the patrol park. This preserves the existing global pool.
   if (ranger.parkId && ranger.parkId !== input.parkId)
     throw invalid({ assigned_ranger: "This ranger is assigned to a different park." });
+  await require('./patrolRouteValidation.service').validate(input.parkId, input.waypoints?.create, managerId);
   return repository.updateScheduledPatrol(id, input);
 };
 exports.cancelPatrol = async id => {

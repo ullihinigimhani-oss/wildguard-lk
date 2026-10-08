@@ -35,11 +35,6 @@ export default function Sidebar({ open, onClose }) {
               </NavLink>
             ))}
         </nav>
-        <div className="sidebar-footer">
-          <span className="park-dot" /> Conservation starts here.
-          <small>Sri Lanka · Field operations</small>
-          <span className="prototype-label">UNIVERSITY PROTOTYPE</span>
-        </div>
       </aside>
     </>
   );

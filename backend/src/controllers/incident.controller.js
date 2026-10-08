@@ -19,7 +19,7 @@ function endpoint(action, status = 200) {
   };
 }
 exports.create = endpoint(async req => ({
-  incident: await service.create(id(req.params.patrolId, "patrolId"), validateIncident(req.body), req.user)
+  incident: await service.create(id(req.params.patrolId, "patrolId"), validateIncident(req.body), req.user, req.get('Idempotency-Key'))
 }), 201);
 exports.listForPatrol = endpoint(req => service.listForPatrol(id(req.params.patrolId, "patrolId"), validateFilters(req.query), req.user));
 exports.listManager = endpoint(req => service.list(validateFilters(req.query, true)));
@@ -62,3 +62,17 @@ exports.withdraw = endpoint(async req => {
     incident: await service.withdraw(id(req.params.incidentId, "incidentId"), req.user)
   };
 });
+exports.getVerifiedIncidentsCount = async (req, res, next) => {
+  try {
+    const db = require("../config/database");
+    const count = await db.incident.count({
+      where: {
+        status: 'VERIFIED',
+        withdrawnAt: null
+      }
+    });
+    res.json({ success: true, data: { count } });
+  } catch (error) {
+    next(error);
+  }
+};

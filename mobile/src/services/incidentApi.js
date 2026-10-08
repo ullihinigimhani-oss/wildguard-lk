@@ -10,9 +10,9 @@ const record = (data) => {
     throw new Error("The server did not confirm the incident.");
   return data.incident;
 };
-export async function createIncident(patrolId, body) {
+export async function createIncident(patrolId, body, options) {
   return record(
-    (await api.post(`/patrols/${pathId(patrolId)}/incidents`, body)).data,
+    (await (options ? api.post(`/patrols/${pathId(patrolId)}/incidents`, body, options) : api.post(`/patrols/${pathId(patrolId)}/incidents`, body))).data,
   );
 }
 export async function listPatrolIncidents(

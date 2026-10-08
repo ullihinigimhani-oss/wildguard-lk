@@ -15,6 +15,7 @@ export default defineConfig({
       "tests/integration/liveMonitoring.test.jsx",
       "tests/integration/rangerTracking.test.jsx",
       "tests/integration/incidentReview.test.jsx",
+      "tests/integration/communityReportManagement.test.jsx",
     ],
   },
 });

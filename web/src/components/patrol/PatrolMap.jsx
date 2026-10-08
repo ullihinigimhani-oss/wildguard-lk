@@ -11,6 +11,8 @@ export default function PatrolMap({
   onMove,
   disabled = false,
   readOnly = false,
+  walkingRoute,
+  invalidIndex,
 }) {
   const container = useRef(null),
     map = useRef(null),
@@ -59,10 +61,12 @@ export default function PatrolMap({
   }, []);
   useEffect(() => {
     layers.current.clearLayers();
-    if (points.length > 1)
+    if (walkingRoute?.geometry?.coordinates?.length > 1)
+      L.polyline(walkingRoute.geometry.coordinates.map(([lng, lat]) => [lat, lng]), { color: '#174D3A', weight: 5, opacity: 0.9 }).bindTooltip('Verified walking route').addTo(layers.current);
+    else if (points.length > 1)
       L.polyline(
         points.map((p) => [p.latitude, p.longitude]),
-        { color: "#285c49", weight: 3, dashArray: "7 5" },
+        { color: "#747e78", weight: 3, dashArray: "7 5" },
       ).addTo(layers.current);
     let checkpoint = 0;
     points.forEach((point) => {
@@ -74,7 +78,7 @@ export default function PatrolMap({
             ];
       const icon = L.divIcon({
         className: "route-marker-container",
-        html: `<span class="route-marker route-marker-${point.type.toLowerCase()}${point.id === selectedId ? " is-selected" : ""}">${symbol}</span>`,
+        html: `<span class="route-marker route-marker-${point.type.toLowerCase()}${point.id === selectedId ? " is-selected" : ""}${point.order === invalidIndex ? ' is-unmapped' : ''}">${symbol}</span>`,
         iconSize: [32, 32],
         iconAnchor: [16, 16],
       });
@@ -95,11 +99,12 @@ export default function PatrolMap({
           h.onMove?.(point.id, marker.getLatLng());
       });
     });
-  }, [points, selectedId, disabled, readOnly]);
+  }, [points, selectedId, disabled, readOnly, walkingRoute, invalidIndex]);
+  useEffect(() => { if (walkingRoute) fitRoute(); }, [walkingRoute]);
   function fitRoute() {
     if (points.length)
       map.current.fitBounds(
-        L.latLngBounds(points.map((p) => [p.latitude, p.longitude])),
+        L.latLngBounds([...points.map((p) => [p.latitude, p.longitude]), ...(walkingRoute?.geometry?.coordinates || []).map(([lng, lat]) => [lat, lng])]),
         { padding: [40, 40], maxZoom: 15 },
       );
   }

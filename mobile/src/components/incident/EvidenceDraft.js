@@ -12,6 +12,7 @@ import {
 } from "../../utils/incidentEvidence";
 
 export default function EvidenceDraft({
+  retainFiles = false,
   items,
   setItems,
   existing = [],
@@ -205,7 +206,7 @@ export default function EvidenceDraft({
                 secondary
                 disabled={disabled || item.cleanupBlocked}
                 onPress={() => {
-                  discardEvidenceFile(item);
+                  if (!retainFiles) discardEvidenceFile(item);
                   setItems((previous) =>
                     previous.filter(
                       (value) => value.uploadKey !== item.uploadKey,

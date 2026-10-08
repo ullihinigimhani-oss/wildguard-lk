@@ -54,12 +54,12 @@ export default function Reporting() {
   const loadIncidents = async () => {
     try {
       setIncidentsLoading(true);
-      // Load all incidents and filter out those marked as done
+      // Load all incidents and filter for verified incidents that are not marked as done
       const response = await listIncidents({});
-      const activeIncidents = response.incidents.filter(
-        inc => (!inc.markAsDone || inc.markAsDone === false) && inc.status !== 'WITHDRAWN'
+      const verifiedIncidents = response.incidents.filter(
+        inc => inc.status === 'VERIFIED' && (!inc.markAsDone || inc.markAsDone === false)
       );
-      setIncidents(activeIncidents || []);
+      setIncidents(verifiedIncidents || []);
     } catch (err) {
       console.error('Error loading incidents:', err);
       setIncidents([]);

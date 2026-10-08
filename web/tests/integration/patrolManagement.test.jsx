@@ -4,12 +4,14 @@ import { MemoryRouter } from "react-router-dom";
 import CreatePatrol from "../../src/pages/PatrolManagement/CreatePatrol";
 import {
   createPatrol,
+  validatePatrolRoute,
   listAssignableRangers,
 } from "../../src/services/patrolApi";
 import { listParks } from "../../src/services/parkApi";
 vi.mock("../../src/services/patrolApi", () => ({
   listAssignableRangers: vi.fn(),
   createPatrol: vi.fn(),
+  validatePatrolRoute: vi.fn(),
 }));
 vi.mock("../../src/services/parkApi", () => ({ listParks: vi.fn() }));
 vi.mock("../../src/components/patrol/PatrolMap", () => ({ default: ({onAdd}) => <button type="button" onClick={() => onAdd({lat:7.5,lng:80.7})}>Choose map location</button> }));
@@ -55,6 +57,7 @@ const created = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  validatePatrolRoute.mockResolvedValue({geometry:{type:'LineString',coordinates:[[80.7,7.5],[80.71,7.51]]},distanceMeters:1500,durationSeconds:1200});
   listParks.mockResolvedValue([
     { id: "park-a", name: "Yala National Park" },
     { id: "park-b", name: "Wilpattu National Park" },
@@ -79,16 +82,15 @@ async function fillValidForm(events) {
     screen.getByLabelText("Assigned Ranger *"),
     "ranger-1",
   );
-  await events.type(
-    screen.getByLabelText("Patrol Title *"),
-    "Northern boundary sweep",
-  );
+  change('Patrol Title *', 'Northern boundary sweep');
   change("Patrol Date *", "2026-10-10");
   change("Start Time *", "06:30");
   change("Expected End Time *", "10:00");
   await events.click(screen.getByRole("button", {name:"Choose map location"}));
   await events.click(screen.getByRole("button", {name:"End Point"}));
   await events.click(screen.getByRole("button", {name:"Choose map location"}));
+  await events.click(screen.getByRole('button', {name:'Validate walking route'}));
+  await screen.findByText(/Walking route verified/);
 }
 test("loads parks and approved rangers into the form", async () => {
   mountPage();
@@ -105,7 +107,8 @@ test("client validation blocks an incomplete submission", async () => {
   const events = userEvent.setup();
   mountPage();
   await screen.findByRole("option", { name: /A\. Perera/ });
-  await events.click(screen.getByRole("button", { name: "Create Patrol" }));
+  expect(screen.getByRole("button", { name: "Create Patrol" })).toBeDisabled();
+  fireEvent.submit(screen.getByRole("button", { name: "Create Patrol" }).closest('form'));
   expect(
     await screen.findByText("Enter a patrol title of 3 to 150 characters."),
   ).toBeVisible();
@@ -224,10 +227,7 @@ test("extra patrol details are sent when provided", async () => {
   await fillValidForm(events);
   await events.selectOptions(screen.getByLabelText("Patrol Type *"), "ANTI_POACHING");
   await events.selectOptions(screen.getByLabelText("Priority *"), "HIGH");
-  await events.type(
-    screen.getByLabelText("Instructions & Notes (optional)"),
-    "Check the northern fence line.",
-  );
+  change('Instructions & Notes (optional)', 'Check the northern fence line.');
   await events.click(screen.getByRole("button", { name: "Create Patrol" }));
   await waitFor(() => expect(createPatrol).toHaveBeenCalledTimes(1));
   expect(createPatrol).toHaveBeenCalledWith({

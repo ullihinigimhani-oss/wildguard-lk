@@ -18,11 +18,19 @@ exports.updateRiskZone = (id, data) =>
     data
   });
 
-exports.deleteRiskZone = (id) =>
-  db().riskZone.update({
-    where: { id },
-    data: { isActive: false }
+exports.deleteRiskZone = async (id) => {
+  const database = db();
+  
+  // First, delete related alerts to avoid foreign key constraint errors
+  await database.alert.deleteMany({
+    where: { riskZoneId: id }
   });
+  
+  // Then delete the risk zone
+  await database.riskZone.delete({
+    where: { id }
+  });
+};
 
 exports.getFirstPark = () =>
   db().park.findFirst();

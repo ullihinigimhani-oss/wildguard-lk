@@ -104,3 +104,69 @@ exports.updateAnimal = async (id, { species, name, sex, notes }) => {
 exports.deleteAnimal = async (id) => {
   return await repository.deleteAnimal(id);
 };
+
+exports.getAnimalsNearHighRiskZones = async () => {
+  const db = require('../config/database');
+  
+  // Get all HIGH and CRITICAL risk zones
+  const riskZones = await db.riskZone.findMany({
+    where: {
+      riskLevel: { in: ['HIGH', 'CRITICAL'] },
+      isActive: true
+    },
+    select: {
+      id: true,
+      centerLatitude: true,
+      centerLongitude: true,
+      radiusMeters: true
+    }
+  });
+
+  if (riskZones.length === 0) {
+    return 0;
+  }
+
+  // Get all animals with their latest locations
+  const animalsWithLocations = await repository.getAnimalsWithLatestLocations();
+  
+  let count = 0;
+  
+  for (const animal of animalsWithLocations) {
+    if (!animal.locations || animal.locations.length === 0) continue;
+    
+    const latestLocation = animal.locations[0];
+    const animalLat = latestLocation.latitude;
+    const animalLng = latestLocation.longitude;
+    
+    // Check if animal is within any high risk zone
+    for (const zone of riskZones) {
+      const distance = calculateDistance(
+        animalLat, animalLng,
+        zone.centerLatitude, zone.centerLongitude
+      );
+      
+      if (distance <= zone.radiusMeters) {
+        count++;
+        break; // Count animal once even if in multiple zones
+      }
+    }
+  }
+  
+  return count;
+};
+
+// Haversine formula to calculate distance between two coordinates in meters
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c;
+}

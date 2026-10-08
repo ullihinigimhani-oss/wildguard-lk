@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Circle } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { getAllAnimals, getAnimalLocationsByDateRange, getDensityZones } from "../../services/sensorApi";
+import { getAllAnimals, getAnimalLocationsByDateRange, getDensityZones, getAnimalsNearHighRiskZones } from "../../services/sensorApi";
+import { getVerifiedIncidentsCount } from "../../services/incidentApi";
 
 // Species emoji mapping
 const SPECIES_EMOJIS = {
@@ -34,6 +35,8 @@ export default function WildlifeMonitoring() {
   const [selectedAnimal, setSelectedAnimal] = useState('');
   const [densityZones, setDensityZones] = useState([]);
   const [routeLocations, setRouteLocations] = useState([]);
+  const [animalsNearRiskZones, setAnimalsNearRiskZones] = useState(0);
+  const [verifiedIncidentsCount, setVerifiedIncidentsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -50,16 +53,20 @@ export default function WildlifeMonitoring() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [animalsRes, zonesRes] = await Promise.all([
+      const [animalsRes, zonesRes, riskZonesRes, incidentsRes] = await Promise.all([
         getAllAnimals(),
         getDensityZones(
           new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
           new Date().toISOString(),
           300
-        )
+        ),
+        getAnimalsNearHighRiskZones(),
+        getVerifiedIncidentsCount()
       ]);
       setAnimals(animalsRes.data || []);
       setDensityZones(zonesRes.data || []);
+      setAnimalsNearRiskZones(riskZonesRes.data?.count || 0);
+      setVerifiedIncidentsCount(incidentsRes || 0);
     } catch (err) {
       setError('Failed to load data');
       console.error('Error loading data:', err);
@@ -142,10 +149,7 @@ export default function WildlifeMonitoring() {
                   Animals Near High Risk Zones
                 </div>
                 <div style={{ fontSize: '36px', fontWeight: '600', color: '#e74c3c' }}>
-                  --
-                </div>
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-                  Coming soon
+                  {animalsNearRiskZones}
                 </div>
               </div>
 
@@ -160,10 +164,7 @@ export default function WildlifeMonitoring() {
                   Verified Incidents Reported
                 </div>
                 <div style={{ fontSize: '36px', fontWeight: '600', color: '#f39c12' }}>
-                  --
-                </div>
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-                  Coming soon
+                  {verifiedIncidentsCount}
                 </div>
               </div>
             </div>
