@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { typography } from "../../constants/typography";
 import { fieldColors, fieldCard } from "../../constants/fieldTheme";
 export const dashboardColors = {
@@ -35,11 +35,18 @@ export const dashboardStyles = StyleSheet.create({
     backgroundColor: c.white,
     borderWidth: 1,
     borderColor: c.border,
-    shadowColor: c.forest,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    ...Platform.select({
+      web: {
+        boxShadow: "0px 4px 12px rgba(18, 61, 41, 0.04)",
+      },
+      default: {
+        shadowColor: c.forest,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 2,
+      },
+    }),
   },
   activeCard: { backgroundColor: c.forest, borderColor: c.forest },
   cardTitle: { ...typography.heading, letterSpacing: -0.4, color: c.text },

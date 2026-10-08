@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -188,10 +189,17 @@ export default function AlertsScreen({ navigation }) {
                 paddingVertical: 8,
                 borderRadius: 8,
                 backgroundColor: active ? colors.white : "transparent",
-                shadowColor: active ? "#000" : "transparent",
-                shadowOpacity: active ? 0.08 : 0,
-                shadowRadius: 4,
-                elevation: active ? 1 : 0,
+                ...Platform.select({
+                  web: {
+                    boxShadow: active ? "0px 2px 4px rgba(0, 0, 0, 0.08)" : "none",
+                  },
+                  default: {
+                    shadowColor: active ? "#000" : "transparent",
+                    shadowOpacity: active ? 0.08 : 0,
+                    shadowRadius: 4,
+                    elevation: active ? 1 : 0,
+                  },
+                }),
               }}
             >
               <Ionicons
