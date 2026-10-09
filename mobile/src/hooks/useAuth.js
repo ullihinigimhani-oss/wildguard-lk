@@ -87,9 +87,9 @@ export function AuthProvider({ children }) {
           setSession((current) =>
             current?.token === session.token ? { ...current, user } : current,
           );
-      } catch {
-        // Fail closed when a resumed session cannot be verified.
-        if (attempt === generation.current) logout();
+      } catch (error) {
+        // An unexpired verified session may continue offline; explicit HTTP rejection logs out.
+        if (attempt === generation.current && error.response) logout();
       }
     });
     return () => {

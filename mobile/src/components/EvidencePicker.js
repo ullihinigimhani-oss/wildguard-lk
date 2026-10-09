@@ -110,13 +110,14 @@ export default function EvidencePicker({
           return;
         }
 
-        let fileType = "image/jpeg";
+        let fileType = asset.mimeType || "image/jpeg";
         if (isVideo) {
           if (uriLower.endsWith(".mov")) fileType = "video/quicktime";
           else if (uriLower.endsWith(".webm")) fileType = "video/webm";
           else fileType = "video/mp4";
         } else {
-          if (uriLower.endsWith(".png")) fileType = "image/png";
+          if (asset.mimeType) fileType = asset.mimeType;
+          else if (uriLower.endsWith(".png")) fileType = "image/png";
           else if (uriLower.endsWith(".webp")) fileType = "image/webp";
           else if (uriLower.endsWith(".heic")) fileType = "image/heic";
           else fileType = "image/jpeg";
@@ -130,12 +131,44 @@ export default function EvidencePicker({
           return;
         }
 
+        let base64 = asset.base64 || null;
+        if (!base64 && asset.uri && !isVideo) {
+          try {
+            const FileSystem = require("expo-file-system");
+            if (FileSystem?.readAsStringAsync) {
+              base64 = await FileSystem.readAsStringAsync(asset.uri, {
+                encoding: FileSystem.EncodingType?.Base64 || "base64",
+              });
+            }
+          } catch (_) {
+            try {
+              if (typeof fetch === "function") {
+                const resp = await fetch(asset.uri);
+                const blob = await resp.blob();
+                base64 = await new Promise((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    const res = reader.result;
+                    if (typeof res === "string") {
+                      resolve(res.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, ""));
+                    } else {
+                      resolve(null);
+                    }
+                  };
+                  reader.onerror = () => resolve(null);
+                  reader.readAsDataURL(blob);
+                });
+              }
+            } catch (_) {}
+          }
+        }
+
         const newEvidenceItem = {
           fileUrl: asset.uri,
           fileType,
           fileName: asset.fileName || `evidence-${Date.now()}.${isVideo ? "mp4" : "jpg"}`,
           isVideo,
-          base64: asset.base64 || null,
+          base64: base64 || null,
           fileSize: asset.fileSize || null,
         };
 

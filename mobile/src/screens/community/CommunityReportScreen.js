@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert as NativeAlert,
+  Linking,
   Pressable,
   ScrollView,
   Text,
@@ -12,6 +14,7 @@ import Button from "../../components/common/Button";
 import LocationPicker from "../../components/LocationPicker";
 import EvidencePicker from "../../components/EvidencePicker";
 import { submitReport, uploadEvidence } from "../../services/communityReportApi";
+import { buildSmsReportText, simulateSmsReport } from "../../services/smsReportApi";
 import { useAuth } from "../../hooks/useAuth";
 import { colors, styles } from "../../constants/theme";
 
@@ -61,6 +64,8 @@ export default function CommunityReportScreen({ navigation, route }) {
   const [longitude, setLongitude] = useState("");
   const [evidence, setEvidence] = useState([]);
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [showSmsSection, setShowSmsSection] = useState(false);
+  const [simulatingSms, setSimulatingSms] = useState(false);
 
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -154,18 +159,52 @@ export default function CommunityReportScreen({ navigation, route }) {
         const item = evidence[i];
         if (item.fileUrl && (item.fileUrl.startsWith("/uploads/") || item.fileUrl.startsWith("http"))) {
           preparedEvidence.push({ fileUrl: item.fileUrl, fileType: item.fileType });
-        } else if (item.base64) {
-          setUploadStatus(`Uploading evidence ${i + 1} of ${evidence.length}...`);
-          const uploadRes = await uploadEvidence({
-            data: item.base64,
-            mimeType: item.fileType,
-            originalName: item.fileName,
-          });
-          item.fileUrl = uploadRes.fileUrl;
-          preparedEvidence.push({ fileUrl: uploadRes.fileUrl, fileType: uploadRes.fileType });
         } else {
-          // Local/mock URI
-          preparedEvidence.push({ fileUrl: item.fileUrl, fileType: item.fileType });
+          let base64Data = item.base64;
+          if (!base64Data && item.fileUrl) {
+            try {
+              const FileSystem = require("expo-file-system");
+              if (FileSystem?.readAsStringAsync) {
+                base64Data = await FileSystem.readAsStringAsync(item.fileUrl, {
+                  encoding: FileSystem.EncodingType?.Base64 || "base64",
+                });
+              }
+            } catch (_) {
+              try {
+                if (typeof fetch === "function") {
+                  const resp = await fetch(item.fileUrl);
+                  const blob = await resp.blob();
+                  base64Data = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const res = reader.result;
+                      if (typeof res === "string") {
+                        resolve(res.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, ""));
+                      } else {
+                        resolve(null);
+                      }
+                    };
+                    reader.onerror = () => resolve(null);
+                    reader.readAsDataURL(blob);
+                  });
+                }
+              } catch (_) {}
+            }
+          }
+
+          if (base64Data) {
+            setUploadStatus(`Uploading evidence ${i + 1} of ${evidence.length}...`);
+            const uploadRes = await uploadEvidence({
+              data: base64Data,
+              mimeType: item.fileType,
+              originalName: item.fileName,
+            });
+            item.fileUrl = uploadRes.fileUrl;
+            preparedEvidence.push({ fileUrl: uploadRes.fileUrl, fileType: uploadRes.fileType || item.fileType });
+          } else {
+            // Local/mock URI
+            preparedEvidence.push({ fileUrl: item.fileUrl, fileType: item.fileType });
+          }
         }
       }
 
@@ -201,6 +240,63 @@ export default function CommunityReportScreen({ navigation, route }) {
       submittingRef.current = false;
       setSubmitting(false);
       setUploadStatus("");
+    }
+  }
+
+  function handleOpenSmsApp() {
+    const effectiveLoc = getEffectiveManualLocation();
+    const textBody = buildSmsReportText({
+      reportType,
+      location: effectiveLoc,
+      description: description.trim(),
+      isAnonymous,
+    });
+
+    const smsUrl = `sms:1919?body=${encodeURIComponent(textBody)}`;
+    Linking.canOpenURL(smsUrl)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(smsUrl);
+        } else {
+          NativeAlert.alert("SMS Reporting Format", `Send SMS to 1919:\n\n${textBody}`);
+        }
+      })
+      .catch(() => {
+        NativeAlert.alert("SMS Reporting Format", `Send SMS to 1919:\n\n${textBody}`);
+      });
+  }
+
+  async function handleSimulateSms() {
+    const effectiveLoc = getEffectiveManualLocation();
+    const textBody = buildSmsReportText({
+      reportType,
+      location: effectiveLoc || "Community Buffer Zone",
+      description: description.trim() || "Observed wildlife activity near settlement boundary",
+      isAnonymous,
+    });
+
+    setSimulatingSms(true);
+    try {
+      const res = await simulateSmsReport({
+        senderPhone: user?.phone || "+94771234567",
+        message: textBody,
+        providerMessageId: `sim-mob-${Date.now()}`,
+      });
+
+      NativeAlert.alert(
+        "SMS Report Ingested",
+        res.replyText || "Your SMS report has been successfully logged by the gateway."
+      );
+      if (res.report) {
+        setSubmittedReport(res.report);
+      }
+    } catch (err) {
+      NativeAlert.alert(
+        "SMS Ingestion Failed",
+        err.response?.data?.message || err.message || "Could not process SMS report."
+      );
+    } finally {
+      setSimulatingSms(false);
     }
   }
 
@@ -501,6 +597,68 @@ export default function CommunityReportScreen({ navigation, route }) {
           </Text>
         </View>
       </Pressable>
+
+      {/* SMS Offline Fallback Option */}
+      <View style={[styles.card, { gap: 10, borderColor: "#0284c7", borderWidth: 1, backgroundColor: "#f0f9ff" }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Toggle SMS Reporting Options"
+          onPress={() => setShowSmsSection((prev) => !prev)}
+          style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Ionicons name="chatbox-ellipses-outline" size={20} color="#0284c7" />
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "#0369a1" }}>
+              No Data? Report via SMS (1919)
+            </Text>
+          </View>
+          <Ionicons
+            name={showSmsSection ? "chevron-up" : "chevron-down"}
+            size={18}
+            color="#0284c7"
+          />
+        </Pressable>
+
+        {showSmsSection && (
+          <View style={{ gap: 10, borderTopWidth: 1, borderTopColor: "#bae6fd", paddingTop: 8 }}>
+            <Text style={{ fontSize: 12, color: "#0c4a6e", lineHeight: 18 }}>
+              In rural areas with poor data connection, send an SMS to shortcode <Text style={{ fontWeight: "700" }}>1919</Text>.
+            </Text>
+
+            <View style={{ backgroundColor: "#ffffff", padding: 10, borderRadius: 8, borderWidth: 1, borderColor: "#e0f2fe" }}>
+              <Text style={{ fontSize: 11, fontWeight: "600", color: "#0369a1", marginBottom: 2 }}>
+                Generated SMS Preview:
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.dark, fontStyle: "italic", lineHeight: 17 }}>
+                {buildSmsReportText({
+                  reportType,
+                  location: getEffectiveManualLocation(),
+                  description: description.trim(),
+                  isAnonymous,
+                })}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title="Open SMS App"
+                  secondary
+                  onPress={handleOpenSmsApp}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title={simulatingSms ? "Simulating..." : "Test Gateway"}
+                  loading={simulatingSms}
+                  disabled={simulatingSms}
+                  onPress={handleSimulateSms}
+                />
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
 
       {/* 7. Submit Button */}
       <View style={{ gap: 8, paddingBottom: 24 }}>

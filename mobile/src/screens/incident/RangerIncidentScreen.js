@@ -1,3 +1,4 @@
+import LocalDrafts from "../../components/incident/LocalDrafts";
 import React, { useState } from "react";
 import { RefreshControl, View } from "react-native";
 import { Text } from "../../components/common/Typography";
@@ -35,6 +36,7 @@ export default function RangerIncidentScreen({ navigation }) {
         title="Field Incident Reporting"
         description="Record wildlife and conservation incidents during your active patrol."
       />
+      <LocalDrafts navigation={navigation} />
       <State {...state} retry={state.refresh} />
       {!state.loading && !state.error && (
         <>

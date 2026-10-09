@@ -1,4 +1,7 @@
+import { useOffline } from "./useOffline";
+import { readNavigation, cacheNavigation } from "../services/offlineMaps";
 import { walkingRouteError } from "../utils/walkingRouteError";
+import { recordOfflineGps, mergeLocalGps } from '../services/offlineGps';
 import { useEffect, useRef, useState } from "react";
 import { pointInGeometry } from "../../../shared/riskGeometry";
 import {
@@ -25,6 +28,8 @@ import {
 } from "../services/patrolApi";
 
 export default function useLiveNavigation(patrol, points, userId, location) {
+  const offline = useOffline();
+  const disconnected = !!offline && !offline.online;
   const [state, setState] = useState({
     reached: new Set(),
     route: null,
@@ -63,10 +68,11 @@ export default function useLiveNavigation(patrol, points, userId, location) {
       riskFailed: false,
     };
     context.current = ctx;
-    setState({
+    setState(previous => ({
+      navigationKey: key,
       reached: ctx.reached,
       route: null,
-      trail: [],
+      trail: previous.navigationKey === key ? previous.trail : [],
       error: null,
       trailError: null,
       offRoute: false,
@@ -74,18 +80,23 @@ export default function useLiveNavigation(patrol, points, userId, location) {
       riskZones: [],
       riskReady: false,
       riskError: null,
-    });
+    }));
     if (active && key)
-      getPatrolRiskZones(patrol.id, ctx.controller.signal)
-        .then((zones) => {
+      (disconnected ? readNavigation(userId, patrol).then(snapshot => {
+        if (!ctx.cancelled) setState(value => ({ ...value, riskError: snapshot.warning }));
+        return snapshot.zones;
+      }) : getPatrolRiskZones(patrol.id, ctx.controller.signal))
+        .then(async (zones) => {
           if (ctx.cancelled) return;
           ctx.riskZones = zones;
-          ctx.riskReady = true;
+          ctx.riskReady = !disconnected;
+          if (!disconnected && offline) await cacheNavigation(userId,patrol,zones).catch(() => {});
+          if (ctx.cancelled) return;
           setState((value) => ({
             ...value,
             riskZones: zones,
-            riskReady: true,
-            riskError: null,
+            riskReady: !disconnected,
+            riskError: disconnected ? "Cached hazards may have changed. Current safety cannot be verified offline." : null,
           }));
           setRevision((value) => value + 1);
         })
@@ -111,13 +122,14 @@ export default function useLiveNavigation(patrol, points, userId, location) {
           }));
         });
     if (active && key)
-      getPatrolLocations(patrol.id, ctx.controller.signal)
-        .then((trail) => {
+      (disconnected ? Promise.resolve([]) : getPatrolLocations(patrol.id, ctx.controller.signal))
+        .then(async (serverTrail) => {
+          const trail = await mergeLocalGps(userId, patrol.id, serverTrail);
           if (ctx.cancelled) return;
           ctx.lastSample = trail.at(-1) || null;
           setState((value) => ({ ...value, trail }));
         })
-        .catch((error) => {
+        .catch(async (error) => {
           if (
             !ctx.cancelled &&
             [401, 403, 404, 409].includes(error.response?.status)
@@ -132,12 +144,17 @@ export default function useLiveNavigation(patrol, points, userId, location) {
             }));
             return;
           }
-          if (!ctx.cancelled)
+          if (!ctx.cancelled) {
+            try {
+              const trail = await mergeLocalGps(userId, patrol.id, []);
+              if (!ctx.cancelled) { ctx.lastSample = trail.at(-1) || null; setState(value => ({ ...value, trail })); }
+            } catch { /* Report storage failures without losing the in-memory trail. */ }
             setState((value) => ({
               ...value,
               trailError:
                 "Previous GPS trail could not be loaded. New samples will still be recorded.",
             }));
+          }
         })
         .finally(() => {
           if (!ctx.cancelled) {
@@ -150,7 +167,7 @@ export default function useLiveNavigation(patrol, points, userId, location) {
       ctx.controller.abort();
       clearTimeout(ctx.timer);
     };
-  }, [key, active, patrol?.id]);
+  }, [key, active, patrol?.id, disconnected]);
 
   useEffect(() => {
     const ctx = context.current,
@@ -225,16 +242,17 @@ export default function useLiveNavigation(patrol, points, userId, location) {
       shouldRecordSample(ctx.lastSample, sample)
     ) {
       ctx.sampling = true;
-      ctx.lastSample = sample;
-      recordPatrolLocation(patrol.id, sample, ctx.controller.signal)
+      recordOfflineGps(userId, patrol, sample, ctx.controller.signal)
         .then((result) => {
           if (ctx.cancelled) return;
-          if (result.accepted)
+          if (result.accepted) {
+            ctx.lastSample = sample;
             setState((value) => ({
               ...value,
               trail: [...value.trail, result.location].slice(-1000),
               trailError: null,
             }));
+          }
         })
         .catch((error) => {
           if (ctx.cancelled) return;
@@ -251,7 +269,7 @@ export default function useLiveNavigation(patrol, points, userId, location) {
             setState((value) => ({
               ...value,
               trailError:
-                "GPS recording is temporarily unavailable. Check your connection.",
+                "GPS could not be saved on this device. Free storage or retry; this point is not yet safely recorded.",
             }));
         })
         .finally(() => {
@@ -259,6 +277,7 @@ export default function useLiveNavigation(patrol, points, userId, location) {
         });
     }
     if (
+      disconnected ||
       !destination ||
       !ctx.riskReady ||
       insideZone ||
@@ -372,7 +391,7 @@ export default function useLiveNavigation(patrol, points, userId, location) {
             setRevision((value) => value + 1);
         }
       });
-  }, [active, location.position, key, points, patrol?.id, revision]);
+  }, [active, location.position, key, points, patrol?.id, revision, disconnected]);
   const destinations = destinationsFor(points),
     destination = destinations.find(
       (point) => !state.reached.has(point.waypointId),

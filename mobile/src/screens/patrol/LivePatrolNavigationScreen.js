@@ -1,3 +1,6 @@
+import { useOffline } from "../../hooks/useOffline";
+import useOfflinePatrolMap from "../../hooks/useOfflinePatrolMap";
+import OfflinePatrolMap from "../../components/patrol/OfflinePatrolMap";
 import React, { useMemo, useState } from "react";
 import { ActivityIndicator, Platform, View } from "react-native";
 import { Text } from "../../components/common/Typography";
@@ -55,6 +58,11 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
     live,
     location.active && usable && !accessLost,
   );
+  const offline = useOffline();
+  const disconnected = !!offline && !offline.online;
+  const savedMap = useOfflinePatrolMap(offline?.owner,patrol,`${disconnected}:${!!full.route}:${live.riskReady}`);
+  const visibleFull = disconnected ? savedMap.snapshot?.route : full.route;
+  const visibleZones = disconnected ? savedMap.snapshot?.zones || live.riskZones || [] : live.riskZones || [];
   const approaching = live.destination?.type === "START";
   React.useEffect(() => {
     if (live.accessLost) setAccessLost(true);
@@ -81,13 +89,13 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
   const navigationData = useMemo(
     () => ({
       currentLocation: location.position,
-      geometry: live.route?.geometry || null,
+      geometry: disconnected ? null : live.route?.geometry || null,
       destination: live.destination || null,
       approaching,
-      fullRoute: full.route,
+      fullRoute: visibleFull,
       reachedWaypointIds: Array.from(live.reached),
       trail: live.trail,
-      riskZones: live.riskZones || [],
+      riskZones: visibleZones,
     }),
     [
       location.position,
@@ -96,7 +104,9 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
       live.trail,
       live.riskZones,
       approaching,
-      full.route,
+      visibleFull,
+      visibleZones,
+      disconnected,
       live.reached,
     ],
   );
@@ -116,7 +126,7 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
             {live.destination && (
               <Text style={styles.muted}>{live.destination.typeLabel}</Text>
             )}
-            {live.summary && (
+            {!disconnected && live.summary && (
               <Text style={ui.section}>
                 {live.summary.distanceMeters >= 1000
                   ? `${(live.summary.distanceMeters / 1000).toFixed(1)} km`
@@ -125,21 +135,24 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
                 {Math.max(1, Math.ceil(live.summary.durationSeconds / 60))} min
               </Text>
             )}
-            {live.summary && (
+            {!disconnected && live.summary && (
               <Text style={styles.muted}>
                 Remaining to next point · estimate from the ORS walking route
               </Text>
             )}
-            {live.routing && (
+            {!disconnected && live.routing && (
               <Text style={styles.muted}>Finding a walking route…</Text>
             )}
-            {live.route?.riskAvoidance?.applied && (
+            {!disconnected && live.route?.riskAvoidance?.applied && (
               <Text style={styles.muted}>
                 Route avoiding {live.route.riskAvoidance.zoneCount} known risk{" "}
                 {live.route.riskAvoidance.zoneCount === 1 ? "zone" : "zones"}
               </Text>
             )}
           </View>
+          {disconnected && <Text accessibilityRole="alert" style={styles.error}>{savedMap.error || savedMap.snapshot?.warning || "Cached hazard information is missing. No current route safety can be verified offline."}</Text>}
+          {disconnected && <Text style={styles.muted}>Live walking directions unavailable while offline. {visibleFull ? "Cached planned route (foot-walking)." : "No matching verified planned route is cached."}</Text>}
+          {disconnected && visibleZones.map(zone => <Text key={zone.id} style={styles.error}>{zone.riskLevel}: {zone.name || "Known risk area"} (cached)</Text>)}
           {patrol.status !== "IN_PROGRESS" || finished ? (
             <Text style={styles.muted}>
               Live navigation is available only while this patrol is in
@@ -234,7 +247,7 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
                     secondary
                     onPress={live.retry}
                     disabled={
-                      !location.position ||
+                      disconnected || !location.position ||
                       !live.riskReady ||
                       live.routing ||
                       accessLost
@@ -242,24 +255,20 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
                   />
                 </>
               )}
-              <PatrolRouteMap
-                points={data.points}
-                segments={data.segments}
-                live
-                navigationData={navigationData}
-              />
+              {disconnected ? <OfflinePatrolMap points={data.points} navigationData={navigationData} /> : <PatrolRouteMap
+                points={data.points} segments={data.segments} live navigationData={navigationData}
+              />}
               <Text style={styles.muted}>
-                Blue dot: Your Location · Blue line: Route to Patrol Start ·
-                Green line: Planned Patrol Navigation · Orange line: Recorded
-                GPS Trail · Red area: Known Risk Zone · Red warning pin:
-                HIGH_RISK warning
+                {disconnected
+                  ? "Blue dot: Your Location · Green line: Cached verified patrol route · Orange line: Recorded GPS Trail · Red area: Cached RiskZone"
+                  : "Blue dot: Your Location · Blue line: Route to Patrol Start · Green line: Planned Patrol Navigation · Orange line: Recorded GPS Trail · Red area: Known Risk Zone · Red warning pin: HIGH_RISK warning"}
               </Text>
-              {full.loading && (
+              {!disconnected && full.loading && (
                 <Text style={styles.muted}>
                   Loading full patrol navigation route…
                 </Text>
               )}
-              {full.error && (
+              {!disconnected && full.error && (
                 <>
                   <Text accessibilityRole="alert" style={styles.error}>
                     {full.error}
@@ -269,7 +278,7 @@ export default function LivePatrolNavigationScreen({ route, navigation }) {
                     secondary
                     onPress={full.retry}
                     disabled={
-                      full.loading || full.waiting ||
+                      disconnected || full.loading || full.waiting ||
                       live.routing ||
                       !live.riskReady ||
                       accessLost

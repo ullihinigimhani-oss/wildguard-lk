@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, Pressable } from "react-native";
+import { AppState, Text, Pressable } from "react-native";
 import { render, fireEvent, waitFor, act } from "@testing-library/react-native";
 import { AuthProvider, useAuth } from "../../src/hooks/useAuth";
 import { loginAccount, getSessionUser } from "../../src/services/authApi";
@@ -48,4 +48,26 @@ test("logout cancels an in-flight login", async () => {
   await act(async () => resolve(user));
   expect(ui.getByText("signed out")).toBeTruthy();
   expect(api.defaults.headers.common.Authorization).toBeUndefined();
+});
+
+test("offline foreground preserves an unexpired verified session but HTTP rejection revokes it", async () => {
+  let foreground;
+  const spy = jest.spyOn(AppState, "addEventListener").mockImplementation((_event, listener) => { foreground = listener; return { remove: jest.fn() }; });
+  const ui = render(<AuthProvider><Harness /></AuthProvider>);
+  fireEvent.press(ui.getByLabelText("Login")); await ui.findByText("COMMUNITY_USER");
+  getSessionUser.mockRejectedValueOnce(new Error("offline")); await act(async () => foreground("active"));
+  expect(ui.getByText("COMMUNITY_USER")).toBeTruthy();
+  getSessionUser.mockRejectedValueOnce({ response: { status: 403 } }); await act(async () => foreground("active"));
+  expect(ui.getByText("signed out")).toBeTruthy(); spy.mockRestore();
+});
+
+test("offline authorization still expires at its original token deadline", async () => {
+  jest.useFakeTimers();
+  const listener = jest.spyOn(AppState, "addEventListener").mockImplementation(() => ({ remove: jest.fn() }));
+  loginAccount.mockResolvedValue({ token: "verified-token", expiresAt: Date.now() + 1000 });
+  const ui = render(<AuthProvider><Harness /></AuthProvider>);
+  fireEvent.press(ui.getByLabelText("Login")); await ui.findByText("COMMUNITY_USER");
+  await act(async () => jest.advanceTimersByTime(1001));
+  expect(ui.getByText("signed out")).toBeTruthy(); expect(api.defaults.headers.common.Authorization).toBeUndefined();
+  ui.unmount(); listener.mockRestore(); jest.useRealTimers();
 });

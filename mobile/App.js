@@ -13,6 +13,7 @@ import { PlusJakartaSans_600SemiBold } from "@expo-google-fonts/plus-jakarta-san
 import { PlusJakartaSans_700Bold } from "@expo-google-fonts/plus-jakarta-sans/700Bold";
 import { TypographyContext } from "./src/components/common/Typography";
 import { fontFamily } from "./src/constants/typography";
+import { OfflineProvider } from './src/hooks/useOffline';
 
 const documentTitle = { enabled: true, formatter: () => "WildGuard LK" };
 
@@ -91,7 +92,9 @@ export default function App() {
         <TypographyContext.Provider value={Boolean(fontsLoaded)}>
           <OnboardingProvider>
             <AuthProvider>
-              <AppNavigation />
+              <OfflineProvider>
+                <AppNavigation />
+              </OfflineProvider>
             </AuthProvider>
           </OnboardingProvider>
         </TypographyContext.Provider>

@@ -41,3 +41,35 @@ export async function updateAlertStatus(id, status, signal) {
   if (!data.success) throw new Error(data.message || "Could not update alert status.");
   return data;
 }
+
+export async function getAlertsRequiringAttention(params = {}, signal) {
+  const { data } = await api.get("/alerts/attention", { params, signal });
+  if (!data.success) throw new Error(data.message || "Could not load alerts requiring attention.");
+  return data;
+}
+
+export async function respondToAlert(id, payload = {}, signal) {
+  const { data } = await api.post(`/alerts/${id}/respond`, payload, { signal });
+  if (!data.success) throw new Error(data.message || "Could not record operational response.");
+  return data;
+}
+
+export async function forwardAlert(id, payload = {}, signal) {
+  const { data } = await api.post(`/alerts/${id}/forward`, payload, { signal });
+  if (!data.success) throw new Error(data.message || "Could not forward alert.");
+  return data;
+}
+
+export async function escalateAlert(id, payload = {}, signal) {
+  const { data } = await api.post(`/alerts/${id}/escalate`, payload, { signal });
+  if (!data.success) throw new Error(data.message || "Could not escalate alert.");
+  return data;
+}
+
+export async function getAlertEscalations(id, signal) {
+  const { data } = await api.get(`/alerts/${id}/escalations`, { signal });
+  if (!data.success) throw new Error(data.message || "Could not load alert escalations.");
+  return data;
+}
+
+

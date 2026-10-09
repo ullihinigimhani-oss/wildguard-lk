@@ -45,3 +45,10 @@ export async function escalateReport(id, payload = {}, signal) {
   if (!data.success) throw new Error(data.message || "Could not escalate report.");
   return data;
 }
+
+export async function forwardToIncident(id, payload = {}, signal) {
+  const { data } = await api.post(`/community-reports/${id}/forward-incident`, payload, { signal });
+  if (!data.success) throw new Error(data.message || "Could not forward report to incident response.");
+  return data;
+}
+
