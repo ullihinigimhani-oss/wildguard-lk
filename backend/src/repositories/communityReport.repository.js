@@ -11,6 +11,7 @@ const reportSelect = {
   manualLocation: true,
   status: true,
   isAnonymous: true,
+  markAsDone: true,
   reporterName: true,
   reporterPhone: true,
   reporterId: true,
@@ -283,5 +284,13 @@ exports.forwardReportToIncident = async (reportId, { incidentData, user, notes }
     return db().$transaction(run);
   }
   return run(db());
+};
+
+exports.updateMarkAsDone = async (id, markAsDone) => {
+  return db().communityReport.update({
+    where: { id },
+    data: { markAsDone },
+    select: reportSelect,
+  });
 };
 

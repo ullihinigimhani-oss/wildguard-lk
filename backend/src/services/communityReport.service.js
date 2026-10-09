@@ -363,3 +363,19 @@ exports.escalateReport = async (id, user, options = {}) => {
     },
   };
 };
+
+exports.markAsDone = async (id, user) => {
+  if (!id || typeof id !== "string" || !id.trim() || id.trim().length > 128) {
+    throw notFound();
+  }
+  const report = await repository.findReportById(id.trim());
+  if (!report) throw notFound();
+
+  const isStaff = user && ["COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER"].includes(user.role);
+  if (!isStaff) {
+    throw forbidden("Only authorized staff can mark reports as done.");
+  }
+
+  const updated = await repository.updateMarkAsDone(id.trim(), true);
+  return sanitizeReport(updated, user);
+};

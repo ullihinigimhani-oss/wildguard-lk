@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Circle, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { createRiskZone, getAllRiskZones, deleteRiskZone, updateRiskZone } from "../../services/riskZoneApi";
 import { listIncidents, markIncidentAsDone, incidentStatuses } from "../../services/incidentApi";
+import { listCommunityReports, markCommunityReportAsDone } from "../../services/communityReportApi";
 
 function MapClickHandler({ onLocationSelect }) {
   useMapEvents({
@@ -33,10 +34,13 @@ export default function Reporting() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [incidents, setIncidents] = useState([]);
   const [incidentsLoading, setIncidentsLoading] = useState(true);
+  const [communityReports, setCommunityReports] = useState([]);
+  const [communityReportsLoading, setCommunityReportsLoading] = useState(true);
 
   useEffect(() => {
     loadRiskZones();
     loadIncidents();
+    loadCommunityReports();
   }, []);
 
   const loadRiskZones = async () => {
@@ -65,6 +69,25 @@ export default function Reporting() {
       setIncidents([]);
     } finally {
       setIncidentsLoading(false);
+    }
+  };
+
+  const loadCommunityReports = async () => {
+    try {
+      setCommunityReportsLoading(true);
+      // Load all community reports and filter for verified reports that are not marked as done
+      const response = await listCommunityReports({ status: 'VERIFIED' });
+      console.log('Community reports response:', response);
+      const verifiedReports = response.reports.filter(
+        report => report.status === 'VERIFIED' && (!report.markAsDone || report.markAsDone === false)
+      );
+      console.log('Filtered verified reports:', verifiedReports);
+      setCommunityReports(verifiedReports || []);
+    } catch (err) {
+      console.error('Error loading community reports:', err);
+      setCommunityReports([]);
+    } finally {
+      setCommunityReportsLoading(false);
     }
   };
 
@@ -121,6 +144,18 @@ export default function Reporting() {
     }
   };
 
+  const handleMarkCommunityReportAsDone = async (reportId) => {
+    if (!window.confirm('Mark this community report as done?')) return;
+    try {
+      await markCommunityReportAsDone(reportId);
+      setMessage('Community report marked as done!');
+      loadCommunityReports();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError('Failed to mark community report as done: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
   const handleIncidentClick = (incident) => {
     if (incident.latitude && incident.longitude) {
       setForm({
@@ -129,6 +164,17 @@ export default function Reporting() {
         centerLongitude: incident.longitude.toString()
       });
       setMapMarker([incident.latitude, incident.longitude]);
+    }
+  };
+
+  const handleCommunityReportClick = (report) => {
+    if (report.latitude && report.longitude) {
+      setForm({
+        ...form,
+        centerLatitude: report.latitude.toString(),
+        centerLongitude: report.longitude.toString()
+      });
+      setMapMarker([report.latitude, report.longitude]);
     }
   };
 
@@ -193,7 +239,7 @@ export default function Reporting() {
 
       <div className="page-content">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          {/* Left - Verified Incidents */}
+          {/* Left - Verified Incidents & Community Reports */}
           <div style={{
             background: 'white',
             borderRadius: '12px',
@@ -214,7 +260,7 @@ export default function Reporting() {
                 No verified incidents found
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '400px', overflow: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '200px', overflow: 'auto', marginBottom: '30px' }}>
                 {incidents.map((incident) => (
                   <div
                     key={incident.id}
@@ -251,6 +297,79 @@ export default function Reporting() {
                         onClick={(e) => {
                           e.stopPropagation();
                           handleMarkAsDone(incident.id);
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#245c45',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          fontWeight: '500',
+                          marginLeft: '8px'
+                        }}
+                      >
+                        Mark as Done
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <h2 style={{ color: '#245c45', marginBottom: '20px', fontSize: '20px' }}>Verified Community Reports</h2>
+            <p style={{ color: '#67756d', marginBottom: '20px', fontSize: '14px' }}>
+              Click a report to populate location in the risk zone form
+            </p>
+            {communityReportsLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#67756d' }}>
+                Loading community reports...
+              </div>
+            ) : communityReports.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#67756d' }}>
+                No verified community reports found
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '200px', overflow: 'auto' }}>
+                {communityReports.map((report) => (
+                  <div
+                    key={report.id}
+                    onClick={() => handleCommunityReportClick(report)}
+                    style={{
+                      padding: '15px',
+                      border: '1px solid #cbd8cf',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      background: '#fafafa'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f0f4ed'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#fafafa'}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '600', color: '#245c45', marginBottom: '5px', fontSize: '14px' }}>
+                          {report.reportType}
+                        </div>
+                        {report.species && (
+                          <div style={{ fontSize: '12px', color: '#67756d', marginBottom: '3px' }}>
+                            Species: {report.species}
+                          </div>
+                        )}
+                        {report.latitude && report.longitude && (
+                          <div style={{ fontSize: '12px', color: '#67756d' }}>
+                            Location: {report.latitude.toFixed(4)}, {report.longitude.toFixed(4)}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '11px', color: '#67756d', marginTop: '4px' }}>
+                          {new Date(report.submittedAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkCommunityReportAsDone(report.id);
                         }}
                         style={{
                           padding: '6px 12px',

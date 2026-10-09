@@ -139,7 +139,11 @@ export default function FieldMap() {
               ))}
               {animals.map((animal) => {
                 const latestLocation = animal.locations[0];
-                const emoji = SPECIES_EMOJIS[animal.species] || '🐾';
+                // Case-insensitive species lookup
+                const speciesKey = Object.keys(SPECIES_EMOJIS).find(
+                  key => key.toLowerCase() === animal.species?.toLowerCase()
+                );
+                const emoji = speciesKey ? SPECIES_EMOJIS[speciesKey] : '🐾';
                 return (
                   <Marker
                     key={animal.id}

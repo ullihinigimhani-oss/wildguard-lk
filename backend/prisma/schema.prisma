@@ -314,6 +314,8 @@ model CommunityReport {
 
   isAnonymous Boolean @default(false)
 
+  markAsDone Boolean @default(false)
+
   // Optional registered community user
   reporterId String?
   reporter   User?   @relation(fields: [reporterId], references: [id])
@@ -339,6 +341,7 @@ model CommunityReport {
   @@index([isAnonymous])
   @@index([incidentId])
   @@index([forwardedById])
+  @@index([markAsDone])
 }
 
 model CommunityReportEvidence {
