@@ -9,6 +9,7 @@ import {
   toSriLankaFrom,
   toSriLankaTo,
 } from "../../services/conservationReportApi";
+import { downloadReportAsPdf } from "../../utils/reportPdf";
 import "./ConservationReports.css";
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -525,20 +526,29 @@ export default function ConservationReports() {
     setDownloading(format);
     setDownloadError("");
     try {
-      await downloadReport(
-        {
-          reportType: selectedType.key,
-          from: toSriLankaFrom(filters.from),
-          to: toSriLankaTo(filters.to),
-          area: filters.area || undefined,
-          type: filters.type || undefined,
-          status: filters.status || undefined,
-          priority: filters.priority || undefined,
-        },
-        format
-      );
+      if (format === "PDF") {
+        // Generate from data already in state — no server round-trip needed.
+        downloadReportAsPdf(reportData);
+      } else {
+        await downloadReport(
+          {
+            reportType: selectedType.key,
+            from: toSriLankaFrom(filters.from),
+            to: toSriLankaTo(filters.to),
+            area: filters.area || undefined,
+            type: filters.type || undefined,
+            status: filters.status || undefined,
+            priority: filters.priority || undefined,
+          },
+          format
+        );
+      }
     } catch (err) {
-      setDownloadError(reportApiError(err));
+      setDownloadError(
+        format === "PDF"
+          ? "PDF generation failed. Try downloading the CSV instead."
+          : reportApiError(err)
+      );
     } finally {
       setDownloading("");
     }
