@@ -9,6 +9,7 @@ import CreatePatrol from "../pages/PatrolManagement/CreatePatrol";
 import PatrolDetails from "../pages/PatrolManagement/PatrolDetails";
 import CommunityReports from "../pages/CommunityReports/CommunityReports";
 import CommunityReportDetailsPage from "../pages/CommunityReports/CommunityReportDetailsPage";
+import Analytics from "../pages/Analytics/Analytics";
 import RangerMonitoring from "../pages/RangerMonitoring/RangerMonitoring";
 import RangerTrack from "../pages/RangerMonitoring/RangerTrack";
 import Reporting from "../pages/Reporting/Reporting";
@@ -65,6 +66,7 @@ export default function AppRoutes() {
             <Route path="/incidents/unassigned/:incidentId" element={<IncidentDetailsPage />} />
             <Route path="/community-reports" element={<CommunityReports />} />
             <Route path="/community-reports/:reportId" element={<CommunityReportDetailsPage />} />
+            <Route path="/analytics" element={<Analytics />} />
           </Route>
           <Route
             element={
@@ -77,7 +79,7 @@ export default function AppRoutes() {
             {modules
               .filter(
                 (item) =>
-                  !["users", "patrols", "incidents", "community-reports", "reporting", "map", "wildlife"].includes(
+                  !["users", "patrols", "incidents", "community-reports", "analytics", "reporting", "map", "wildlife"].includes(
                     item.path,
                   ),
               )
