@@ -125,3 +125,10 @@ export function mediaUrl(path) {
   const origin = api.defaults.baseURL.replace(/\/api\/?$/, "");
   return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
 }
+
+export async function markCommunityReportAsDone(id, signal) {
+  const { data } = await api.patch(`/community-reports/${pathId(id)}/mark-done`, {}, { signal });
+  if (!data?.success)
+    throw new Error("Failed to mark community report as done.");
+  return data;
+}

@@ -16,6 +16,7 @@ export default defineConfig({
       "tests/integration/rangerTracking.test.jsx",
       "tests/integration/incidentReview.test.jsx",
       "tests/integration/communityReportManagement.test.jsx",
+      "tests/integration/analyticsDashboard.test.jsx",
     ],
   },
 });

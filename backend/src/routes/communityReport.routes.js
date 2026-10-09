@@ -24,8 +24,8 @@ router.post("/", optionalAuth, controller.submitReport);
 // 2. Community member view their own reports
 router.get("/mine", authenticate, allowRoles("COMMUNITY_USER"), controller.listMyReports);
 
-// 3. Liaison & Manager view all community reports
-router.get("/", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.listAllReports);
+// 3. Liaison, Manager, Ranger & Researcher view all community reports
+router.get("/", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER", "RESEARCHER"), controller.listAllReports);
 
 // 4. View single report details
 router.get("/:id", optionalAuth, controller.getReportById);
@@ -44,5 +44,8 @@ router.post("/:id/escalate", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK
 
 // 9. Liaison & Manager forward reviewed report to Chanuka's Incident Response
 router.post("/:id/forward-incident", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER"), controller.forwardToIncidentResponse);
+
+// 10. Staff mark community report as done
+router.patch("/:id/mark-done", authenticate, allowRoles("COMMUNITY_LIAISON", "PARK_MANAGER", "RANGER"), controller.markAsDone);
 
 module.exports = router;

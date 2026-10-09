@@ -15,7 +15,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --runInBand",
     "prisma:generate": "prisma generate",
-    "prisma:validate": "prisma validate"
+    "prisma:validate": "prisma validate",
+    "seed:dummy": "node scripts/seed-dummy-data.js",
+    "seed:dummy:clean": "node scripts/delete-dummy-data.js"
   },
   "keywords": [],
   "author": "",

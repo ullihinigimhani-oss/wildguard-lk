@@ -110,3 +110,16 @@ exports.escalateReport = async (req, res, next) => {
   }
 };
 
+exports.markAsDone = async (req, res, next) => {
+  try {
+    const report = await service.markAsDone(req.params.id, req.user);
+    res.json({
+      success: true,
+      message: "Community report marked as done successfully.",
+      report,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
