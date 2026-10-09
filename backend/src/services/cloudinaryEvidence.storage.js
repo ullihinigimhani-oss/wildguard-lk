@@ -21,7 +21,10 @@ function configure() {
   });
 }
 exports.assertConfigured = configure;
-function uploadFailure(error) {
+function uploadFailure(
+  error,
+  message = "Private storage upload failed. The incident is saved; retry this evidence item.",
+) {
   const code = [401, 403].includes(error?.http_code)
     ? "CLOUDINARY_AUTH_FAILED"
     : error?.http_code === 404
@@ -34,7 +37,7 @@ function uploadFailure(error) {
   return evidenceError(
     503,
     code,
-    "Private storage upload failed. The incident is saved; retry this evidence item.",
+    message,
   );
 }
 exports.upload = (media, publicId) => {
@@ -61,13 +64,56 @@ exports.upload = (media, publicId) => {
     }
   });
 };
-exports.remove = async (publicId, resourceType) => {
+exports.uploadPublic = (media, publicId) => {
+  configure();
+  return new Promise((resolve, reject) => {
+    try {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          public_id: publicId,
+          resource_type: media.resourceType,
+          type: "upload",
+          overwrite: false,
+          unique_filename: false,
+          allowed_formats: [media.format],
+          timeout: 120000,
+        },
+        (error, asset) =>
+          error
+            ? reject(
+                uploadFailure(
+                  error,
+                  "Evidence storage upload failed. Retry this evidence item.",
+                ),
+              )
+            : resolve(asset),
+      );
+      stream.on("error", (error) =>
+        reject(
+          uploadFailure(
+            error,
+            "Evidence storage upload failed. Retry this evidence item.",
+          ),
+        ),
+      );
+      stream.end(media.buffer);
+    } catch (error) {
+      reject(
+        uploadFailure(
+          error,
+          "Evidence storage upload failed. Retry this evidence item.",
+        ),
+      );
+    }
+  });
+};
+exports.remove = async (publicId, resourceType, type = "authenticated") => {
   configure();
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const result = await cloudinary.uploader.destroy(publicId, {
         resource_type: resourceType,
-        type: "authenticated",
+        type,
         invalidate: true,
         timeout: 15000,
       });

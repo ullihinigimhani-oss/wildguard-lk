@@ -5,15 +5,47 @@ import ReportStatusScreen, {
   formatLocationSummary,
 } from "../../src/screens/community/ReportStatusScreen";
 import * as communityApi from "../../src/services/communityReportApi";
+import * as MediaLibrary from "expo-media-library/legacy";
+import { File } from "expo-file-system";
+import { api } from "../../src/services/api";
 
 jest.mock("../../src/services/communityReportApi", () => ({
   listMyReports: jest.fn(),
   getReportById: jest.fn(),
+  resolveEvidenceUrl: jest.requireActual(
+    "../../src/services/communityReportApi",
+  ).resolveEvidenceUrl,
+}));
+
+jest.mock("expo-file-system", () => ({
+  File: Object.assign(jest.fn(), { downloadFileAsync: jest.fn() }),
+  Paths: { cache: "cache" },
+}));
+
+jest.mock("expo-media-library/legacy", () => ({
+  requestPermissionsAsync: jest.fn(),
+  saveToLibraryAsync: jest.fn(),
 }));
 
 describe("Task 7: My Community Reports Screen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    MediaLibrary.requestPermissionsAsync.mockResolvedValue({ granted: true });
+    File.downloadFileAsync.mockResolvedValue({
+      uri: "file:///cache/wildguard-evidence.jpg",
+    });
+  });
+
+  test("resolves backend-relative evidence paths to the configured server", () => {
+    const originalBaseUrl = api.defaults.baseURL;
+    api.defaults.baseURL = "https://wildguard.example/api";
+    try {
+      expect(
+        communityApi.resolveEvidenceUrl("/uploads/evidence/photo.png"),
+      ).toBe("https://wildguard.example/uploads/evidence/photo.png");
+    } finally {
+      api.defaults.baseURL = originalBaseUrl;
+    }
   });
 
   test("helper functions format date/time and location summaries accurately", () => {
@@ -140,6 +172,24 @@ describe("Task 7: My Community Reports Screen", () => {
       expect(screen.getByText("Standard Submission (Identified)")).toBeTruthy();
       expect(screen.getByText("Evidence Indicator (1):")).toBeTruthy();
     });
+
+    fireEvent.press(screen.getByLabelText("View evidence image 1"));
+    expect(screen.getByLabelText("Close evidence preview")).toBeTruthy();
+    expect(screen.getByLabelText("Evidence image 1")).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText("Download image"));
+    await waitFor(() => {
+      expect(MediaLibrary.requestPermissionsAsync).toHaveBeenCalledWith(
+        true,
+        ["photo"],
+      );
+      expect(MediaLibrary.saveToLibraryAsync).toHaveBeenCalledWith(
+        "file:///cache/wildguard-evidence.jpg",
+      );
+      expect(screen.getByText("Image saved to your photo library.")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByLabelText("Close evidence preview"));
 
     // Close details modal
     fireEvent.press(screen.getByLabelText("Close details modal"));

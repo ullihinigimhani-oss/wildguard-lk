@@ -108,9 +108,15 @@ beforeEach(() => {
 describe("Community Report APIs", () => {
   describe("POST /api/community-reports (Submission)", () => {
     test("submits an anonymous report successfully", async () => {
+      const cloudinaryUrl =
+        "https://res.cloudinary.com/test-cloud/image/upload/v1/wildguard-community/evidence/example.jpg";
       const res = await request(app)
         .post("/api/community-reports")
-        .send(validReportPayload())
+        .send(
+          validReportPayload({
+            evidence: [{ fileUrl: cloudinaryUrl, fileType: "image/jpeg" }],
+          }),
+        )
         .expect(201);
 
       expect(res.body.success).toBe(true);
@@ -119,6 +125,20 @@ describe("Community Report APIs", () => {
       expect(res.body.report.status).toBe("PENDING");
       expect(res.body.report.reporterId).toBeNull();
       expect(db.communityReport.create).toHaveBeenCalledTimes(1);
+      expect(db.communityReport.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            evidence: {
+              create: [
+                {
+                  fileUrl: cloudinaryUrl,
+                  fileType: "image/jpeg",
+                },
+              ],
+            },
+          }),
+        }),
+      );
     });
 
     test("submits an authenticated report and binds reporterId", async () => {

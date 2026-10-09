@@ -37,13 +37,13 @@ export default function AlertsScreen({ navigation }) {
 
   const viewModes = isAuthorizedResponder
     ? [
-        { key: "ACTIVE", label: "Active Alerts", icon: "shield-alert" },
-        { key: "ATTENTION", label: "Needs Action", icon: "flash" },
-        { key: "HISTORY", label: "Alert History", icon: "time" },
+        { key: "ACTIVE", label: "Active Alerts", icon: "notifications-outline" },
+        { key: "ATTENTION", label: "Needs Action", icon: "flash-outline" },
+        { key: "HISTORY", label: "Alert History", icon: "time-outline" },
       ]
     : [
-        { key: "ACTIVE", label: "Active Alerts", icon: "shield-alert" },
-        { key: "HISTORY", label: "Alert History", icon: "time" },
+        { key: "ACTIVE", label: "Active Alerts", icon: "notifications-outline" },
+        { key: "HISTORY", label: "Alert History", icon: "time-outline" },
       ];
 
   const [viewMode, setViewMode] = useState("ACTIVE");
@@ -294,7 +294,14 @@ export default function AlertsScreen({ navigation }) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          paddingVertical: 6,
+          paddingHorizontal: 2,
+        }}
       >
         {RISK_FILTERS.map((f) => {
           const active = riskFilter === f.key;
@@ -305,14 +312,28 @@ export default function AlertsScreen({ navigation }) {
               accessibilityState={{ selected: active }}
               accessibilityLabel={`Filter ${f.label}`}
               onPress={() => setRiskFilter(f.key)}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                borderRadius: 20,
+              style={({ pressed }) => ({
+                height: 36,
+                paddingHorizontal: 16,
+                borderRadius: 18,
                 backgroundColor: active ? colors.green : colors.white,
-                borderWidth: 1,
+                borderWidth: 1.5,
                 borderColor: active ? colors.green : colors.border,
-              }}
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                alignSelf: "flex-start",
+                opacity: pressed ? 0.8 : 1,
+                ...Platform.select({
+                  web: {
+                    cursor: "pointer",
+                    boxShadow: active ? "0 2px 4px rgba(36, 91, 68, 0.15)" : "none",
+                  },
+                  default: {
+                    elevation: active ? 2 : 0,
+                  },
+                }),
+              })}
             >
               <Text
                 style={{

@@ -1,13 +1,5 @@
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
-
-const UPLOAD_DIR = path.resolve(__dirname, "../../uploads/evidence");
-
-// Ensure upload directory exists
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+const cloudinaryStorage = require("./cloudinaryEvidence.storage");
 
 const ALLOWED_MIME_TYPES = {
   "image/jpeg": { ext: ".jpg", maxBytes: 10 * 1024 * 1024, type: "image" },
@@ -143,29 +135,44 @@ exports.storeEvidence = async (payload = {}) => {
     throw error;
   }
 
-  // Generate safe sanitized filename with crypto UUID
-  const safeId = crypto.randomUUID();
-  const safeFileName = `evidence-${Date.now()}-${safeId}${config.ext}`;
-  const targetPath = path.resolve(UPLOAD_DIR, safeFileName);
-
-  // Prevent directory traversal
-  if (!targetPath.startsWith(UPLOAD_DIR)) {
-    const error = new Error("Unsafe file path detected.");
-    error.status = 400;
-    throw error;
+  const publicId = `wildguard-community/evidence/${crypto.randomUUID()}`;
+  const resourceType = config.type;
+  const format = config.ext.slice(1);
+  const asset = await cloudinaryStorage.uploadPublic(
+    { buffer, resourceType, format },
+    publicId,
+  );
+  let fileUrl;
+  try {
+    fileUrl = new URL(asset?.secure_url);
+  } catch {
+    fileUrl = null;
+  }
+  if (
+    asset.public_id !== publicId ||
+    asset.resource_type !== resourceType ||
+    !Number.isFinite(asset.bytes) ||
+    asset.bytes <= 0 ||
+    asset.bytes > config.maxBytes ||
+    fileUrl?.protocol !== "https:"
+  ) {
+    if (asset?.public_id === publicId) {
+      await cloudinaryStorage.remove(publicId, resourceType, "upload");
+    }
+    const { evidenceError } = require("../validators/incidentEvidence.validator");
+    throw evidenceError(
+      503,
+      "MEDIA_UPLOAD_FAILED",
+      "Cloudinary could not verify the uploaded evidence. Please retry.",
+    );
   }
 
-  await fs.promises.writeFile(targetPath, buffer);
-
-  const fileUrl = `/uploads/evidence/${safeFileName}`;
-
   return {
-    fileUrl,
+    fileUrl: fileUrl.href,
     fileType: normalizedMime,
-    fileSize: buffer.length,
-    fileName: safeFileName,
+    fileSize: asset.bytes,
+    fileName: `${publicId.split("/").pop()}.${format}`,
   };
 };
 
 exports.ALLOWED_MIME_TYPES = ALLOWED_MIME_TYPES;
-exports.UPLOAD_DIR = UPLOAD_DIR;

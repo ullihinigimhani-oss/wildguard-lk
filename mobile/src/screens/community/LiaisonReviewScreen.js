@@ -5,6 +5,7 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -264,7 +265,14 @@ export default function LiaisonReviewScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingVertical: 4,
+            paddingHorizontal: 2,
+          }}
         >
           {STATUS_FILTERS.map((f) => {
             const active = statusFilter === f.key;
@@ -275,14 +283,22 @@ export default function LiaisonReviewScreen() {
                 accessibilityLabel={`Status ${f.label}`}
                 accessibilityState={{ selected: active }}
                 onPress={() => setStatusFilter(f.key)}
-                style={{
-                  paddingHorizontal: 13,
-                  paddingVertical: 6,
-                  borderRadius: 18,
+                style={({ pressed }) => ({
+                  height: 34,
+                  paddingHorizontal: 14,
+                  borderRadius: 17,
                   backgroundColor: active ? colors.green : colors.white,
-                  borderWidth: 1,
+                  borderWidth: 1.5,
                   borderColor: active ? colors.green : colors.border,
-                }}
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  alignSelf: "flex-start",
+                  opacity: pressed ? 0.8 : 1,
+                  ...Platform.select({
+                    web: { cursor: "pointer" },
+                  }),
+                })}
               >
                 <Text
                   style={{
@@ -307,7 +323,14 @@ export default function LiaisonReviewScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingVertical: 4,
+            paddingHorizontal: 2,
+          }}
         >
           {TYPE_FILTERS.map((t) => {
             const active = typeFilter === t.key;
@@ -318,14 +341,22 @@ export default function LiaisonReviewScreen() {
                 accessibilityLabel={`Category ${t.label}`}
                 accessibilityState={{ selected: active }}
                 onPress={() => setTypeFilter(t.key)}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 5,
-                  borderRadius: 14,
+                style={({ pressed }) => ({
+                  height: 32,
+                  paddingHorizontal: 14,
+                  borderRadius: 16,
                   backgroundColor: active ? colors.dark : "#f1f5f9",
-                  borderWidth: 1,
+                  borderWidth: 1.5,
                   borderColor: active ? colors.dark : colors.border,
-                }}
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  alignSelf: "flex-start",
+                  opacity: pressed ? 0.8 : 1,
+                  ...Platform.select({
+                    web: { cursor: "pointer" },
+                  }),
+                })}
               >
                 <Text
                   style={{
