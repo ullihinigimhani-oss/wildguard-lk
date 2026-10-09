@@ -1,8 +1,27 @@
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
-const path = require("path");
-const fs = require("fs");
 
+jest.mock("cloudinary", () => ({
+  v2: {
+    config: jest.fn(),
+    uploader: {
+      upload_stream: jest.fn((options, callback) => ({
+        on: jest.fn(),
+        end(buffer) {
+          const requestedFormat = options.allowed_formats[0];
+          const format = requestedFormat === "jpg" ? "jpeg" : requestedFormat;
+          callback(null, {
+            public_id: options.public_id,
+            resource_type: options.resource_type,
+            bytes: buffer.length,
+            secure_url: `https://res.cloudinary.com/test-cloud/${options.resource_type}/upload/${options.public_id}.${format}`,
+          });
+        },
+      })),
+      destroy: jest.fn().mockResolvedValue({ result: "ok" }),
+    },
+  },
+}));
 jest.mock("../../src/config/database", () => ({
   user: { findUnique: jest.fn() },
   communityReport: {
@@ -15,7 +34,6 @@ jest.mock("../../src/config/database", () => ({
 
 const db = require("../../src/config/database");
 const app = require("../../src/app");
-const { UPLOAD_DIR } = require("../../src/services/evidenceStorage.service");
 
 let accounts;
 const token = (id) =>
@@ -28,6 +46,9 @@ const token = (id) =>
 
 beforeEach(() => {
   process.env.JWT_SECRET = "evidence-upload-test-secret-key-32";
+  process.env.CLOUDINARY_CLOUD_NAME = "test-cloud";
+  process.env.CLOUDINARY_API_KEY = "test-api-key";
+  process.env.CLOUDINARY_API_SECRET = "test-api-secret";
   accounts = {
     "reporter-1": {
       id: "reporter-1",
@@ -60,20 +81,6 @@ beforeEach(() => {
   }));
 });
 
-afterAll(() => {
-  // Clean up any test uploaded files in uploads/evidence directory
-  try {
-    if (fs.existsSync(UPLOAD_DIR)) {
-      const files = fs.readdirSync(UPLOAD_DIR);
-      for (const file of files) {
-        if (file.startsWith("evidence-")) {
-          fs.unlinkSync(path.join(UPLOAD_DIR, file));
-        }
-      }
-    }
-  } catch (_) {}
-});
-
 describe("Evidence Upload APIs", () => {
   const validJpegBuffer = Buffer.from([
     0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
@@ -102,9 +109,15 @@ describe("Evidence Upload APIs", () => {
         .expect(201);
 
       expect(res.body.success).toBe(true);
-      expect(res.body.fileUrl).toMatch(/^\/uploads\/evidence\/evidence-.*\.jpg$/);
+      expect(res.body.fileUrl).toMatch(
+        /^https:\/\/res\.cloudinary\.com\/test-cloud\/image\/upload\//,
+      );
       expect(res.body.fileType).toBe("image/jpeg");
       expect(res.body.fileName).toBeDefined();
+      expect(require("cloudinary").v2.uploader.upload_stream).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "upload", resource_type: "image" }),
+        expect.any(Function),
+      );
     });
 
     test("successfully uploads a valid PNG photo with data URI prefix", async () => {
@@ -119,7 +132,9 @@ describe("Evidence Upload APIs", () => {
         .expect(201);
 
       expect(res.body.success).toBe(true);
-      expect(res.body.fileUrl).toMatch(/^\/uploads\/evidence\/evidence-.*\.png$/);
+      expect(res.body.fileUrl).toMatch(
+        /^https:\/\/res\.cloudinary\.com\/test-cloud\/image\/upload\//,
+      );
       expect(res.body.fileType).toBe("image/png");
     });
 
@@ -134,7 +149,9 @@ describe("Evidence Upload APIs", () => {
         .expect(201);
 
       expect(res.body.success).toBe(true);
-      expect(res.body.fileUrl).toMatch(/^\/uploads\/evidence\/evidence-.*\.mp4$/);
+      expect(res.body.fileUrl).toMatch(
+        /^https:\/\/res\.cloudinary\.com\/test-cloud\/video\/upload\//,
+      );
       expect(res.body.fileType).toBe("video/mp4");
     });
 
