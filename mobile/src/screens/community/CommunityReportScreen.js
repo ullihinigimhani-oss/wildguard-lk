@@ -202,8 +202,9 @@ export default function CommunityReportScreen({ navigation, route }) {
             item.fileUrl = uploadRes.fileUrl;
             preparedEvidence.push({ fileUrl: uploadRes.fileUrl, fileType: uploadRes.fileType || item.fileType });
           } else {
-            // Local/mock URI
-            preparedEvidence.push({ fileUrl: item.fileUrl, fileType: item.fileType });
+            throw new Error(
+              `Could not read evidence file ${i + 1}. Remove it and select it again before submitting.`,
+            );
           }
         }
       }
@@ -478,20 +479,35 @@ export default function CommunityReportScreen({ navigation, route }) {
           maxLength={100}
           style={styles.input}
         />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingVertical: 4,
+          }}
+        >
           {QUICK_SPECIES.map((s) => (
             <Pressable
               key={s}
               onPress={() => selectSpecies(s)}
               disabled={submitting}
-              style={{
+              style={({ pressed }) => ({
+                height: 30,
                 backgroundColor: species === s ? colors.green : colors.white,
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 16,
+                paddingHorizontal: 12,
+                borderRadius: 15,
                 borderWidth: 1,
-                borderColor: colors.border,
-              }}
+                borderColor: species === s ? colors.green : colors.border,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                alignSelf: "flex-start",
+                opacity: pressed || submitting ? 0.8 : 1,
+              })}
             >
               <Text
                 style={{

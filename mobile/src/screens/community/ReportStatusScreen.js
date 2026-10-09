@@ -10,10 +10,16 @@ import {
   Text,
   View,
 } from "react-native";
+import { File, Paths } from "expo-file-system";
+import * as MediaLibrary from "expo-media-library/legacy";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Screen from "../../components/common/Screen";
 import Button from "../../components/common/Button";
-import { listMyReports, getReportById } from "../../services/communityReportApi";
+import {
+  listMyReports,
+  getReportById,
+  resolveEvidenceUrl,
+} from "../../services/communityReportApi";
 import { colors, styles } from "../../constants/theme";
 
 export const STATUS_FILTERS = [
@@ -80,6 +86,10 @@ export default function ReportStatusScreen({ navigation }) {
   const [selectedReport, setSelectedReport] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState("");
+  const [previewEvidence, setPreviewEvidence] = useState(null);
+  const [previewError, setPreviewError] = useState("");
+  const [downloadMessage, setDownloadMessage] = useState("");
+  const [downloadingEvidence, setDownloadingEvidence] = useState(false);
 
   async function fetchReports(targetPage = 1, isPull = false) {
     if (isPull) setRefreshing(true);
@@ -110,6 +120,7 @@ export default function ReportStatusScreen({ navigation }) {
 
   async function handleOpenDetails(item) {
     setSelectedReport(item);
+    setPreviewEvidence(null);
     setLoadingDetails(true);
     setDetailsError("");
 
@@ -122,6 +133,77 @@ export default function ReportStatusScreen({ navigation }) {
       setDetailsError(err.response?.data?.message || err.message || "Could not refresh report details.");
     } finally {
       setLoadingDetails(false);
+    }
+  }
+
+  function openEvidencePreview(evidence, index) {
+    setDownloadMessage("");
+    setPreviewError("");
+    try {
+      setPreviewEvidence({
+        ...evidence,
+        index,
+        url: resolveEvidenceUrl(evidence.fileUrl),
+      });
+    } catch (failure) {
+      setPreviewEvidence({ ...evidence, index, url: null });
+      setPreviewError(
+        failure.message || "The evidence image could not be opened.",
+      );
+    }
+  }
+
+  async function downloadEvidence() {
+    if (!previewEvidence?.url || downloadingEvidence) return;
+
+    const fileType = (previewEvidence.fileType || "").toLowerCase();
+    const extension = fileType.includes("png")
+      ? "png"
+      : fileType.includes("webp")
+        ? "webp"
+        : fileType.includes("gif")
+          ? "gif"
+          : "jpg";
+    const filename = `wildguard-evidence-${previewEvidence.index + 1}-${Date.now()}.${extension}`;
+    setDownloadingEvidence(true);
+    setDownloadMessage("");
+
+    try {
+      if (Platform.OS === "web") {
+        if (typeof document === "undefined") {
+          throw new Error("Image downloads are unavailable in this browser.");
+        }
+        const link = document.createElement("a");
+        link.href = previewEvidence.url;
+        link.download = filename;
+        link.rel = "noopener";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setDownloadMessage("Image download started.");
+      } else {
+        const permission = await MediaLibrary.requestPermissionsAsync(
+          true,
+          ["photo"],
+        );
+        if (!permission.granted) {
+          throw new Error("Photo library permission is needed to save this image.");
+        }
+        const destination = new File(Paths.cache, filename);
+        const downloaded = await File.downloadFileAsync(
+          previewEvidence.url,
+          destination,
+          { idempotent: true },
+        );
+        await MediaLibrary.saveToLibraryAsync(downloaded.uri);
+        setDownloadMessage("Image saved to your photo library.");
+      }
+    } catch (failure) {
+      setDownloadMessage(
+        failure.message || "Could not download this evidence image.",
+      );
+    } finally {
+      setDownloadingEvidence(false);
     }
   }
 
@@ -150,7 +232,14 @@ export default function ReportStatusScreen({ navigation }) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          paddingVertical: 6,
+          paddingHorizontal: 2,
+        }}
       >
         {STATUS_FILTERS.map((f) => {
           const active = filter === f.key;
@@ -161,14 +250,28 @@ export default function ReportStatusScreen({ navigation }) {
               accessibilityLabel={`Filter ${f.label}`}
               accessibilityState={{ selected: active }}
               onPress={() => setFilter(f.key)}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                borderRadius: 20,
+              style={({ pressed }) => ({
+                height: 36,
+                paddingHorizontal: 16,
+                borderRadius: 18,
                 backgroundColor: active ? colors.green : colors.white,
-                borderWidth: 1,
+                borderWidth: 1.5,
                 borderColor: active ? colors.green : colors.border,
-              }}
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                alignSelf: "flex-start",
+                opacity: pressed ? 0.8 : 1,
+                ...Platform.select({
+                  web: {
+                    cursor: "pointer",
+                    boxShadow: active ? "0 2px 4px rgba(36, 91, 68, 0.15)" : "none",
+                  },
+                  default: {
+                    elevation: active ? 2 : 0,
+                  },
+                }),
+              })}
             >
               <Text
                 style={{
@@ -379,7 +482,7 @@ export default function ReportStatusScreen({ navigation }) {
 
       {/* Details Modal */}
       <Modal
-        visible={Boolean(selectedReport)}
+        visible={Boolean(selectedReport && !previewEvidence)}
         transparent
         animationType="fade"
         onRequestClose={() => setSelectedReport(null)}
@@ -487,18 +590,64 @@ export default function ReportStatusScreen({ navigation }) {
                     </Text>
                     {selectedReport.evidence && selectedReport.evidence.length > 0 ? (
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                        {selectedReport.evidence.map((ev, i) => (
-                          <View key={ev.id || i} style={{ gap: 4 }}>
-                            <Image
-                              source={{ uri: ev.fileUrl }}
-                              accessibilityLabel={`Evidence thumbnail ${i + 1}`}
-                              style={{ width: 100, height: 100, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}
-                            />
-                            <Text style={{ fontSize: 10, color: colors.muted, textAlign: "center" }}>
-                              {ev.fileType || "image/jpeg"}
-                            </Text>
-                          </View>
-                        ))}
+                        {selectedReport.evidence.map((ev, i) => {
+                          let thumbnailUrl;
+                          let thumbnailError = "";
+                          try {
+                            thumbnailUrl = resolveEvidenceUrl(ev.fileUrl);
+                          } catch (failure) {
+                            thumbnailUrl = null;
+                            thumbnailError =
+                              failure.message || "Evidence image unavailable.";
+                          }
+                          return (
+                            <View key={ev.id || i} style={{ gap: 4 }}>
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel={`View evidence image ${i + 1}`}
+                                onPress={() => openEvidencePreview(ev, i)}
+                              >
+                                {thumbnailUrl ? (
+                                  <Image
+                                    source={{ uri: thumbnailUrl }}
+                                    accessibilityLabel={`Evidence thumbnail ${i + 1}`}
+                                    style={{ width: 100, height: 100, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}
+                                  />
+                                ) : (
+                                  <View
+                                    style={{
+                                      width: 100,
+                                      height: 100,
+                                      borderRadius: 10,
+                                      borderWidth: 1,
+                                      borderColor: colors.border,
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                  >
+                                    <Ionicons
+                                      name="image-outline"
+                                      size={28}
+                                      color={colors.muted}
+                                    />
+                                  </View>
+                                )}
+                              </Pressable>
+                              <Text
+                                style={{
+                                  fontSize: 10,
+                                  color: thumbnailError
+                                    ? colors.red || "#dc2626"
+                                    : colors.muted,
+                                  textAlign: "center",
+                                  maxWidth: 100,
+                                }}
+                              >
+                                {thumbnailError || ev.fileType || "image/jpeg"}
+                              </Text>
+                            </View>
+                          );
+                        })}
                       </ScrollView>
                     ) : (
                       <Text style={styles.muted}>No evidence attached to this report.</Text>
@@ -509,6 +658,91 @@ export default function ReportStatusScreen({ navigation }) {
                 <Button title="Close" secondary onPress={() => setSelectedReport(null)} />
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={Boolean(previewEvidence)}
+        animationType="fade"
+        onRequestClose={() => setPreviewEvidence(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "#101512", padding: 20 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingVertical: 8,
+            }}
+          >
+            <Text style={{ color: colors.white, fontSize: 16, fontWeight: "700" }}>
+              {previewEvidence
+                ? `Evidence image ${previewEvidence.index + 1}`
+                : "Evidence image"}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close evidence preview"
+              onPress={() => setPreviewEvidence(null)}
+              hitSlop={12}
+            >
+              <Ionicons name="close" size={28} color={colors.white} />
+            </Pressable>
+          </View>
+
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              alignItems: "center",
+              marginVertical: 16,
+            }}
+          >
+            {previewEvidence?.url && !previewError ? (
+              <Image
+                source={{ uri: previewEvidence.url }}
+                accessibilityLabel={`Evidence image ${previewEvidence.index + 1}`}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="contain"
+                onError={() =>
+                  setPreviewError("Could not load this evidence image.")
+                }
+              />
+            ) : (
+              <Text
+                accessibilityRole="alert"
+                style={{ color: colors.white, textAlign: "center" }}
+              >
+                {previewError || "Evidence image unavailable."}
+              </Text>
+            )}
+          </View>
+
+          {downloadMessage ? (
+            <Text
+              accessibilityRole="alert"
+              style={{
+                color: colors.white,
+                textAlign: "center",
+                marginBottom: 10,
+              }}
+            >
+              {downloadMessage}
+            </Text>
+          ) : null}
+          <View style={{ gap: 10 }}>
+            <Button
+              title="Download image"
+              loading={downloadingEvidence}
+              disabled={!previewEvidence?.url || Boolean(previewError)}
+              onPress={downloadEvidence}
+            />
+            <Button
+              title="Close"
+              secondary
+              onPress={() => setPreviewEvidence(null)}
+            />
           </View>
         </View>
       </Modal>

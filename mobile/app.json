@@ -27,6 +27,14 @@
           "microphonePermission": false
         }
       ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": false,
+          "savePhotosPermission": "Allow WildGuard LK to save report evidence images to your photo library.",
+          "granularPermissions": ["photo"]
+        }
+      ],
       "expo-font",
       "expo-video",
       "expo-sqlite"
