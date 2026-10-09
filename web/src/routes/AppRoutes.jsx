@@ -15,6 +15,7 @@ import RangerTrack from "../pages/RangerMonitoring/RangerTrack";
 import Reporting from "../pages/Reporting/Reporting";
 import FieldMap from "../pages/FieldMap/FieldMap";
 import WildlifeMonitoring from "../pages/WildlifeMonitoring/WildlifeMonitoring";
+import ConservationReports from "../pages/ConservationReports/ConservationReports";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import OperationsLayout from "../layouts/OperationsLayout";
@@ -67,6 +68,7 @@ export default function AppRoutes() {
             <Route path="/community-reports" element={<CommunityReports />} />
             <Route path="/community-reports/:reportId" element={<CommunityReportDetailsPage />} />
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/conservation-reports" element={<ConservationReports />} />
           </Route>
           <Route
             element={
@@ -79,7 +81,7 @@ export default function AppRoutes() {
             {modules
               .filter(
                 (item) =>
-                  !["users", "patrols", "incidents", "community-reports", "analytics", "reporting", "map", "wildlife"].includes(
+                  !["users", "patrols", "incidents", "community-reports", "analytics", "conservation-reports", "reporting", "map", "wildlife"].includes(
                     item.path,
                   ),
               )
