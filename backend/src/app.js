@@ -26,6 +26,7 @@ app.use("/api/incidents", require("./routes/incident.routes"));
 app.use("/api/navigation", require("./routes/navigation.routes"));
 app.use("/api/community-reports", require("./routes/communityReport.routes"));
 app.use("/api/analytics", require("./routes/analytics.routes"));
+app.use("/api/reports", require("./routes/report.routes"));
 app.use("/api/alerts", require("./routes/alert.routes"));
 app.use("/api/sensors", require("./routes/sensor.routes"));
 app.use("/api/risk-zones", require("./routes/riskZone.routes"));
