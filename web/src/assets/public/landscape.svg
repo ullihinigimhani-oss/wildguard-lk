@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" fill="none">
+  <defs><linearGradient id="sky" x2="0" y2="900" gradientUnits="userSpaceOnUse"><stop stop-color="#aebfac"/><stop offset="1" stop-color="#e0cf9c"/></linearGradient><linearGradient id="ground" x2="1600" y2="900" gradientUnits="userSpaceOnUse"><stop stop-color="#284d3d"/><stop offset="1" stop-color="#708166"/></linearGradient></defs>
+  <path fill="url(#sky)" d="M0 0h1600v900H0z"/><circle cx="1230" cy="250" r="104" fill="#e4ce92"/>
+  <path d="M0 390 170 330 320 390 530 260 730 385 925 245 1095 345 1320 220 1600 335V900H0Z" fill="#81977f"/>
+  <path d="M0 480Q280 345 540 490T1010 400T1600 470V900H0Z" fill="#597761"/>
+  <path d="M0 615Q300 435 655 590T1150 510T1600 570V900H0Z" fill="url(#ground)"/>
+  <path d="M810 900Q1030 780 932 696T1210 610Q925 641 1010 720T1070 900" fill="#b5bca0" opacity=".55"/>
+  <g fill="#254b39"><path d="m1440 0 21 598h-38l-8-598Z"/><path d="M1335 362q-53-65-3-98-22-81 52-86 16-72 74-35 52-42 84 20 82-8 58 65 67 49 0 99-96 70-265 35Z"/><path d="m1532 900 17-342 13 342Z"/><path d="M1513 610q-55-48-15-83-8-63 47-57 42-43 70 4 59 29 10 76-2 71-112 60Z"/></g>
+  <g fill="#203e32" transform="translate(960 490)"><path d="M17 92C9 45 43 18 101 21l84 7c23-18 63-12 76 13 11 21 8 42 6 63l-1 40c-2 22-18 37-39 30l-2-14c15 1 16-10 15-26l-4-39-22 25-12 77h-27l-4-68-65-2-8 71H69l-8-75-16-7-6 68H15L9 91Z"/><path d="M197 45c-33-18-51 9-43 41 6 25 23 29 40 13Z" fill="#345040"/><path d="M20 66Q-4 61-7 100" stroke="#203e32" stroke-width="6"/><circle cx="239" cy="62" r="3" fill="#b9c3a0"/><path d="M231 101q-6 18-22 18l12-23" fill="#d3c8a1"/></g>
+  <g fill="#304c38" transform="translate(1255 580) scale(.49)"><path d="M17 92C9 45 43 18 101 21l84 7c23-18 63-12 76 13 11 21 8 42 6 63l-1 40c-2 22-18 37-39 30l-2-14c15 1 16-10 15-26l-4-39-22 25-12 77h-27l-4-68-65-2-8 71H69l-8-75-16-7-6 68H15L9 91Z"/></g>
+  <path d="M0 760Q250 680 495 785T930 800T1600 760V900H0Z" fill="#173d30"/>
+  <g stroke="#597654" stroke-width="4"><path d="m820 840 5-75m-4 37-23-17m25 34 24-31m555 42 10-81m-9 44-25-24m25 32 27-35m-330 116 9-65m-10 33-21-18"/></g>
+  <g stroke="#516b55" stroke-width="3"><path d="m1090 150 12-5 12 5m30-36 12-5 12 5m-325 72 12-5 12 5"/></g>
+</svg>

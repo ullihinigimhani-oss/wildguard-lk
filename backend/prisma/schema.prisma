@@ -18,6 +18,12 @@ enum UserRole {
   COMMUNITY_USER
 }
 
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum PatrolStatus {
   SCHEDULED
   IN_PROGRESS
@@ -25,18 +31,33 @@ enum PatrolStatus {
   CANCELLED
 }
 
+enum PatrolType {
+  ROUTINE
+  ANTI_POACHING
+  WILDLIFE_MONITORING
+  CONFLICT_RESPONSE
+  SPECIAL
+}
+
+enum PatrolPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum IncidentStatus {
   PENDING
   UNDER_REVIEW
   RESPONDING
   RESOLVED
+  VERIFIED
+  REJECTED
 }
 
 enum CommunityReportStatus {
   PENDING
   UNDER_REVIEW
-  RESPONSE_IN_PROGRESS
-  RESOLVED
+  VERIFIED
   REJECTED
 }
 
@@ -59,6 +80,13 @@ enum SyncStatus {
   FAILED
 }
 
+enum EscalationStatus {
+  PENDING
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
 // ======================================================
 // USERS & PARKS
 // ======================================================
@@ -71,9 +99,17 @@ model User {
   phone        String?
   role         UserRole
   isActive     Boolean  @default(true)
+  approvalStatus ApprovalStatus @default(APPROVED)
+  profileImageUrl String?
+  rejectionReason String?
+  reviewedAt DateTime?
+  reviewedById String?
 
   parkId String?
-  park   Park?   @relation(fields: [parkId], references: [id])
+  park   Park?   @relation("AssignedPark", fields: [parkId], references: [id])
+
+  requestedParkId String?
+  requestedPark Park? @relation("RequestedPark", fields: [requestedParkId], references: [id])
 
   assignedPatrols Patrol[] @relation("AssignedRanger")
   createdPatrols  Patrol[] @relation("CreatedByManager")
@@ -82,12 +118,17 @@ model User {
   communityReports CommunityReport[]
 
   alertAcknowledgements AlertAcknowledgement[]
+  respondedAlerts       Alert[]                @relation("AlertResponses")
+  alertEscalations      AlertEscalation[]      @relation("AlertEscalations")
+  forwardedReports      CommunityReport[]      @relation("ReportForwards")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([parkId])
+  @@index([requestedParkId])
   @@index([role])
+  @@index([approvalStatus, role, createdAt])
 }
 
 model Park {
@@ -96,7 +137,8 @@ model Park {
   location    String?
   description String?
 
-  users       User[]
+  users       User[] @relation("AssignedPark")
+  requestedUsers User[] @relation("RequestedPark")
   patrols     Patrol[]
   incidents   Incident[]
   riskZones   RiskZone[]
@@ -117,7 +159,15 @@ model Patrol {
   scheduledDate DateTime?
   startTime     DateTime?
   endTime       DateTime?
+  actualStartTime DateTime?
+  actualEndTime   DateTime?
   status        PatrolStatus @default(SCHEDULED)
+
+  patrolType   PatrolType   @default(ROUTINE)
+  priority     PatrolPriority @default(MEDIUM)
+  startLocation String?
+  latitude      Float?
+  longitude     Float?
 
   parkId String
   park   Park   @relation(fields: [parkId], references: [id])
@@ -151,7 +201,19 @@ model PatrolLocation {
   @@index([patrolId])
 }
 
+enum PatrolWaypointType {
+  START
+  CHECKPOINT
+  HIGH_RISK
+  OBSERVATION
+  END
+}
+
 model PatrolWaypoint {
+  // Nullable additions preserve historical, unclassified waypoint rows.
+  type       PatrolWaypointType?
+  order      Int?
+  label      String?
   id         String   @id @default(cuid())
   latitude   Float
   longitude  Float
@@ -162,6 +224,7 @@ model PatrolWaypoint {
   patrol   Patrol @relation(fields: [patrolId], references: [id], onDelete: Cascade)
 
   @@index([patrolId])
+  @@unique([patrolId, order])
 }
 
 // ======================================================
@@ -170,6 +233,7 @@ model PatrolWaypoint {
 
 model Incident {
   id           String @id @default(cuid())
+  title        String?
   incidentType String
   description  String
 
@@ -182,6 +246,9 @@ model Incident {
 
   occurredAt DateTime?
   reportedAt DateTime  @default(now())
+  withdrawnAt DateTime?
+
+  markAsDone Boolean @default(false)
 
   reporterId String
   reporter   User   @relation(fields: [reporterId], references: [id])
@@ -193,6 +260,11 @@ model Incident {
   patrol   Patrol? @relation(fields: [patrolId], references: [id])
 
   evidence IncidentEvidence[]
+  escalatedAlerts AlertEscalation[]
+
+  communityReportId String?
+  communityReport   CommunityReport? @relation("IncidentCommunityReport", fields: [communityReportId], references: [id], onDelete: SetNull)
+  forwardedCommunityReports CommunityReport[] @relation("ReportToIncident")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -202,6 +274,8 @@ model Incident {
   @@index([patrolId])
   @@index([incidentType])
   @@index([status])
+  @@index([markAsDone])
+  @@index([communityReportId])
 }
 
 model IncidentEvidence {
@@ -209,6 +283,7 @@ model IncidentEvidence {
   fileUrl  String
   fileType String
   caption  String?
+  metadata Json?
 
   incidentId String
   incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
@@ -237,6 +312,10 @@ model CommunityReport {
   reporterName  String?
   reporterPhone String?
 
+  isAnonymous Boolean @default(false)
+
+  markAsDone Boolean @default(false)
+
   // Optional registered community user
   reporterId String?
   reporter   User?   @relation(fields: [reporterId], references: [id])
@@ -245,11 +324,24 @@ model CommunityReport {
 
   evidence CommunityReportEvidence[]
 
+  // Operational Incident Response handoff (Chanuka)
+  incidentId      String?
+  incident        Incident? @relation("ReportToIncident", fields: [incidentId], references: [id], onDelete: SetNull)
+  forwardedAt     DateTime?
+  forwardedById   String?
+  forwardedBy     User?     @relation("ReportForwards", fields: [forwardedById], references: [id], onDelete: SetNull)
+  forwardingNotes String?
+  incidents       Incident[] @relation("IncidentCommunityReport")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([reporterId])
+  @@index([isAnonymous])
+  @@index([incidentId])
+  @@index([forwardedById])
+  @@index([markAsDone])
 }
 
 model CommunityReportEvidence {
@@ -298,10 +390,13 @@ model TrackingCollar {
 }
 
 model AnimalLocation {
-  id         String   @id @default(cuid())
-  latitude   Float
-  longitude  Float
-  recordedAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  latitude      Float
+  longitude     Float
+  recordedAt    DateTime @default(now())
+  heartRate     Int?
+  temperature   Float?
+  activityLevel String?
 
   // MOCK means this can be simulated IoT collar data
   source String @default("MOCK_COLLAR")
@@ -350,6 +445,16 @@ model Alert {
   generatedAt DateTime  @default(now())
   resolvedAt  DateTime?
 
+  // Operational liaison / authorized response
+  responseNote  String?
+  respondedById String?
+  respondedAt   DateTime?
+  responder     User?     @relation("AlertResponses", fields: [respondedById], references: [id])
+
+  // Ranger / Manager operational handoff
+  forwardedTo String?
+  forwardedAt DateTime?
+
   animalId String
   animal   Animal @relation(fields: [animalId], references: [id])
 
@@ -357,6 +462,7 @@ model Alert {
   riskZone   RiskZone @relation(fields: [riskZoneId], references: [id])
 
   acknowledgements AlertAcknowledgement[]
+  escalations      AlertEscalation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -364,11 +470,13 @@ model Alert {
   @@index([animalId])
   @@index([riskZoneId])
   @@index([status])
+  @@index([respondedById])
 }
 
 model AlertAcknowledgement {
-  id             String   @id @default(cuid())
-  acknowledgedAt DateTime @default(now())
+  id             String    @id @default(cuid())
+  readAt         DateTime? @default(now())
+  acknowledgedAt DateTime?
 
   alertId String
   alert   Alert  @relation(fields: [alertId], references: [id], onDelete: Cascade)
@@ -378,6 +486,30 @@ model AlertAcknowledgement {
 
   @@unique([alertId, userId])
   @@index([userId])
+}
+
+model AlertEscalation {
+  id               String           @id @default(cuid())
+  alertId          String
+  alert            Alert            @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  escalatedById    String
+  escalator        User             @relation("AlertEscalations", fields: [escalatedById], references: [id])
+  reason           String
+  status           EscalationStatus @default(PENDING)
+  priority         String
+  targetDepartment String           @default("INCIDENT_RESPONSE")
+  incidentId       String?
+  incident         Incident?        @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  escalatedAt      DateTime         @default(now())
+  resolvedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([alertId])
+  @@index([escalatedById])
+  @@index([status])
+  @@index([alertId, status])
 }
 
 // ======================================================

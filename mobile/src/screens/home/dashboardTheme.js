@@ -1,0 +1,86 @@
+import { Platform, StyleSheet } from "react-native";
+import { typography } from "../../constants/typography";
+import { fieldColors, fieldCard } from "../../constants/fieldTheme";
+export const dashboardColors = {
+  ...fieldColors,
+  white: "#FFFFFF",
+  onForest: fieldColors.sage,
+};
+const c = dashboardColors;
+export const dashboardStyles = StyleSheet.create({
+  content: { padding: 20, gap: 22 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10 },
+  brand: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "700",
+    color: c.forest,
+    letterSpacing: -0.3,
+  },
+  eyebrow: {
+    fontSize: 10,
+    lineHeight: 16,
+    letterSpacing: 1.5,
+    fontWeight: "700",
+    color: c.muted,
+  },
+  title: { ...typography.display, letterSpacing: -0.7, color: c.forest },
+  body: { ...typography.body, color: c.muted },
+  section: { ...typography.section, color: c.text },
+  card: {
+    ...fieldCard,
+    borderRadius: 22,
+    padding: 20,
+    gap: 16,
+    backgroundColor: c.white,
+    borderWidth: 1,
+    borderColor: c.border,
+    ...Platform.select({
+      web: {
+        boxShadow: "0px 4px 12px rgba(18, 61, 41, 0.04)",
+      },
+      default: {
+        shadowColor: c.forest,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 2,
+      },
+    }),
+  },
+  activeCard: { backgroundColor: c.forest, borderColor: c.forest },
+  cardTitle: { ...typography.heading, letterSpacing: -0.4, color: c.text },
+  badge: {
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    backgroundColor: c.sage,
+    alignSelf: "flex-start",
+  },
+  badgeText: {
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: "700",
+    letterSpacing: 0.7,
+    color: c.forest,
+  },
+  iconTile: {
+    height: 44,
+    width: 44,
+    borderRadius: 14,
+    backgroundColor: c.sage,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  notice: {
+    minHeight: 48,
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: "#FFF0DB",
+    borderWidth: 1,
+    borderColor: "#EDD7B9",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+});

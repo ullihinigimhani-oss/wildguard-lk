@@ -1,1 +1,52 @@
-{}
+{
+  "expo": {
+    "name": "WildGuard LK",
+    "slug": "wildguard-lk",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "light",
+    "scheme": "wildguard-lk",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow WildGuard LK to use your location during active patrol navigation.",
+          "locationAlwaysPermission": false,
+          "locationAlwaysAndWhenInUsePermission": false,
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow WildGuard LK to select incident evidence photos and videos.",
+          "cameraPermission": "Allow WildGuard LK to photograph field incident evidence.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": false,
+          "savePhotosPermission": "Allow WildGuard LK to save report evidence images to your photo library.",
+          "granularPermissions": ["photo"]
+        }
+      ],
+      "expo-font",
+      "expo-video",
+      "expo-sqlite"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "lk.wildguard.prototype"
+    },
+    "web": {
+      "favicon": "./assets/images/wildguard-logo.png"
+    }
+  }
+}

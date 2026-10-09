@@ -1,0 +1,235 @@
+/* Dashboard + conserved-analytics layout (Park Manager overview). */
+.dashboard-page .conserve-analytics {
+  margin: 24px 0 6px;
+}
+
+.conserve-analytics .analytics-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.conserve-analytics .analytics-topbar h3 {
+  margin: 0 0 4px;
+}
+
+.conserve-analytics .analytics-topbar p {
+  margin: 0;
+}
+
+/* Global filter bar (white panel with its own padding). */
+.analytics-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+  background: white;
+  border: 1px solid var(--border, #dbe3dc);
+  border-radius: 9px;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+
+.analytics-filterbar label {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+  min-width: 170px;
+  font-size: 12px;
+}
+
+.analytics-filterbar input,
+.analytics-filterbar select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd8cf;
+  border-radius: 8px;
+  background: white;
+}
+
+/* Metric strip: 6 cards, then collapse responsively. */
+.conserve-analytics .analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.analytics-metric-value {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.analytics-metric-label {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted, #64748b);
+  line-height: 1.4;
+}
+
+/* Panels: body gets real padding so charts are never flush to the edges. */
+.analytics-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.analytics-panel .panel-heading {
+  padding-bottom: 16px;
+}
+
+.analytics-panel .analytics-body {
+  padding: 4px 24px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.analytics-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 24px;
+  background: #f7faf8;
+  border-top: 1px solid var(--border, #dbe3dc);
+  border-bottom: 1px solid var(--border, #dbe3dc);
+}
+
+.analytics-controls label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.analytics-controls select {
+  min-width: 160px;
+  padding: 9px 12px;
+  border: 1px solid #cbd8cf;
+  border-radius: 8px;
+  background: white;
+}
+
+.analytics-chart-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 26px;
+}
+
+.analytics-chart-block h4 {
+  font-size: 14px;
+  margin: 0 0 10px;
+  color: #1e293b;
+}
+
+.analytics-state,
+.analytics-empty {
+  padding: 14px 16px;
+  color: var(--muted, #64748b);
+}
+
+/* Bar chart (CSS, dependency-free). */
+.bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-label {
+  flex: 0 0 150px;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-track {
+  flex: 1;
+  background: #edf1ee;
+  border-radius: 4px;
+  height: 14px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: #0f766e;
+  border-radius: 4px;
+}
+
+.bar-value {
+  flex: 0 0 30px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Trend chart (SVG, dependency-free). */
+.trend-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.trend-area {
+  fill: #d7f3ea;
+}
+
+.trend-line {
+  fill: none;
+  stroke: #0f766e;
+  stroke-width: 2;
+}
+
+.trend-dot {
+  fill: #0f766e;
+}
+
+.trend-axis {
+  stroke: #cbd5e1;
+  stroke-width: 1;
+}
+
+.trend-tick {
+  font-size: 10px;
+  fill: #64748b;
+}
+
+.trend-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--muted, #64748b);
+}
+
+/* Responsive. */
+@media (max-width: 1080px) {
+  .conserve-analytics .analytics-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .conserve-analytics .analytics-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .analytics-filterbar label {
+    min-width: 130px;
+  }
+  .analytics-chart-row {
+    grid-template-columns: 1fr;
+  }
+}

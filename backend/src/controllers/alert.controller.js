@@ -1,0 +1,144 @@
+const service = require("../services/alert.service");
+
+exports.listAlerts = async (req, res, next) => {
+  try {
+    const result = await service.listAlerts(req.query, req.user || null);
+    res.set("Cache-Control", "no-store").json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAlertById = async (req, res, next) => {
+  try {
+    const alert = await service.getAlertDetails(req.params.id, req.user || null);
+    res.set("Cache-Control", "no-store").json({
+      success: true,
+      alert,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getUnreadCount = async (req, res, next) => {
+  try {
+    const result = await service.getUnreadCount(req.user || null);
+    res.set("Cache-Control", "no-store").json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.acknowledgeAlert = async (req, res, next) => {
+  try {
+    const result = await service.acknowledgeAlert(req.params.id, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.markAsRead = async (req, res, next) => {
+  try {
+    const result = await service.markAsRead(req.params.id, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.markAllAsRead = async (req, res, next) => {
+  try {
+    const result = await service.markAllAsRead(req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateStatus = async (req, res, next) => {
+  try {
+    const alert = await service.updateAlertStatus(req.params.id, req.body.status);
+    res.json({
+      success: true,
+      message: "Alert status updated successfully.",
+      alert,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAlertsRequiringAttention = async (req, res, next) => {
+  try {
+    const result = await service.getAlertsRequiringAttention(req.query, req.user);
+    res.set("Cache-Control", "no-store").json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.respondToAlert = async (req, res, next) => {
+  try {
+    const result = await service.respondToAlert(req.params.id, req.body, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.forwardAlert = async (req, res, next) => {
+  try {
+    const result = await service.forwardAlert(req.params.id, req.body, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.escalateAlert = async (req, res, next) => {
+  try {
+    const result = await service.escalateAlert(req.params.id, req.body, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAlertEscalations = async (req, res, next) => {
+  try {
+    const result = await service.getAlertEscalations(req.params.id, req.user);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.ingestRiskAlert = async (req, res, next) => {
+  try {
+    const result = await service.ingestRiskAlert(req.body);
+    const statusCode = result.duplicate || !result.published ? 200 : 201;
+    res.status(statusCode).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.resolveRiskAlert = async (req, res, next) => {
+  try {
+    const result = await service.resolveRiskAlert(req.params.id, req.body, req.user);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
