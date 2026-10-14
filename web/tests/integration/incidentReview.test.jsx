@@ -121,6 +121,17 @@ beforeEach(() => {
   });
 });
 
+test('[B3-INC-01] incident load failure retries without exposing raw provider error', async () => {
+  getIncident.mockRejectedValueOnce(new Error('fixture-private detail')); mountDetails(); await screen.findByRole('button', { name: 'Retry details' });
+  expect(screen.getByRole('alert')).not.toHaveTextContent('fixture-private'); fireEvent.click(screen.getByRole('button', { name: 'Retry details' })); await screen.findByText('Wire snare near stream'); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+test('[B3-INC-02] incident from another patrol cannot expose details or review control', async () => {
+  getIncident.mockResolvedValue({ ...incident, patrolId: 'other' }); mountDetails(); await screen.findByText('This incident does not belong to the selected patrol.'); expect(screen.queryByText('Wire snare near stream')).not.toBeInTheDocument(); expect(screen.queryByLabelText('Update incident status')).not.toBeInTheDocument();
+});
+test('[B3-INC-03] unmount aborts pending incident details lookup', () => {
+  getIncident.mockReturnValue(new Promise(() => {})); const view = mountDetails(); const signal = getIncident.mock.calls[0][1]; view.unmount(); expect(signal.aborted).toBe(true);
+});
+
 test("manager sees every Ranger-submitted detail with a status form", async () => {
   const { container } = mountDetails();
   await screen.findByText("Wire snare near stream");

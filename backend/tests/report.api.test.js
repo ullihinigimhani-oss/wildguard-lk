@@ -1,5 +1,6 @@
 // Report API Integration Tests
 // Tests report endpoints with authentication and authorization
+jest.mock('../src/config/database', () => require('./fixtures/reportDatabase.cjs').createReportDatabase());
 
 const request = require("supertest");
 const app = require("../src/app");
@@ -15,7 +16,7 @@ describe("Report API", () => {
 
   beforeAll(async () => {
     // Set JWT secret
-    process.env.JWT_SECRET = "test-report-api-secret-key";
+    process.env.JWT_SECRET = "test-report-api-secret-key-at-least-32-characters";
 
     // Create test park
     testPark = await db.park.create({
@@ -29,7 +30,7 @@ describe("Report API", () => {
     parkManager = await db.user.create({
       data: {
         name: "Report Test Manager",
-        email: `report-manager-${Date.now()}@test.com`,
+        email: "report-manager@example.test",
         passwordHash: "test-hash",
         role: "PARK_MANAGER",
         parkId: testPark.id,
@@ -41,7 +42,7 @@ describe("Report API", () => {
     ranger = await db.user.create({
       data: {
         name: "Report Test Ranger",
-        email: `report-ranger-${Date.now()}@test.com`,
+        email: "report-ranger@example.test",
         passwordHash: "test-hash",
         role: "RANGER",
         parkId: testPark.id,

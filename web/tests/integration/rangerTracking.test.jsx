@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import RangerTrack from "../../src/pages/RangerMonitoring/RangerTrack";
 import { getPatrol, getPatrolTrail } from "../../src/services/patrolApi";
@@ -63,6 +63,8 @@ test("shows the planned route, recorded history, ranger header and back link", a
 test("reports the freshness of the newest recorded position", async () => {
   mount();
   await screen.findByText("A. Perera");
+  // The patrol header resolves before the separate history request.
+  await screen.findByText(/Recorded route \(2 points\)/);
   expect(screen.getAllByText("Available").length).toBeGreaterThan(0);
   expect(screen.getByText(/Recorded route \(2 points\)/)).toBeVisible();
 });
@@ -101,12 +103,13 @@ test("polls recorded positions while in progress and stops on unmount", async ()
   vi.useFakeTimers();
   try {
     const { unmount } = mount();
-    await vi.advanceTimersByTimeAsync(0);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     expect(getPatrolTrail).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(7000);
+    expect(screen.getByText(/Recorded route \(2 points\)/)).toBeVisible();
+    await act(async () => { await vi.advanceTimersByTimeAsync(7000); });
     expect(getPatrolTrail).toHaveBeenCalledTimes(2);
     unmount();
-    await vi.advanceTimersByTimeAsync(21000);
+    await act(async () => { await vi.advanceTimersByTimeAsync(21000); });
     expect(getPatrolTrail).toHaveBeenCalledTimes(2);
   } finally {
     vi.useRealTimers();

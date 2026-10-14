@@ -68,9 +68,18 @@ export default function App() {
   const loadAnimals = async () => {
     try {
       const response = await getAllAnimals();
-      setAnimals(response.data || []);
+      const rows = response?.data ?? [];
+      if (!Array.isArray(rows)) throw new Error('Invalid animal list response');
+      if (rows.some(animal => !animal || typeof animal.animalCode !== 'string' ||
+        typeof animal.species !== 'string' || (animal.locations != null &&
+          (!Array.isArray(animal.locations) || animal.locations.some(location =>
+            !location || !Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)))))) {
+        throw new Error('Invalid animal record response');
+      }
+      setAnimals(rows);
     } catch (err) {
       console.error('Failed to load animals:', err);
+      setError('Failed to load animals');
     }
   };
 

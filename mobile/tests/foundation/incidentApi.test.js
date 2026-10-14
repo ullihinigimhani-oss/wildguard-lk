@@ -172,3 +172,22 @@ test.each([400, 401, 403, 404, 409, 503, undefined])(
     expect(message).not.toContain("private");
   },
 );
+
+test.each([['01',null],['02',{success:false,incident:{id:'i'}}],['03',{success:true,incident:{}}]])('[B4-INC-%s] malformed incident detail %j cannot confirm a record',async(_id,data)=>{
+ api.get.mockResolvedValue({data}); await expect(getIncident('i')).rejects.toThrow('did not confirm');
+});
+test.each([['04',{success:true,incidents:[],total:'0',page:1,pageSize:25}],['05',{success:true,incidents:{},total:0,page:1,pageSize:25}],['06',{success:true,incidents:[],total:0,page:1.5,pageSize:25}]])('[B4-INC-%s] malformed incident pagination %j is rejected',async(_id,data)=>{
+ api.get.mockResolvedValue({data}); await expect(listPatrolIncidents('p')).rejects.toThrow('could not be loaded');
+});
+test('[B4-INC-07] create forwards cancellation and stable idempotency options',async()=>{
+ const options={signal:new AbortController().signal,headers:{'Idempotency-Key':'fixture-key'}}; await createIncident('p',body,options); expect(api.post).toHaveBeenCalledWith('/patrols/p/incidents',body,options);
+});
+test('[B4-INC-08] malformed context fails before any HTTP write',async()=>{
+ const calls=api.post.mock.calls.length; await expect(createIncident(' ',body)).rejects.toThrow('context is missing'); expect(api.post.mock.calls.length).toBe(calls);
+});
+test('[B4-INC-09] failed edit retains original server rejection without retry',async()=>{
+ const error={response:{status:409,data:{code:'INCIDENT_LOCKED'}}}; api.patch.mockRejectedValueOnce(error); await expect(editIncident('i',body)).rejects.toBe(error); expect(api.patch).toHaveBeenCalledTimes(1);
+});
+test('[B4-INC-10] cancelled detail fetch preserves cancellation error and exact signal',async()=>{
+ const signal=new AbortController().signal,error=Object.assign(new Error('cancelled'),{name:'CanceledError'}); api.get.mockRejectedValueOnce(error); await expect(getIncident('i',signal)).rejects.toBe(error); expect(api.get).toHaveBeenLastCalledWith('/incidents/i',{signal});
+});

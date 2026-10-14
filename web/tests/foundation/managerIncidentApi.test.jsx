@@ -3,6 +3,7 @@ import {
   listIncidents,
   getEvidenceAccess,
   listAllIncidents,
+  listReportingIncidents,
 } from "../../src/services/incidentApi";
 vi.mock("../../src/services/api", () => ({
   api: { get: vi.fn(), defaults: { baseURL: "https://backend.example/api" } },
@@ -89,6 +90,20 @@ test("manager list uses the authenticated shared API and drops unsupported filte
     signal: undefined,
   });
 });
+test("reporting retains its existing endpoint while manager pagination uses the manager endpoint", async () => {
+  const result = { success: true, incidents: [], total: 0, pageSize: 25 };
+  api.get.mockResolvedValue({ data: result });
+  const controller = new AbortController();
+  await expect(listReportingIncidents({ status: "VERIFIED", severity: "HIGH" }, controller.signal)).resolves.toEqual(result);
+  expect(api.get).toHaveBeenLastCalledWith("/incidents/ranger", {
+    params: { status: "VERIFIED" }, signal: controller.signal,
+  });
+  await listAllIncidents({ status: "VERIFIED" }, controller.signal);
+  expect(api.get).toHaveBeenLastCalledWith("/incidents", {
+    params: { status: "VERIFIED", page: 1 }, signal: controller.signal,
+  });
+});
+
 test("private access composes only the expected backend path and rejects permanent public URLs", async () => {
   api.get.mockResolvedValue({
     data: {

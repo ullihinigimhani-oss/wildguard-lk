@@ -14,6 +14,7 @@ jest.mock("../../src/config/database", () => ({
     updateMany: jest.fn()
   },
   incident: {
+    update: jest.fn(),
     create: jest.fn(),
     findFirst: jest.fn(),
     findMany: jest.fn(),
@@ -665,6 +666,7 @@ test("Park Manager reviews a Ranger incident end to end and the status persists"
     evidenceCount: 1
   });
   const updated = await review("UNDER_REVIEW").expect(200);
+  expect(updated.headers["cache-control"]).toBe("no-store");
   expect(updated.body.incident).toMatchObject({
     id: "i-1",
     status: "UNDER_REVIEW",
@@ -697,13 +699,70 @@ test("Park Manager reviews a Ranger incident end to end and the status persists"
   expect((await managerList()).body.incidents[0].status).toBe("UNDER_REVIEW");
   expect((await details("a")).body.incident.status).toBe("UNDER_REVIEW");
 });
-test.each(["RESPONDING", "RESOLVED", "in review", "IN_REVIEW", "", "PENDING,UNDER_REVIEW"])("unsupported status %s is rejected without writing", async status => {
+test.each(["RESPONDING", "RESOLVED"])("supported status %s persists using the existing schema vocabulary", async status => {
+  await create(payload(), "a").expect(201);
+  const response = await review(status).expect(200);
+  expect(response.body.incident.status).toBe(status);
+  expect(incidents.get("i-1").status).toBe(status);
+  expect((await details("a").expect(200)).body.incident.status).toBe(status);
+  expect(db.incident.updateMany).toHaveBeenCalledWith({
+    where: { id: "i-1", withdrawnAt: null }, data: { status }
+  });
+});
+
+test.each(["in review", "IN_REVIEW", "", "PENDING,UNDER_REVIEW"])("unsupported status %s is rejected without writing", async status => {
   await create(payload(), "a").expect(201);
   const response = await review(status);
   expect(response.status).toBe(400);
   expect(response.body.errors.status).toBeTruthy();
   expect(db.incident.updateMany).not.toHaveBeenCalled();
   expect(incidents.get("i-1").status).toBe("PENDING");
+});
+
+test.each(["PENDING", "UNDER_REVIEW", "VERIFIED"])("client cannot assign valid status %s on creation or edit", async status => {
+  seed();
+  await create(payload({ status })).expect(400);
+  await patch({ title: "Safe title", status }).expect(400);
+  expect(db.incident.create).not.toHaveBeenCalled();
+  expect(db.incident.updateMany).not.toHaveBeenCalled();
+  expect(incidents.get("i-1").status).toBe("PENDING");
+});
+
+test("completion-flag payload cannot smuggle a review status past authorization", async () => {
+  seed();
+  await request(app).patch("/api/incidents/i-1/status").set("Authorization", token("other"))
+    .send({ markAsDone: true, status: "VERIFIED" }).expect(400);
+  expect(db.incident.update).not.toHaveBeenCalled();
+  expect(db.incident.updateMany).not.toHaveBeenCalled();
+  expect(incidents.get("i-1").status).toBe("PENDING");
+});
+
+test.each([null, true, 1, ["VERIFIED"], {}])("non-string review status %j is rejected before database access", async status => {
+  seed();
+  const response = await review(status).expect(400);
+  expect(response.body.errors.status).toBeTruthy();
+  expect(db.incident.findFirst).not.toHaveBeenCalled();
+  expect(db.incident.updateMany).not.toHaveBeenCalled();
+  expect(incidents.get("i-1").status).toBe("PENDING");
+});
+
+test.each(["manager", "other"])("%s cannot edit incidents, including missing IDs", async who => {
+  seed();
+  await patch(undefined, who).expect(403);
+  await request(app).patch("/api/incidents/missing-id").set("Authorization", token(who))
+    .send({ title: "Unauthorized edit" }).expect(403);
+  expect(db.incident.findFirst).not.toHaveBeenCalled();
+  expect(db.incident.updateMany).not.toHaveBeenCalled();
+});
+
+test("existing completion-flag operation remains available without changing review status", async () => {
+  seed().status = "VERIFIED";
+  db.incident.update.mockResolvedValueOnce({ id: "i-1", markAsDone: true, status: "VERIFIED" });
+  const response = await request(app).patch("/api/incidents/i-1/status")
+    .set("Authorization", token("other")).send({ markAsDone: true }).expect(200);
+  expect(response.body).toEqual({ success: true, message: "Incident marked as done successfully" });
+  expect(db.incident.update).toHaveBeenCalledWith({ where: { id: "i-1" }, data: { markAsDone: true } });
+  expect(db.incident.updateMany).not.toHaveBeenCalled();
 });
 test("manager status update rejects unknown fields and never writes them", async () => {
   await create(payload(), "a").expect(201);

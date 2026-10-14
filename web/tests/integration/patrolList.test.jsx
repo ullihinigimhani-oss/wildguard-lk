@@ -167,11 +167,23 @@ test("empty results explain whether filters or data are the cause", async () => 
     await screen.findByText("No patrols match the current filters."),
   ).toBeVisible();
 });
-test("shows a loading state while the list request is pending", () => {
-  listPatrols.mockReturnValue(new Promise(() => {}));
-  mountPage();
-  expect(screen.getByText("Loading patrols…")).toBeVisible();
-  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+test("shows a loading state while the list request is pending", async () => {
+  vi.useFakeTimers();
+  let resolve;
+  listPatrols.mockReturnValue(new Promise(r => { resolve = r; }));
+  let view;
+  try {
+    await act(async () => { view = mountPage(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+    expect(listAssignableRangers).toHaveBeenCalledTimes(1);
+    expect(listPatrols).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Loading patrols…")).toBeVisible();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  } finally {
+    view?.unmount();
+    await act(async () => { resolve(pageOf([])); });
+    vi.useRealTimers();
+  }
 });
 test("list failures show an error and retry recovers", async () => {
   listPatrols.mockRejectedValueOnce(new Error("offline"));
@@ -363,4 +375,10 @@ test("transient polling failure preserves the existing table and recovers automa
   } finally {
     vi.useRealTimers();
   }
+});
+
+test('[B3-PAT-01] last page boundary disables further pagination without hiding existing patrol', async () => {
+  listPatrols.mockResolvedValue(pageOf([patrol], 26)); mountPage(); await screen.findByText(patrol.routeName);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' })); await waitFor(() => expect(listPatrols).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 })));
+  await screen.findByText(patrol.routeName); expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled();
 });

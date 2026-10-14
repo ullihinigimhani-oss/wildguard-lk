@@ -15,7 +15,7 @@ const processedMessageCache = new Map();
 // Helper to keep cache size bounded to 5,000 recent message IDs
 function recordProcessedMessage(messageId, data) {
   if (!messageId) return;
-  if (processedMessageCache.size > 5000) {
+  if (processedMessageCache.size >= 5000) {
     const oldestKey = processedMessageCache.keys().next().value;
     processedMessageCache.delete(oldestKey);
   }

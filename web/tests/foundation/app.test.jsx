@@ -1,8 +1,13 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import App from "../../src/App";
+import { ZoneAlertProvider } from "../../src/contexts/ZoneAlertContext";
+import { getAllAnimals } from "../../src/services/sensorApi";
+import { getAllRiskZones } from "../../src/services/riskZoneApi";
 import { api } from "../../src/services/api";
+vi.mock("../../src/services/sensorApi", () => ({ getAllAnimals: vi.fn() }));
+vi.mock("../../src/services/riskZoneApi", () => ({ getAllRiskZones: vi.fn() }));
 vi.mock("../../src/services/api", () => ({
   api: {
     post: vi.fn(),
@@ -20,6 +25,8 @@ const profile = {
 beforeEach(() => {
   sessionStorage.clear();
   vi.clearAllMocks();
+  getAllAnimals.mockResolvedValue({ data: [] });
+  getAllRiskZones.mockResolvedValue({ data: [] });
   api.get.mockResolvedValue({ data: { success: true, user: profile } });
   api.post.mockResolvedValue({
     data: { success: true, user: profile, token: "session-token" },
@@ -28,7 +35,7 @@ beforeEach(() => {
 function mount(path = "/login") {
   render(
     <MemoryRouter initialEntries={[path]}>
-      <App />
+      <ZoneAlertProvider><App /></ZoneAlertProvider>
     </MemoryRouter>,
   );
   return userEvent.setup();
@@ -119,9 +126,11 @@ test("submitting disables duplicate submissions", async () => {
   resolve({ data: { success: true, user: profile, token: "session-token" } });
   await screen.findByText("Welcome back, Test Ranger");
 });
-test("unknown page remains a 404", () => {
-  mount("/missing");
+test("unknown page remains a 404", async () => {
+  await act(async () => { mount("/missing"); });
   expect(screen.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  expect(getAllAnimals).toHaveBeenCalledTimes(1);
+  expect(getAllRiskZones).toHaveBeenCalledTimes(1);
 });
 
 test("pending account message is displayed without a session", async () => {
@@ -241,4 +250,19 @@ test("an authenticated non-manager cannot open per-ranger tracking", async () =>
   expect(
     screen.queryByRole("heading", { name: "Northern boundary sweep" }),
   ).not.toBeInTheDocument();
+});
+
+test('[B3-ROUTE-01] unauthenticated conservation report route requires login', async () => {
+  mount('/conservation-reports'); expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeVisible(); expect(screen.queryByRole('heading', { name: 'Conservation Reports' })).not.toBeInTheDocument();
+});
+test('[B3-ROUTE-02] non-manager conservation report access redirects to profile', async () => {
+  sessionStorage.setItem('wildguard.session', 'saved-token'); mount('/conservation-reports'); expect(await screen.findByText(profile.email, { selector: 'dd' })).toBeVisible(); expect(screen.queryByRole('heading', { name: 'Conservation Reports' })).not.toBeInTheDocument();
+});
+test('[B3-ROUTE-03] JWT expiry transitions protected profile back to login', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] }); vi.setSystemTime(1000000);
+  try {
+    sessionStorage.setItem('wildguard.session', `header.${btoa(JSON.stringify({ exp: 1002 }))}.signature`);
+    await act(async () => mount('/profile')); expect(screen.getByText(profile.email, { selector: 'dd' })).toBeVisible();
+    await act(async () => vi.advanceTimersByTime(2000)); expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeVisible(); expect(sessionStorage.length).toBe(0);
+  } finally { vi.useRealTimers(); }
 });

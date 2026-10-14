@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { getAllAnimals } from '../services/sensorApi';
 import { getAllRiskZones } from '../services/riskZoneApi';
 
@@ -15,6 +15,7 @@ export const useZoneAlerts = () => {
 export const ZoneAlertProvider = ({ children }) => {
   const [alerts, setAlerts] = useState([]);
   const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
+  const pollVersion = useRef(0);
 
   // Calculate distance between two points in meters
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -31,6 +32,7 @@ export const ZoneAlertProvider = ({ children }) => {
   };
 
   const checkZoneEntries = async () => {
+    const version = ++pollVersion.current;
     try {
       const [animalsResponse, zonesResponse] = await Promise.all([
         getAllAnimals(),
@@ -74,7 +76,7 @@ export const ZoneAlertProvider = ({ children }) => {
         });
       });
 
-      setAlerts(newAlerts);
+      if (version === pollVersion.current) setAlerts(newAlerts);
     } catch (err) {
       console.error('Error checking zone entries:', err);
     }
@@ -90,7 +92,11 @@ export const ZoneAlertProvider = ({ children }) => {
     const interval = setInterval(checkZoneEntries, 5000);
     checkZoneEntries(); // Initial check
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      // Invalidate pending work on dismissal, replacement effects and unmount.
+      ++pollVersion.current;
+    };
   }, [dismissedAlerts]);
 
   return (

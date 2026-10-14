@@ -1,0 +1,14 @@
+jest.mock('../../../src/repositories/alert.repository', () => ({ findAlertById: jest.fn(), acknowledgeAlert: jest.fn(), listAlerts: jest.fn(), countUnreadAlerts: jest.fn(), markAsRead: jest.fn(), markAllAsRead: jest.fn() }));
+const repo = require('../../../src/repositories/alert.repository');
+const service = require('../../../src/services/alert.service');
+const user = { id: 'user' };
+beforeEach(() => { jest.resetAllMocks(); jest.useFakeTimers().setSystemTime(new Date('2026-01-04T00:00:00Z')); repo.findAlertById.mockResolvedValue({ id: 'alert', status: 'ACTIVE', generatedAt: new Date('2026-01-01T00:00:00Z'), acknowledgements: [] }); repo.acknowledgeAlert.mockResolvedValue({ acknowledgedAt: new Date(), readAt: new Date() }); });
+afterEach(() => jest.useRealTimers());
+test('B5-ALERT-01 exactly 72-hour-old alert remains acknowledgeable', async () => { expect(await service.acknowledgeAlert('alert', user)).toMatchObject({ success: true, isAcknowledged: true }); expect(repo.acknowledgeAlert).toHaveBeenCalledWith('alert', 'user'); });
+test('B5-ALERT-02 one millisecond beyond expiry prevents acknowledgement write', async () => { jest.setSystemTime(new Date('2026-01-04T00:00:00.001Z')); await expect(service.acknowledgeAlert('alert', user)).rejects.toMatchObject({ status: 400 }); expect(repo.acknowledgeAlert).not.toHaveBeenCalled(); });
+test('B5-ALERT-03 missing user prevents read lookup and mutation', async () => { await expect(service.markAsRead('alert', null)).rejects.toMatchObject({ status: 400 }); expect(repo.findAlertById).not.toHaveBeenCalled(); expect(repo.markAsRead).not.toHaveBeenCalled(); });
+test('B5-ALERT-04 acknowledgement repository failure remains observable', async () => { const error = new Error('fixture write error'); repo.acknowledgeAlert.mockRejectedValue(error); await expect(service.acknowledgeAlert('alert', user)).rejects.toBe(error); });
+test('B5-ALERT-05 list repository failure cannot return an empty success', async () => { const error = new Error('fixture list error'); repo.listAlerts.mockRejectedValue(error); await expect(service.listAlerts()).rejects.toBe(error); });
+test('B5-ALERT-06 unread count failure propagates', async () => { const error = new Error('fixture count error'); repo.countUnreadAlerts.mockRejectedValue(error); await expect(service.getUnreadCount(user)).rejects.toBe(error); });
+test('B5-ALERT-07 read receipt failure propagates without success', async () => { const error = new Error('fixture receipt error'); repo.markAsRead.mockRejectedValue(error); await expect(service.markAsRead('alert', user)).rejects.toBe(error); });
+test('B5-ALERT-08 mark-all failure propagates', async () => { const error = new Error('fixture batch error'); repo.markAllAsRead.mockRejectedValue(error); await expect(service.markAllAsRead(user)).rejects.toBe(error); });

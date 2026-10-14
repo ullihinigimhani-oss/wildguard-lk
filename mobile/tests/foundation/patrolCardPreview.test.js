@@ -13,10 +13,15 @@ jest.mock("../../src/components/patrol/PatrolMapSurface", () => ({ html }) => <>
 const points = [{ type: "START", order: 0, latitude: 7.2, longitude: 80.2 }, { type: "CHECKPOINT", order: 1, latitude: 7.3, longitude: 80.3 }];
 const record = (id) => ({ id, routeName: `Route ${id}`, park: { name: "Actual Park" }, scheduledDate: "2026-10-08", startTime: "2026-10-08T08:00:00Z", endTime: "2026-10-08T12:00:00Z", actualStartTime: "2026-10-08T08:15:00Z", status: "IN_PROGRESS", priority: "HIGH", patrolType: "ROUTINE" });
 beforeEach(() => {
+  jest.useFakeTimers();
   jest.clearAllMocks();
   getMyPatrol.mockImplementation(async (id) => ({ ...record(id), plannedRoute: id === "a" ? points : points.map((p) => ({ ...p, longitude: p.longitude + 1 })) }));
   getPatrolLocations.mockResolvedValue([{ latitude: 7.21, longitude: 80.21 }, { latitude: 7.22, longitude: 80.22 }]);
   useRangerPatrols.mockReturnValue({ patrols: [record("a"), record("b")], loading: false, error: null, refresh: jest.fn() });
+});
+afterEach(() => {
+  act(() => jest.runOnlyPendingTimers());
+  jest.useRealTimers();
 });
 test("visible cards load automatically with correct coordinates and cached return visits", async () => {
   const navigation = { navigate: jest.fn() };

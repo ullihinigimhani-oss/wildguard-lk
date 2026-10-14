@@ -26,8 +26,10 @@ async function generateIncidentReport(user, query) {
   // Get detailed incident records for the report
   const where = {
     ...(user?.parkId && { parkId: user.parkId }),
-    ...(filters.from && { reportedAt: { gte: filters.from } }),
-    ...(filters.to && { reportedAt: { lte: filters.to } }),
+    ...((filters.from || filters.to) && { reportedAt: {
+      ...(filters.from && { gte: filters.from }),
+      ...(filters.to && { lte: filters.to }),
+    } }),
     ...(filters.type && { incidentType: filters.type }),
     ...(filters.status && { status: filters.status }),
     ...(filters.area && {
@@ -90,7 +92,7 @@ async function generateIncidentReport(user, query) {
       reportedAt: inc.reportedAt,
       occurredAt: inc.occurredAt,
       location: inc.manualLocation || 
-        (inc.latitude && inc.longitude ? `${inc.latitude}, ${inc.longitude}` : "Unknown"),
+        (inc.latitude != null && inc.longitude != null ? `${inc.latitude}, ${inc.longitude}` : "Unknown"),
       reporterName: inc.reporter?.name || "Unknown",
       reporterRole: inc.reporter?.role || "Unknown",
       patrolRoute: inc.patrol?.routeName || "N/A",
@@ -231,8 +233,10 @@ async function generateConflictTrendReport(user, query) {
 
   // Get detailed community report records (do NOT expose reporter identity)
   const where = {
-    ...(filters.from && { submittedAt: { gte: filters.from } }),
-    ...(filters.to && { submittedAt: { lte: filters.to } }),
+    ...((filters.from || filters.to) && { submittedAt: {
+      ...(filters.from && { gte: filters.from }),
+      ...(filters.to && { lte: filters.to }),
+    } }),
     ...(filters.type && { reportType: filters.type }),
     ...(filters.status && { status: filters.status }),
     ...(filters.area && {
@@ -287,7 +291,7 @@ async function generateConflictTrendReport(user, query) {
       status: report.status,
       submittedAt: report.submittedAt,
       location: report.manualLocation || 
-        (report.latitude && report.longitude ? `${report.latitude}, ${report.longitude}` : "Unknown"),
+        (report.latitude != null && report.longitude != null ? `${report.latitude}, ${report.longitude}` : "Unknown"),
       isAnonymous: report.isAnonymous,
     })),
   };

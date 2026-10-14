@@ -3,6 +3,49 @@ jest.mock('../../../src/services/patrolRouteValidation.service', () => ({ valida
 const repository = require("../../../src/repositories/patrol.repository");
 const service = require("../../../src/services/patrol.service");
 
+describe('Batch 1 patrol persistence seams', () => {
+  const validation = require('../../../src/services/patrolRouteValidation.service');
+  beforeEach(() => {
+    validation.validate.mockReset().mockResolvedValue({});
+    repository.findPatrolById.mockResolvedValue({ id: 'p', status: 'SCHEDULED' });
+  });
+  test('[B1-PAT-01] route validation failure prevents scheduled creation', async () => {
+    const failure = Object.assign(new Error('No risk avoiding route'), { status: 422 });
+    validation.validate.mockRejectedValue(failure);
+    await expect(service.createPatrol(input(), 'manager')).rejects.toBe(failure);
+    expect(repository.createPatrol).not.toHaveBeenCalled();
+  });
+  test('[B1-PAT-02] editing cannot reassign an assigned Ranger to another park', async () => {
+    repository.findRanger.mockResolvedValue({ ...approvedRanger, parkId: 'other' });
+    await expect(service.updatePatrol('p', input(), 'manager')).rejects.toMatchObject({ status: 400,
+      fields: { assigned_ranger: 'This ranger is assigned to a different park.' } });
+    expect(validation.validate).not.toHaveBeenCalled();
+    expect(repository.updateScheduledPatrol).not.toHaveBeenCalled();
+  });
+  test('[B1-PAT-03] approved unassigned Ranger remains eligible for editing', async () => {
+    repository.updateScheduledPatrol.mockResolvedValue({ id: 'p', status: 'SCHEDULED' });
+    await expect(service.updatePatrol('p', input(), 'manager')).resolves.toMatchObject({ id: 'p' });
+    expect(validation.validate).toHaveBeenCalledWith('park-1', undefined, 'manager');
+    expect(repository.updateScheduledPatrol).toHaveBeenCalledWith('p', input());
+  });
+  test('[B1-PAT-04] edit persistence failure is not converted into successful readback', async () => {
+    const failure = new Error('Mock edit failed'); repository.updateScheduledPatrol.mockRejectedValue(failure);
+    await expect(service.updatePatrol('p', input(), 'manager')).rejects.toBe(failure);
+  });
+  test('[B1-PAT-05] cancellation persistence failure is propagated', async () => {
+    const failure = new Error('Mock cancel failed'); repository.updateScheduledPatrol.mockRejectedValue(failure);
+    await expect(service.cancelPatrol('p')).rejects.toBe(failure);
+    expect(repository.updateScheduledPatrol).toHaveBeenCalledWith('p', { status: 'CANCELLED' });
+  });
+  test('[B1-PAT-06] cancelled assignments are excluded without discarding completed history or mutating the repository list', async () => {
+    const rows = Object.freeze([Object.freeze({ id: 'cancelled', status: 'CANCELLED' }),
+      Object.freeze({ id: 'done', status: 'COMPLETED' }), Object.freeze({ id: 'active', status: 'IN_PROGRESS' })]);
+    repository.findRangerPatrols.mockResolvedValue(rows);
+    expect((await service.getRangerPatrols('r')).map(row => row.id)).toEqual(['done', 'active']);
+    expect(rows).toHaveLength(3); expect(repository.findRangerPatrols).toHaveBeenCalledWith('r');
+  });
+});
+
 const input = () => ({
   routeName: "Northern boundary sweep",
   parkId: "park-1",

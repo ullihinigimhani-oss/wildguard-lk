@@ -45,9 +45,12 @@ export default function WildlifeMonitoring() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    setRouteLocations([]);
     if (selectedAnimal) {
-      loadAnimalRoute(selectedAnimal);
+      loadAnimalRoute(selectedAnimal, () => active);
     }
+    return () => { active = false; };
   }, [selectedAnimal]);
 
   const loadData = async () => {
@@ -75,14 +78,14 @@ export default function WildlifeMonitoring() {
     }
   };
 
-  const loadAnimalRoute = async (animalId) => {
+  const loadAnimalRoute = async (animalId, isCurrent) => {
     try {
       const response = await getAnimalLocationsByDateRange(
         animalId,
         new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
         new Date().toISOString()
       );
-      setRouteLocations(response.data || []);
+      if (isCurrent()) setRouteLocations(response.data || []);
     } catch (err) {
       console.error('Error loading animal route:', err);
     }

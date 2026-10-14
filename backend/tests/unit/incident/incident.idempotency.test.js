@@ -43,6 +43,45 @@ test("legacy online creation remains compatible without an idempotency key", asy
   expect(repo.create.mock.calls[0][1]).not.toHaveProperty("id");
 });
 
+test('[B1-IDEM-01] uppercase UUID and equivalent timezone timestamp replay the same saved incident', async () => {
+  const saved = await service.create('p', body, user, key);
+  const replay = await service.create('p', { ...body, occurredAt: '2026-10-08T13:30:00+05:30' }, user, key.toUpperCase());
+  expect(replay.id).toBe(saved.id); expect(repo.create).toHaveBeenCalledTimes(1);
+});
+test('[B1-IDEM-02] a null or omitted manual location is equivalent on replay', async () => {
+  const { manualLocation, ...withoutLocation } = body;
+  const saved = await service.create('p', withoutLocation, user, key);
+  expect((await service.create('p', { ...withoutLocation, manualLocation: null }, user, key)).id).toBe(saved.id);
+  expect(repo.create).toHaveBeenCalledTimes(1);
+});
+test('[B1-IDEM-03] replay cannot attach inline evidence to an already saved report', async () => {
+  await service.create('p', body, user, key);
+  await expect(service.create('p', { ...body, evidence: [{ uploadId: 'new' }] }, user, key))
+    .rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT', status: 409 });
+  expect(repo.create).toHaveBeenCalledTimes(1);
+});
+test('[B1-IDEM-04] P2002 recovers only a matching owned persisted report', async () => {
+  const saved = await service.create('p', body, user, key);
+  repo.findIncident.mockResolvedValueOnce(null);
+  repo.withActivePatrol.mockRejectedValueOnce(Object.assign(new Error('Mock conflict'), { code: 'P2002' }));
+  expect((await service.create('p', body, user, key)).id).toBe(saved.id);
+  expect(repo.findIncident).toHaveBeenLastCalledWith(saved.id, user);
+  expect(repo.create).toHaveBeenCalledTimes(1);
+});
+test('[B1-IDEM-05] P2002 without an owned record preserves the original database error', async () => {
+  const failure = Object.assign(new Error('Mock conflict'), { code: 'P2002' });
+  repo.withActivePatrol.mockRejectedValueOnce(failure);
+  await expect(service.create('p', body, user, key)).rejects.toBe(failure);
+  expect(repo.create).not.toHaveBeenCalled();
+});
+test('[B1-IDEM-06] conflicting persisted content remains a 409 during database conflict recovery', async () => {
+  await service.create('p', body, user, key);
+  repo.findIncident.mockResolvedValueOnce(null);
+  repo.withActivePatrol.mockRejectedValueOnce(Object.assign(new Error('Mock conflict'), { code: 'P2002' }));
+  await expect(service.create('p', { ...body, longitude: 81 }, user, key)).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+  expect(repo.create).toHaveBeenCalledTimes(1);
+});
+
 test("completion winning the lock still recovers an already-persisted matching report", async () => {
   const saved = await service.create("p", body, user, key);
   repo.findIncident.mockResolvedValueOnce(null);

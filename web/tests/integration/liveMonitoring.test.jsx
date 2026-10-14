@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import RangerMonitoring from "../../src/pages/RangerMonitoring/RangerMonitoring";
 import { getPatrolTrail, listLiveRangers } from "../../src/services/patrolApi";
@@ -162,12 +162,13 @@ test("polls for updates on an interval and stops after leaving the page", async 
   vi.useFakeTimers();
   try {
     const { unmount } = mount();
-    await vi.advanceTimersByTimeAsync(0);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     expect(listLiveRangers).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(7000);
+    expect(screen.getByText('A. Perera')).toBeVisible();
+    await act(async () => { await vi.advanceTimersByTimeAsync(7000); });
     expect(listLiveRangers).toHaveBeenCalledTimes(2);
     unmount();
-    await vi.advanceTimersByTimeAsync(21000);
+    await act(async () => { await vi.advanceTimersByTimeAsync(21000); });
     expect(listLiveRangers).toHaveBeenCalledTimes(2);
   } finally {
     vi.useRealTimers();

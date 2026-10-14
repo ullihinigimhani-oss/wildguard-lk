@@ -126,7 +126,7 @@ export async function getCurrentDeviceLocation(options = {}) {
       coords: {
         latitude: Number(latitude.toFixed(6)),
         longitude: Number(longitude.toFixed(6)),
-        accuracy: accuracy ? Math.round(accuracy) : null,
+        accuracy: Number.isFinite(accuracy) && accuracy >= 0 ? Math.round(accuracy) : null,
       },
     };
   } catch (err) {

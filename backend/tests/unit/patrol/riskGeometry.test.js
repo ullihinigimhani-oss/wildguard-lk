@@ -7,6 +7,50 @@ const {
   withinLimits,
 } = require("../../../../shared/riskGeometry");
 const { distanceMeters } = require("../../../../shared/patrolNavigation");
+
+test('[B1-GEO-01] maximum radius is valid but an additional millimeter is not', () => {
+  const input = Object.freeze({ centerLatitude: 7.5, centerLongitude: 80.7, radiusMeters: 5000 });
+  expect(zonePolygon(input).type).toBe('Polygon');
+  expect(zonePolygon({ ...input, radiusMeters: 5000.001 })).toBeNull();
+  expect(input.radiusMeters).toBe(5000);
+});
+test('[B1-GEO-02] exactly 32 zones fit while 33 zones exceed policy', () => {
+  const { RISK_POLICY } = require('../../../../shared/riskGeometry');
+  const tiny = { radiusMeters: 1, geometry: zonePolygon({ centerLatitude: 7.5, centerLongitude: 80.7, radiusMeters: 1 }) };
+  expect(withinLimits(Array(32).fill(tiny))).toBe(true);
+  expect(withinLimits(Array(RISK_POLICY.maxZones + 1).fill(tiny))).toBe(false);
+});
+test.each([['B1-GEO-03', 18000, true], ['B1-GEO-04', 18000.001, false]])(
+  '[%s] computed extent %f m respects the inclusive policy boundary', (_id, extent, allowed) => {
+    // Isolate the comparison from floating point coordinate construction. Real distance math
+    // has its own navigation tests; real geometry is retained here.
+    let isolated;
+    jest.isolateModules(() => {
+      jest.doMock('../../../../shared/patrolNavigation', () => ({
+        ...jest.requireActual('../../../../shared/patrolNavigation'), distanceMeters: () => extent,
+      }));
+      isolated = require('../../../../shared/riskGeometry');
+    });
+    try { expect(isolated.withinLimits([{ radiusMeters: 100, geometry: zonePolygon({ centerLatitude: 7.5, centerLongitude: 80.7, radiusMeters: 100 }) }])).toBe(allowed); }
+    finally { jest.dontMock('../../../../shared/patrolNavigation'); }
+  });
+test('[B1-GEO-05] combined area accepts its calculated boundary and rejects additional radius', () => {
+  const { RISK_POLICY } = require('../../../../shared/riskGeometry');
+  const radius = (Math.sqrt(RISK_POLICY.maxAreaMeters2 / (2 * Math.PI)) - 0.1) * Math.cos(Math.PI / RISK_POLICY.vertices);
+  const make = value => ({ radiusMeters: value, geometry: zonePolygon({ centerLatitude: 7.5, centerLongitude: 80.7, radiusMeters: value }) });
+  const area = 2 * Math.PI * (radius / Math.cos(Math.PI / RISK_POLICY.vertices) + 0.1) ** 2;
+  expect(area).toBeCloseTo(RISK_POLICY.maxAreaMeters2, 5);
+  expect(withinLimits([make(radius), make(radius)])).toBe(true);
+  expect(withinLimits([make(radius + 0.001), make(radius + 0.001)])).toBe(false);
+});
+test('[B1-GEO-06] a route touching a boundary vertex intersects without changing either input', () => {
+  const geometry = zonePolygon({ centerLatitude: 7.5, centerLongitude: 80.7, radiusMeters: 100 });
+  const vertex = geometry.coordinates[0][0];
+  const route = { type: 'LineString', coordinates: [[vertex[0], vertex[1] + 0.001], [...vertex]] };
+  const before = JSON.stringify({ geometry, route });
+  expect(routeIntersectsZones(route, [{ radiusMeters: 100, geometry }])).toBe(true);
+  expect(JSON.stringify({ geometry, route })).toBe(before);
+});
 const zone = (latitude = 7.5, longitude = 80.7, radius = 100) => ({
   radiusMeters: radius,
   geometry: zonePolygon({

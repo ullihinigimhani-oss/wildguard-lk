@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
+import userEvent from "@testing-library/user-event";
 import EditPatrol from "../../src/pages/PatrolManagement/EditPatrol";
 import PatrolManagement from "../../src/pages/PatrolManagement/PatrolManagement";
 import { getPatrol, updatePatrol, createPatrol, cancelPatrol, listPatrols, listAssignableRangers } from "../../src/services/patrolApi";
@@ -54,11 +55,14 @@ test("prepopulates details and route, saves the same ID and reassignment without
   expect(createPatrol).not.toHaveBeenCalled();
 });
 test("save conflict preserves edits and displays the server conflict", async () => {
+  const user = userEvent.setup();
   updatePatrol.mockRejectedValue({ response: { status: 409, data: { message: "This patrol changed. Refresh and try again." } } });
   mountEdit(); await screen.findByDisplayValue("Existing patrol");
-  fireEvent.click(screen.getByRole('button',{name:'Validate walking route'}));
+  await waitFor(() => expect(screen.getByLabelText("Park / Ranger Area *")).toBeEnabled());
+  await waitFor(() => expect(screen.getByLabelText("Assigned Ranger *")).toBeEnabled());
+  await user.click(screen.getByRole('button',{name:'Validate walking route'}));
   await screen.findByText(/Walking route verified/);
-  fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+  await user.click(screen.getByRole("button", { name: "Save Changes" }));
   await screen.findByText("This patrol changed. Refresh and try again.");
   expect(screen.getByLabelText("Patrol Title *")).toHaveValue("Existing patrol");
 });

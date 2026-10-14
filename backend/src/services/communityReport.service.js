@@ -288,8 +288,8 @@ exports.forwardToIncidentResponse = async (id, user, options = {}) => {
     title,
     incidentType: mapReportTypeToIncidentType(report.reportType),
     description: incidentDescription,
-    latitude: report.latitude || null,
-    longitude: report.longitude || null,
+    latitude: report.latitude ?? null,
+    longitude: report.longitude ?? null,
     manualLocation: report.manualLocation || null,
     occurredAt: report.submittedAt || new Date(),
     evidence,
@@ -321,8 +321,8 @@ exports.forwardToIncidentResponse = async (id, user, options = {}) => {
     notes,
     location: {
       manualLocation: report.manualLocation || null,
-      latitude: report.latitude || null,
-      longitude: report.longitude || null,
+      latitude: report.latitude ?? null,
+      longitude: report.longitude ?? null,
     },
   };
 

@@ -1,7 +1,7 @@
 module.exports = {
   preset: "jest-expo",
   testMatch: ["<rootDir>/tests/foundation/**/*.test.js"],
-  setupFilesAfterEnv: ["<rootDir>/tests/setup.js"],
+  setupFilesAfterEnv: ["<rootDir>/tests/isolation.cjs", "<rootDir>/tests/setup.js"],
   clearMocks: true,
   moduleDirectories: ["node_modules", "<rootDir>/node_modules"],
 };
