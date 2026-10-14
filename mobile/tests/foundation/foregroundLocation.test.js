@@ -184,3 +184,25 @@ test("disabled Android services open system Location Settings without enabling s
     Platform.OS = previous;
   }
 });
+
+test('[B4-WATCH-01] native subscription rejection shows recovery state and retry establishes new watcher',async()=>{
+ Location.watchPositionAsync.mockRejectedValueOnce(new Error('native watcher failed')); const view=renderHook(()=>useForegroundLocation(true)); await waitFor(()=>expect(view.result.current.errorCode).toBe('GPS_UNAVAILABLE'));
+ act(()=>view.result.current.retry()); await waitFor(()=>expect(Location.watchPositionAsync).toHaveBeenCalledTimes(2)); const timestamp=Date.now(); act(()=>receive({coords:{latitude:7.51234567,longitude:80.71234567,accuracy:10},timestamp})); expect(view.result.current.position.latitude).toBe(7.51234567); expect(view.result.current.position.timestamp).toBe(timestamp); view.unmount(); expect(remove).toHaveBeenCalledTimes(1);
+});
+test('[B4-WATCH-02] native watcher error callback clears position without leaking subscription',async()=>{
+ const view=renderHook(()=>useForegroundLocation(true)); await waitFor(()=>expect(Location.watchPositionAsync).toHaveBeenCalled()); const failure=Location.watchPositionAsync.mock.calls[0][2]; act(()=>failure(new Error('native private detail'))); expect(view.result.current.position).toBeNull(); expect(view.result.current.error).not.toContain('private'); view.unmount(); expect(remove).toHaveBeenCalledTimes(1);
+});
+test('[B4-WATCH-03] retry removes old watcher and late old callback cannot update new subscription',async()=>{
+ const view=renderHook(()=>useForegroundLocation(true)); await waitFor(()=>expect(Location.watchPositionAsync).toHaveBeenCalled()); const old=receive; act(()=>view.result.current.retry()); await waitFor(()=>expect(Location.watchPositionAsync).toHaveBeenCalledTimes(2)); expect(remove).toHaveBeenCalledTimes(1);
+ act(()=>old({coords:{latitude:8,longitude:81,accuracy:10},timestamp:Date.now()})); expect(view.result.current.position).toBeNull(); act(()=>receive({coords:{latitude:7,longitude:80,accuracy:10},timestamp:Date.now()})); expect(view.result.current.position.latitude).toBe(7); view.unmount(); expect(remove).toHaveBeenCalledTimes(2);
+});
+test('[B4-WATCH-04] missing timestamp and out-of-range coordinates cannot become navigation positions',async()=>{
+ const view=renderHook(()=>useForegroundLocation(true)); await waitFor(()=>expect(Location.watchPositionAsync).toHaveBeenCalled());
+ for(const fix of [{coords:{latitude:7,longitude:80,accuracy:10}},{coords:{latitude:90.1,longitude:80,accuracy:10},timestamp:Date.now()}]) {act(()=>receive(fix)); expect(view.result.current.position).toBeNull(); expect(view.result.current.errorCode).toBe('GPS_UNAVAILABLE');} view.unmount();
+});
+test('[B4-WATCH-05] exact fix age and accuracy limits are inclusive, one extra millisecond rejects',async()=>{
+ const {NAVIGATION}=require('../../../shared/patrolNavigation'); const now=new Date('2026-01-01T00:00:00Z').getTime(); jest.spyOn(Date,'now').mockReturnValue(now);
+ const view=renderHook(()=>useForegroundLocation(true)); await waitFor(()=>expect(Location.watchPositionAsync).toHaveBeenCalled());
+ const fix={coords:{latitude:7,longitude:80,accuracy:NAVIGATION.maximumAccuracyMeters},timestamp:now-NAVIGATION.fixMaxAgeMs}; act(()=>receive(fix)); expect(view.result.current.position).toEqual({latitude:7,longitude:80,accuracy:NAVIGATION.maximumAccuracyMeters,timestamp:fix.timestamp});
+ act(()=>receive({...fix,timestamp:fix.timestamp-1})); expect(view.result.current.position).toBeNull(); expect(view.result.current.errorCode).toBe('GPS_UNAVAILABLE'); view.unmount();
+});

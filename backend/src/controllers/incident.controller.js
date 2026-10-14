@@ -32,12 +32,13 @@ exports.edit = endpoint(async req => ({
 }));
 exports.updateStatus = async (req, res, next) => {
   try {
-    const { incidentId } = req.params;
-    const { markAsDone, status } = req.body;
-    const db = require("../config/database");
+    const incidentId = id(req.params.incidentId, "incidentId");
+    const markAsDone = req.body?.markAsDone;
 
     // Handle markAsDone for ranger feature
     if (markAsDone !== undefined) {
+      onlyKeys(req.body, ["markAsDone"]);
+      const db = require("../config/database");
       const result = await db.incident.update({
         where: { id: incidentId },
         data: { markAsDone }
@@ -45,12 +46,9 @@ exports.updateStatus = async (req, res, next) => {
       res.json({ success: true, message: 'Incident marked as done successfully' });
     }
     // Handle status for manager review feature
-    else if (status !== undefined) {
-      const incident = await service.updateStatus(incidentId, status, req.user);
-      res.json({ success: true, incident });
-    }
     else {
-      res.status(400).json({ success: false, message: 'Either markAsDone or status must be provided' });
+      const incident = await service.updateStatus(incidentId, validateStatus(req.body), req.user);
+      res.set("Cache-Control", "no-store").json({ success: true, incident });
     }
   } catch (error) {
     next(error);

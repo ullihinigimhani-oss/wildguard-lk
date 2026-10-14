@@ -5,6 +5,25 @@ import {
 } from "../utils/incidentEvidence";
 import { api } from "./api";
 
+function waitForReceiptPoll(signal) {
+  return new Promise((resolve, reject) => {
+    let timer;
+    const cancel = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+      reject(Object.assign(new Error("Evidence upload cancelled."), {
+        name: "CanceledError", code: "ERR_CANCELED",
+      }));
+    };
+    if (signal?.aborted) return cancel();
+    signal?.addEventListener("abort", cancel, { once: true });
+    timer = setTimeout(() => {
+      signal?.removeEventListener("abort", cancel);
+      resolve();
+    }, 1000);
+  });
+}
+
 export async function uploadIncidentEvidence(incidentId, item, onProgress, options = {}) {
   const started = Date.now();
   const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
@@ -66,7 +85,7 @@ export async function uploadIncidentEvidence(incidentId, item, onProgress, optio
       throw new Error("The server did not confirm the upload receipt.");
     const deadline = Date.now() + 240000;
     while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await waitForReceiptPoll(options.signal);
       try {
         const status = await api.get(
           `/incidents/${encodeURIComponent(incidentId)}/evidence/uploads/${encodeURIComponent(jobId)}`,
@@ -101,7 +120,8 @@ export async function getEvidenceAccess(incidentId, evidenceId) {
   if (
     !data?.success ||
     !data.access?.path?.startsWith(expected) ||
-    !Number.isFinite(Date.parse(data.access.expiresAt))
+    !Number.isFinite(Date.parse(data.access.expiresAt)) ||
+    Date.parse(data.access.expiresAt) <= Date.now()
   )
     throw new Error("Private media access could not be confirmed.");
   return {

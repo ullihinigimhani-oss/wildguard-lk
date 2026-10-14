@@ -1,6 +1,34 @@
 const { classifyPatrol, localDateKey, scheduleInstant, expectedEnd, delayDuration, matchesFilter, dashboardPatrols } = require('../../../../shared/patrolLifecycle');
 const scheduled = (overrides = {}) => ({ id: 'patrol-a', status: 'SCHEDULED', scheduledDate: '2026-10-07T00:00:00Z', startTime: '2026-10-07T08:00:00+05:30', endTime: '2026-10-07T12:00:00+05:30', ...overrides });
 const at = time => new Date('2026-10-07T' + time + '+05:30');
+
+test.each([['B1-LIFE-01', 'SCHEDULED'], ['B1-LIFE-02', 'IN_PROGRESS']])('[%s] %s becomes overdue only after the exact deadline', (_id, status) => {
+  const patrol = Object.freeze(scheduled({ status }));
+  expect(classifyPatrol(patrol, at('12:00:00')).overdue).toBe(false);
+  expect(classifyPatrol(patrol, new Date(at('12:00:00').getTime() + 1)).overdue).toBe(true);
+  expect(patrol.status).toBe(status);
+});
+test('[B1-LIFE-03] a one ms late completion has a late badge without invented full minutes', () => {
+  expect(classifyPatrol(scheduled({ status: 'COMPLETED', actualEndTime: new Date(at('12:00:00').getTime() + 1) }), at('13:00:00')))
+    .toMatchObject({ lateness: 1, completedLate: true, completionText: 'Completed less than 1 minute after expected end' });
+});
+test('[B1-LIFE-04] equal schedules use stable IDs without reordering caller assignments', () => {
+  const b = Object.freeze(scheduled({ id: 'b' })), a = Object.freeze(scheduled({ id: 'a' }));
+  const input = Object.freeze([b, a]);
+  expect(dashboardPatrols(input, at('09:00:00')).selected.id).toBe('a');
+  expect(input.map(row => row.id)).toEqual(['b', 'a']);
+});
+test('[B1-LIFE-05] date-only leap-day deadlines roll over at Sri Lankan midnight', () => {
+  const patrol = scheduled({ scheduledDate: '2024-02-29', startTime: null, endTime: null });
+  expect(new Date(expectedEnd(patrol)).toISOString()).toBe('2024-02-29T18:30:00.000Z');
+});
+test('[B1-LIFE-06] invalid scheduled date falls back to a valid start timestamp', () => {
+  const { scheduleDateKey } = require('../../../../shared/patrolLifecycle');
+  expect(scheduleDateKey(scheduled({ scheduledDate: 'invalid', startTime: '2026-12-31T19:00:00Z' }))).toBe('2027-01-01');
+});
+test('[B1-LIFE-07] unknown filters never accidentally match an assignment', () => {
+  expect(matchesFilter(scheduled(), 'UNSUPPORTED', at('09:00:00'))).toBe(false);
+});
 test('A: today scheduled assignment can start even before scheduled start', () => {
   expect(classifyPatrol(scheduled(), at('07:00:00'))).toMatchObject({ today: true, overdue: false, badges: ['TODAY'], action: 'Start Patrol' });
 });

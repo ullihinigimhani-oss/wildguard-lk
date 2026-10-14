@@ -365,9 +365,16 @@ test("creation failure preserves selections; unavailable iOS files require resel
   );
   expect(ui.getByLabelText("Selected evidence: 0.jpg")).toBeTruthy();
   File.mockImplementation(() => ({ exists: false, size: 0 }));
-  fireEvent.press(ui.getByLabelText("Submit Incident"));
-  await ui.findByText(/unavailable.*select it again/);
-  expect(createIncident).toHaveBeenCalledTimes(1);
+  const diagnostic = jest.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    fireEvent.press(ui.getByLabelText("Submit Incident"));
+    await ui.findByText(/unavailable.*select it again/);
+    expect(createIncident).toHaveBeenCalledTimes(1);
+    expect(diagnostic).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(diagnostic.mock.calls[0][0])).toMatchObject({
+      stage: "client_file_prepare", step: "stable_stat", code: "LOCAL_MEDIA_UNAVAILABLE",
+    });
+  } finally { diagnostic.mockRestore(); }
 });
 test("editing shows existing evidence separately and uploads only newly selected files", async () => {
   getIncident.mockResolvedValue({

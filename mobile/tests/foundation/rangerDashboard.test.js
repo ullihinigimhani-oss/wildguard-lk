@@ -1,5 +1,5 @@
 import React from "react";
-import { render, fireEvent } from "@testing-library/react-native";
+import { render, fireEvent, act } from "@testing-library/react-native";
 import HomeScreen from "../../src/screens/home/HomeScreen";
 import MyPatrolScreen from "../../src/screens/patrol/MyPatrolScreen";
 import ProfileScreen from "../../src/screens/profile/ProfileScreen";
@@ -65,7 +65,14 @@ const loaded = (patrols) =>
     error: null,
     refresh: jest.fn(),
   });
-beforeEach(() => loaded([]));
+beforeEach(() => {
+  jest.useFakeTimers();
+  loaded([]);
+});
+afterEach(() => {
+  act(() => jest.runOnlyPendingTimers());
+  jest.useRealTimers();
+});
 test("dashboard shows real confirmed user details, empty state and quick actions", () => {
   const nav = navigation();
   const ui = render(<HomeScreen navigation={nav} />);
@@ -122,7 +129,7 @@ test("K: real overdue count navigates to Overdue filter", () => {
   expect(nav.navigate).toHaveBeenCalledWith("Patrol", { filter: "OVERDUE" });
   expect(ui.getByText("ACTIVE PATROL")).toBeTruthy();
 });
-test("all six filters, completed-late history and removal from overdue", () => {
+test("all six filters, completed-late history and removal from overdue", async () => {
   const active = patrol({
     id: "active",
     routeName: "Active sweep",
@@ -144,7 +151,10 @@ test("all six filters, completed-late history and removal from overdue", () => {
     ["Overdue", "Past sweep"],
     ["Completed", "Finished sweep"],
   ]) {
-    fireEvent.press(ui.getByRole("button", { name: label }));
+    await act(async () => {
+      fireEvent.press(ui.getByRole("button", { name: label }));
+      jest.runOnlyPendingTimers();
+    });
     expect(ui.getAllByRole("header")).toHaveLength(2);
     expect(ui.getByText(title)).toBeTruthy();
   }

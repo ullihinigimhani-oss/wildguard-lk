@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, renderAsync, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 import { Share, Alert as NativeAlert } from "react-native";
 import AlertsScreen from "../../src/screens/alerts/AlertsScreen";
 import AlertDetailsScreen, {
@@ -310,7 +310,7 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
     const route = { params: { alertData: mockActiveAlerts[0] } };
     alertApi.acknowledgeAlert.mockResolvedValueOnce({ success: true });
 
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     expect(screen.getByText("CRITICAL SAFETY ALERT")).toBeTruthy();
     expect(screen.getByText("STATUS: ACTIVE")).toBeTruthy();
@@ -341,7 +341,7 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
     const route = { params: { alertId: "alert-1" } };
     alertApi.getAlertById.mockResolvedValueOnce(mockActiveAlerts[0]);
 
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     await waitFor(() => {
       expect(alertApi.getAlertById).toHaveBeenCalledWith("alert-1");
@@ -360,9 +360,9 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
     expect(getAlertTypeLabel(null)).toBe("Community Safety Notice");
   });
 
-  test("AlertDetailsScreen toggles map view when coordinates are present", () => {
+  test("AlertDetailsScreen toggles map view when coordinates are present", async () => {
     const route = { params: { alertData: mockActiveAlerts[0] } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     const mapButton = screen.getByLabelText("View on Map");
     expect(mapButton).toBeTruthy();
@@ -381,7 +381,7 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
     });
 
     const goBack = jest.fn();
-    render(<AlertDetailsScreen route={route} navigation={{ goBack }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack }} />);
 
     await waitFor(() => {
       expect(screen.getByText("Safety Alert Not Found")).toBeTruthy();
@@ -395,7 +395,7 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
     const route = { params: { alertId: "   " } };
     const goBack = jest.fn();
 
-    render(<AlertDetailsScreen route={route} navigation={{ goBack }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack }} />);
 
     expect(screen.getByText("Invalid Alert Reference")).toBeTruthy();
     expect(screen.getByText("Invalid alert identifier provided.")).toBeTruthy();
@@ -410,7 +410,7 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
       .mockRejectedValueOnce(new Error("Network Error"))
       .mockResolvedValueOnce(mockActiveAlerts[0]);
 
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     await waitFor(() => {
       expect(screen.getByText("Unable to Load Alert")).toBeTruthy();
@@ -424,16 +424,16 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
     });
   });
 
-  test("AlertDetailsScreen displays resolved alert banner and resolved time", () => {
+  test("AlertDetailsScreen displays resolved alert banner and resolved time", async () => {
     const route = { params: { alertData: mockResolvedAlert } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     expect(screen.getByText("ALL CLEAR — ALERT RESOLVED")).toBeTruthy();
     expect(screen.getByText("STATUS: RESOLVED")).toBeTruthy();
     expect(screen.getByText("Alert Resolved (No Action Needed)")).toBeTruthy();
   });
 
-  test("AlertDetailsScreen displays expired alert banner when active alert is expired", () => {
+  test("AlertDetailsScreen displays expired alert banner when active alert is expired", async () => {
     const expiredAlert = {
       ...mockActiveAlerts[0],
       isExpired: true,
@@ -441,7 +441,7 @@ describe("Task 9: Community Safety & Wildlife Alerts", () => {
       status: "ACTIVE",
     };
     const route = { params: { alertData: expiredAlert } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     expect(screen.getByText("NOTICE EXPIRED")).toBeTruthy();
     expect(screen.getByText("STATUS: EXPIRED")).toBeTruthy();
@@ -509,16 +509,45 @@ describe("Task 11: Alert Read/Unread Management", () => {
 
   test("AlertDetailsScreen automatically calls markAlertAsRead on mount for an unread active alert", async () => {
     const route = { params: { alertData: unreadAlert } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     await waitFor(() => {
       expect(alertApi.markAlertAsRead).toHaveBeenCalledWith("alert-unread-1");
     });
   });
 
+  test("a delayed automatic read updates the visible notice inside the awaited React lifecycle", async () => {
+    let finish;
+    alertApi.markAlertAsRead.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const errors = jest.spyOn(console, "error"); // Call through: unexpected errors remain visible.
+    try {
+      await renderAsync(<AlertDetailsScreen route={{ params: { alertData: unreadAlert } }} navigation={{ goBack: jest.fn() }} />);
+      expect(screen.getByText("UNREAD NOTICE")).toBeTruthy();
+      expect(alertApi.markAlertAsRead).toHaveBeenCalledWith(unreadAlert.id);
+      await act(async () => finish({ success: true, readAt: "2026-10-08T08:30:00.000Z" }));
+      expect(screen.getByText("READ")).toBeTruthy();
+      expect(screen.queryByText("UNREAD NOTICE")).toBeNull();
+      expect(errors).not.toHaveBeenCalled();
+    } finally { errors.mockRestore(); }
+  });
+
+  test("a delayed automatic read does not update an unmounted alert details screen", async () => {
+    let finish;
+    alertApi.markAlertAsRead.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const errors = jest.spyOn(console, "error");
+    try {
+      const view = await renderAsync(<AlertDetailsScreen route={{ params: { alertData: unreadAlert } }} navigation={{ goBack: jest.fn() }} />);
+      expect(alertApi.markAlertAsRead).toHaveBeenCalledTimes(1);
+      await view.unmountAsync();
+      await act(async () => finish({ success: true }));
+      expect(view.toJSON()).toBeNull();
+      expect(errors).not.toHaveBeenCalled();
+    } finally { errors.mockRestore(); }
+  });
+
   test("AlertDetailsScreen does NOT call markAlertAsRead when alert is already read or acknowledged", async () => {
     const route = { params: { alertData: readAlert } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     await waitFor(() => {
       expect(alertApi.markAlertAsRead).not.toHaveBeenCalled();
@@ -529,7 +558,7 @@ describe("Task 11: Alert Read/Unread Management", () => {
     const route = { params: { alertData: unreadAlert } };
     alertApi.acknowledgeAlert.mockRejectedValueOnce(new Error("Network timeout"));
 
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     // Click acknowledge button
     const ackBtn = screen.getByText("Acknowledge This Alert");
@@ -736,9 +765,9 @@ describe("Task 12: Acknowledge Safety Alert (Explicit Acknowledgement)", () => {
     expect(screen.queryByText("Acknowledge")).toBeNull();
   });
 
-  test("AlertDetailsScreen displays SAFETY INSTRUCTIONS ACKNOWLEDGED banner with formatted timestamp", () => {
+  test("AlertDetailsScreen displays SAFETY INSTRUCTIONS ACKNOWLEDGED banner with formatted timestamp", async () => {
     const route = { params: { alertData: fullyAcknowledgedAlert } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     expect(screen.getByText("SAFETY INSTRUCTIONS ACKNOWLEDGED")).toBeTruthy();
     expect(screen.getByText(/You confirmed understanding on/)).toBeTruthy();
@@ -747,7 +776,7 @@ describe("Task 12: Acknowledge Safety Alert (Explicit Acknowledgement)", () => {
 
   test("AlertDetailsScreen provides confirmation feedback and enters acknowledged state upon button press", async () => {
     const route = { params: { alertData: readUnacknowledgedAlert } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     const ackBtn = screen.getByText("Acknowledge This Alert");
     fireEvent.press(ackBtn);
@@ -763,14 +792,14 @@ describe("Task 12: Acknowledge Safety Alert (Explicit Acknowledgement)", () => {
     });
   });
 
-  test("AlertDetailsScreen disables acknowledge button for resolved and expired alerts", () => {
-    const { unmount } = render(
+  test("AlertDetailsScreen disables acknowledge button for resolved and expired alerts", async () => {
+    const { unmountAsync } = await renderAsync(
       <AlertDetailsScreen route={{ params: { alertData: resolvedAlert } }} navigation={{ goBack: jest.fn() }} />
     );
     expect(screen.getByText("Alert Resolved (No Action Needed)")).toBeTruthy();
-    unmount();
+    await unmountAsync();
 
-    render(
+    await renderAsync(
       <AlertDetailsScreen route={{ params: { alertData: expiredAlert } }} navigation={{ goBack: jest.fn() }} />
     );
     expect(screen.getByText("Notice Expired")).toBeTruthy();
@@ -887,7 +916,7 @@ describe("Task 13: Share Safety Alert (Safe Public Sharing & Native Integration)
 
   test("AlertDetailsScreen Share button invokes shareSafetyAlert and triggers native share", async () => {
     const route = { params: { alertData: sensitiveAlert } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     const shareBtn = screen.getByText("Share Alert with Community");
     fireEvent.press(shareBtn);
@@ -991,11 +1020,11 @@ describe("Task 14: Authorized Wildlife Alert Response", () => {
     mockUser = { id: "user-test-1", name: "Community Member", role: "COMMUNITY_USER" };
   });
 
-  test("normal COMMUNITY_USER does NOT receive operational response controls", () => {
+  test("normal COMMUNITY_USER does NOT receive operational response controls", async () => {
     mockUser = { id: "user-test-1", name: "Community Member", role: "COMMUNITY_USER" };
 
     const route = { params: { alertData: activeAlertForResponse } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     // Public community buttons are present
     expect(screen.getByText("Acknowledge This Alert")).toBeTruthy();
@@ -1038,11 +1067,11 @@ describe("Task 14: Authorized Wildlife Alert Response", () => {
     });
   });
 
-  test("COMMUNITY_LIAISON sees operational response controls on AlertDetailsScreen", () => {
+  test("COMMUNITY_LIAISON sees operational response controls on AlertDetailsScreen", async () => {
     mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
 
     const route = { params: { alertData: activeAlertForResponse } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     expect(screen.getByText("Authorized Liaison Response")).toBeTruthy();
     expect(screen.getByText("Target Alert Status:")).toBeTruthy();
@@ -1050,11 +1079,11 @@ describe("Task 14: Authorized Wildlife Alert Response", () => {
     expect(screen.getByText("Forward Alert (Handoff)")).toBeTruthy();
   });
 
-  test("operational response note shorter than 5 chars triggers validation alert without calling API", () => {
+  test("operational response note shorter than 5 chars triggers validation alert without calling API", async () => {
     mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
 
     const route = { params: { alertData: activeAlertForResponse } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     const noteInput = screen.getByPlaceholderText(/Liaison contacted Grama Niladhari/);
     fireEvent.changeText(noteInput, "ok");
@@ -1073,7 +1102,7 @@ describe("Task 14: Authorized Wildlife Alert Response", () => {
     mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
 
     const route = { params: { alertData: activeAlertForResponse } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     const noteInput = screen.getByPlaceholderText(/Liaison contacted Grama Niladhari/);
     fireEvent.changeText(noteInput, "Perimeter flares deployed and watchtower alerted.");
@@ -1100,7 +1129,7 @@ describe("Task 14: Authorized Wildlife Alert Response", () => {
     mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
 
     const route = { params: { alertData: activeAlertForResponse } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     // Select Mark Resolved status pill
     const markResolvedPill = screen.getByLabelText("Status: Resolved");
@@ -1127,7 +1156,7 @@ describe("Task 14: Authorized Wildlife Alert Response", () => {
     mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
 
     const route = { params: { alertData: activeAlertForResponse } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     const forwardRangerBtn = screen.getByText("Forward to Ranger");
     fireEvent.press(forwardRangerBtn);
@@ -1167,7 +1196,7 @@ describe("Task 14: Authorized Wildlife Alert Response", () => {
     });
 
     const route = { params: { alertData: activeAlertForResponse } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     // Select Park Manager target
     const mgrPill = screen.getByLabelText("Forward to Park Manager");
@@ -1187,11 +1216,11 @@ describe("Task 14: Authorized Wildlife Alert Response", () => {
     });
   });
 
-  test("displays existing operational action record when present on alert", () => {
+  test("displays existing operational action record when present on alert", async () => {
     mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
 
     const route = { params: { alertData: alertWithExistingResponse } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     expect(screen.getByText("Operational Action Record")).toBeTruthy();
     expect(screen.getByText(/Officer Nimal/)).toBeTruthy();
@@ -1200,11 +1229,11 @@ describe("Task 14: Authorized Wildlife Alert Response", () => {
     expect(screen.getByText(/Forwarded to Ranger Patrol Division/)).toBeTruthy();
   });
 
-  test("operational response controls are closed for resolved alert", () => {
+  test("operational response controls are closed for resolved alert", async () => {
     mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
 
     const route = { params: { alertData: resolvedAlert } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     // Response controls must be closed
     expect(screen.queryByText("Submit Operational Response")).toBeNull();
@@ -1275,21 +1304,21 @@ describe("Task 15: High-Priority Alert Escalation", () => {
     affectedArea: "North Gate",
   };
 
-  test("COMMUNITY_USER cannot see management escalation controls", () => {
+  test("COMMUNITY_USER cannot see management escalation controls", async () => {
     mockUser = { id: "user-1", name: "Community Member", role: "COMMUNITY_USER" };
 
     const route = { params: { alertData: criticalAlertForEscalation } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     expect(screen.queryByText("High-Priority Management Escalation")).toBeNull();
     expect(screen.queryByText("Escalate to Incident Response")).toBeNull();
   });
 
-  test("COMMUNITY_LIAISON sees severity restriction notice on MEDIUM alert", () => {
+  test("COMMUNITY_LIAISON sees severity restriction notice on MEDIUM alert", async () => {
     mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
 
     const route = { params: { alertData: mediumAlert } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     expect(screen.getByText("High-Priority Management Escalation")).toBeTruthy();
     expect(
@@ -1303,7 +1332,7 @@ describe("Task 15: High-Priority Alert Escalation", () => {
     const alertSpy = jest.spyOn(NativeAlert, "alert");
 
     const route = { params: { alertData: criticalAlertForEscalation } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     const reasonInput = screen.getByPlaceholderText(
       "Provide justification for Conservation Operations & Incident Response dispatch (min 10 chars)..."
@@ -1356,7 +1385,7 @@ describe("Task 15: High-Priority Alert Escalation", () => {
     });
 
     const route = { params: { alertData: criticalAlertForEscalation } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     const reasonInput = screen.getByPlaceholderText(
       "Provide justification for Conservation Operations & Incident Response dispatch (min 10 chars)..."
@@ -1415,7 +1444,7 @@ describe("Task 15: High-Priority Alert Escalation", () => {
     });
 
     const route = { params: { alertData: highAlertForEscalation } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     const reasonInput = screen.getByPlaceholderText(
       "Provide justification for Conservation Operations & Incident Response dispatch (min 10 chars)..."
@@ -1437,11 +1466,11 @@ describe("Task 15: High-Priority Alert Escalation", () => {
     });
   });
 
-  test("displays active escalation badge and locks duplicate active escalation when already escalated", () => {
+  test("displays active escalation badge and locks duplicate active escalation when already escalated", async () => {
     mockUser = { id: "liaison-1", name: "Liaison Officer", role: "COMMUNITY_LIAISON" };
 
     const route = { params: { alertData: alreadyEscalatedAlert } };
-    render(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
+    await renderAsync(<AlertDetailsScreen route={route} navigation={{ goBack: jest.fn() }} />);
 
     expect(screen.getByText("Management Escalation Record")).toBeTruthy();
     expect(screen.getByText("ESCALATED: PENDING")).toBeTruthy();

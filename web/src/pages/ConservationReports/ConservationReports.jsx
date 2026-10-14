@@ -471,12 +471,15 @@ export default function ConservationReports() {
   const [downloadError, setDownloadError] = useState("");
 
   const controllerRef = useRef(null);
+  const reportParamsRef = useRef(null);
 
   const update = (patch) => setFilters((f) => ({ ...f, ...patch }));
 
   // When the selected report type changes, clear the previous result and
   // reset type/status/priority filters (dates and area persist).
   function selectType(typeObj) {
+    controllerRef.current?.abort();
+    setLoading(false);
     setSelectedType(typeObj);
     setReportData(null);
     setError("");
@@ -486,6 +489,10 @@ export default function ConservationReports() {
   // ── Generate ────────────────────────────────────────────────────────────
   const generate = useCallback(async () => {
     if (!selectedType) return;
+    if (filters.from && filters.to && filters.from > filters.to) {
+      setError('The start date must be on or before the end date.');
+      return;
+    }
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -495,8 +502,7 @@ export default function ConservationReports() {
     setReportData(null);
 
     try {
-      const data = await generateReport(
-        {
+      const params = {
           reportType: selectedType.key,
           from: toSriLankaFrom(filters.from),
           to: toSriLankaTo(filters.to),
@@ -504,16 +510,18 @@ export default function ConservationReports() {
           type: filters.type || undefined,
           status: filters.status || undefined,
           priority: filters.priority || undefined,
-        },
-        controller.signal
-      );
-      setReportData(data);
+        };
+      const data = await generateReport(params, controller.signal);
+      if (!controller.signal.aborted) {
+        reportParamsRef.current = params;
+        setReportData(data);
+      }
     } catch (err) {
-      if (err.name !== "CanceledError" && err.name !== "AbortError") {
+      if (!controller.signal.aborted && err.name !== "CanceledError" && err.name !== "AbortError") {
         setError(reportApiError(err));
       }
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, [selectedType, filters]);
 
@@ -531,15 +539,7 @@ export default function ConservationReports() {
         downloadReportAsPdf(reportData);
       } else {
         await downloadReport(
-          {
-            reportType: selectedType.key,
-            from: toSriLankaFrom(filters.from),
-            to: toSriLankaTo(filters.to),
-            area: filters.area || undefined,
-            type: filters.type || undefined,
-            status: filters.status || undefined,
-            priority: filters.priority || undefined,
-          },
+          reportParamsRef.current,
           format
         );
       }
@@ -720,6 +720,8 @@ export default function ConservationReports() {
                 <button
                   className="button secondary"
                   onClick={() => {
+                    controllerRef.current?.abort();
+                    setLoading(false);
                     setFilters(INITIAL_FILTERS);
                     setReportData(null);
                     setError("");

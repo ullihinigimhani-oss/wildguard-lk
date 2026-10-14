@@ -1,11 +1,13 @@
 import {
   fireEvent,
+  act,
   render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import userEvent from "@testing-library/user-event";
 import CommunityReports from "../../src/pages/CommunityReports/CommunityReports";
 import CommunityReportDetailsPage from "../../src/pages/CommunityReports/CommunityReportDetailsPage";
 import {
@@ -84,6 +86,29 @@ beforeEach(() => {
   listCommunityReports.mockResolvedValue(listResult([report]));
   getCommunityReport.mockResolvedValue(report);
   updateCommunityReportStatus.mockResolvedValue({ ...report, status: "VERIFIED" });
+});
+
+test('[B3-COM-01] empty result hides pagination and offers no detail actions', async () => {
+  listCommunityReports.mockResolvedValue(listResult([])); mountList(); await screen.findByText('No community reports match these filters.');
+  expect(screen.queryByRole('button', { name: 'Previous' })).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument(); expect(screen.queryByRole('link', { name: /View report/ })).not.toBeInTheDocument();
+});
+test('[B3-COM-02] failed initial list retries and clears prior error', async () => {
+  listCommunityReports.mockRejectedValueOnce(new Error('offline')); mountList(); await screen.findByRole('button', { name: 'Retry reports' });
+  fireEvent.click(screen.getByRole('button', { name: 'Retry reports' })); await screen.findByText('Asian Elephant'); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+test('[B3-COM-03] pagination selects second page and filter change returns to first', async () => {
+  listCommunityReports.mockResolvedValue({ ...listResult([report]), total: 26 }); mountList(); await screen.findByText('Asian Elephant'); fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await waitFor(() => expect(listCommunityReports).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }), expect.any(AbortSignal))); await screen.findByText('Asian Elephant');
+  fireEvent.change(screen.getByLabelText('Report status'), { target: { value: 'PENDING' } });
+  await waitFor(() => expect(listCommunityReports).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, status: 'PENDING' }), expect.any(AbortSignal))); await screen.findByText('Asian Elephant');
+});
+test('[B3-COM-04] replaced filter request is aborted and late result cannot replace current rows', async () => {
+  let resolve; listCommunityReports.mockReturnValueOnce(new Promise(r => { resolve = r; })); mountList(); const signal = listCommunityReports.mock.calls[0][1];
+  fireEvent.change(screen.getByLabelText('Report status'), { target: { value: 'PENDING' } }); await screen.findByText('Asian Elephant'); expect(signal.aborted).toBe(true);
+  await act(async () => resolve(listResult([{ ...report, species: 'Stale species' }]))); expect(screen.queryByText('Stale species')).not.toBeInTheDocument(); expect(screen.getByText('Asian Elephant')).toBeInTheDocument();
+});
+test('[B3-COM-05] reversed calendar range fails before HTTP request', async () => {
+  mountList('/community-reports?from=2026-01-02&to=2026-01-01'); await screen.findByText('End date must not precede start date.'); expect(listCommunityReports).not.toHaveBeenCalled();
 });
 
 test("authorized manager can list reports and open the details link", async () => {
@@ -183,6 +208,7 @@ test("status form proposes the current plus valid transitions", async () => {
 });
 
 test("a PENDING report can be verified directly", async () => {
+  const user = userEvent.setup();
   getCommunityReport.mockResolvedValue({ ...report, status: "PENDING" });
   mountList("/community-reports/cr1");
   const select = await screen.findByLabelText("Update report status");
@@ -190,11 +216,13 @@ test("a PENDING report can be verified directly", async () => {
     .getAllByRole("option")
     .map((option) => option.value);
   expect(options.sort()).toEqual(["PENDING", "REJECTED", "UNDER_REVIEW", "VERIFIED"]);
-  fireEvent.change(select, { target: { value: "VERIFIED" } });
-  fireEvent.click(screen.getByRole("button", { name: "Update Status" }));
+  await waitFor(() => expect(screen.queryByText("Loading report…")).not.toBeInTheDocument());
+  await user.selectOptions(select, "VERIFIED");
+  await user.click(screen.getByRole("button", { name: "Update Status" }));
   await waitFor(() =>
     expect(updateCommunityReportStatus).toHaveBeenCalledWith("cr1", "VERIFIED"),
   );
+  expect(await screen.findByText("Report status saved as Verified.")).toBeInTheDocument();
 });
 
 test("Update Status button applies the selected status", async () => {

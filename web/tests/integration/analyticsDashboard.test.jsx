@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import Dashboard from "../../src/pages/Dashboard/Dashboard";
 import {
@@ -90,6 +90,19 @@ beforeEach(() => {
   incidentAnalytics.mockResolvedValue(incidentData);
   patrolAnalytics.mockResolvedValue(patrolData);
   communityAnalytics.mockResolvedValue(communityData);
+});
+
+test('[B3-DASH-01] KPI failure leaves independent chart panels usable and retry recovers', async () => {
+  kpis.mockRejectedValueOnce(new Error('metrics offline')); mount(); await screen.findByRole('button', { name: 'Retry metrics' }); expect(await screen.findByRole('img', { name: 'Incidents over time' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry metrics' })); await screen.findByText('Patrols scheduled'); expect(screen.queryByRole('button', { name: 'Retry metrics' })).not.toBeInTheDocument();
+});
+test('[B3-DASH-02] older incident analytics cannot replace newer filter result', async () => {
+  let resolve; incidentAnalytics.mockReturnValueOnce(new Promise(r => { resolve = r; })); mount(); const signal = incidentAnalytics.mock.calls[0][1];
+  fireEvent.change(screen.getByLabelText('Area / location'), { target: { value: 'Lake' } }); await screen.findByRole('img', { name: 'Incidents over time' }); expect(signal.aborted).toBe(true);
+  await act(async () => resolve({ ...incidentData, byType: [{ key: 'OLD_RESULT', count: 1 }] })); expect(screen.queryByText('OLD RESULT')).not.toBeInTheDocument(); expect(screen.getByText('Wildlife Conflict', { selector: 'span' })).toBeInTheDocument();
+});
+test('[B3-DASH-03] dashboard unmount aborts all four independent pending queries', () => {
+  for (const loader of [kpis, incidentAnalytics, patrolAnalytics, communityAnalytics]) loader.mockReturnValue(new Promise(() => {})); const view = mount(); const signals = [kpis, incidentAnalytics, patrolAnalytics, communityAnalytics].map(loader => loader.mock.calls[0][1]); view.unmount(); expect(signals.every(signal => signal.aborted)).toBe(true);
 });
 
 test("authorized manager sees metric cards, trends and breakdown bars on the dashboard", async () => {

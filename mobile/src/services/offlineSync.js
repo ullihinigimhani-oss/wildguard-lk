@@ -62,7 +62,11 @@ function delayFor(error, retries) {
   const raw = error.response?.headers?.['retry-after'];
   const seconds = raw != null ? Number(raw) : NaN;
   const date = Number.isFinite(seconds) ? seconds : (Date.parse(raw) - Date.now()) / 1000;
-  return Math.max(Math.min(300000, 5000 * 2 ** Math.min(retries, 6)), Number.isFinite(date) ? date * 1000 : 0, Number(error.response?.data?.retryAfterSeconds || 0) * 1000);
+  const bodyDelay = Number(error.response?.data?.retryAfterSeconds || 0) * 1000;
+  const headerDelay = date * 1000;
+  return Math.max(Math.min(300000, 5000 * 2 ** Math.min(retries, 6)),
+    Number.isFinite(headerDelay) && headerDelay >= 0 ? headerDelay : 0,
+    Number.isFinite(bodyDelay) && bodyDelay >= 0 ? bodyDelay : 0);
 }
 async function failed(id, table, row, error, version, signal) {
   if (signal.aborted || generation !== version || owner !== id) {

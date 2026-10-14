@@ -264,3 +264,37 @@ test("queued but unattempted reports cannot become editable drafts or replace ev
   expect(saved.form.title).toBe("Submitted");
   expect(saved.items).toHaveLength(1);
 });
+
+test.each([
+ ['01',{headers:{'retry-after':'Thu, 01 Jan 2026 00:01:00 GMT'}},60000],
+ ['02',{data:{retryAfterSeconds:7}},7000], ['03',{data:{retryAfterSeconds:'12'}},12000],
+ ['04',{data:{retryAfterSeconds:-3}},5000], ['05',{data:{retryAfterSeconds:'invalid'}},5000],
+ ['06',{data:{retryAfterSeconds:'Infinity'}},5000], ['07',{headers:{'retry-after':'-4'}},5000],
+ ['08',{headers:{'retry-after':'invalid'}},5000], ['09',{headers:{'retry-after':'10'},data:{retryAfterSeconds:20}},20000],
+ ['10',{data:{retryAfterSeconds:'1e308'}},5000],
+])('[B4-SYNC-%s] retry delay %j persists finite boundary %i ms',async(_id,response,delay)=>{
+ jest.setSystemTime(new Date('2026-01-01T00:00:00Z')); await store.enqueueGps('r','p',sample); recordPatrolLocation.mockRejectedValueOnce({response:{status:429,...response}}); await configureSync('r',true);
+ const db=await store.database(),row=await db.getFirstAsync('SELECT * FROM gps WHERE owner=?','r'); expect(row.status).toBe('SYNC_FAILED'); expect(row.next_at).toBe(Date.now()+delay); expect(syncState().error).toBeNull();
+ await configureSync(null,false); SQLite.close(); store.resetOfflineConnection(); await configureSync('r',true); expect(recordPatrolLocation).toHaveBeenCalledTimes(1);
+ jest.setSystemTime(Date.now()+delay-1); await retrySync(); expect(recordPatrolLocation).toHaveBeenCalledTimes(1); jest.setSystemTime(Date.now()+1); await retrySync(); expect(recordPatrolLocation).toHaveBeenCalledTimes(2); expect(await store.pending('r','gps')).toEqual([]);
+});
+test('[B4-STORE-01] GPS write failure is observable and does not invent saved data',async()=>{
+ const db=await store.database(),error=new Error('fixture disk full'),spy=jest.spyOn(db,'runAsync').mockRejectedValueOnce(error);
+ try {await expect(store.enqueueGps('r','p',sample)).rejects.toBe(error);} finally {spy.mockRestore();} expect(await store.localTrail('r','p')).toEqual([]);
+});
+test('[B4-STORE-02] trail read failure propagates and existing row survives recovery',async()=>{
+ await store.enqueueGps('r','p',sample); const db=await store.database(),error=new Error('fixture read unavailable'),spy=jest.spyOn(db,'getAllAsync').mockRejectedValueOnce(error);
+ try {await expect(store.localTrail('r','p')).rejects.toBe(error);} finally {spy.mockRestore();} expect(await store.localTrail('r','p')).toEqual([sample]);
+});
+test('[B4-STORE-03] failed cache replacement rolls back deletion and partial inserts',async()=>{
+ await store.cachePatrol('r',{id:'old',rangerId:'r',status:'IN_PROGRESS'}); const db=await store.database(),original=db.runAsync;
+ const spy=jest.spyOn(db,'runAsync').mockImplementation(async(sql,...args)=>{if(sql.startsWith('INSERT INTO patrol_cache')&&args[1]==='bad') throw new Error('fixture write failure'); return original(sql,...args);});
+ try {await expect(store.cachePatrols('r',[{id:'new',rangerId:'r'},{id:'bad',rangerId:'r'}])).rejects.toThrow('fixture write failure');} finally {spy.mockRestore();}
+ expect((await store.cachedPatrols('r')).map(row=>row.id)).toEqual(['old']);
+});
+test('[B4-STORE-04] coordinator storage query failure retains queued GPS and manual retry recovers',async()=>{
+ await store.enqueueGps('r','p',sample); const db=await store.database(),original=db.getAllAsync;
+ const spy=jest.spyOn(db,'getAllAsync').mockImplementation(async(sql,...args)=>{if(sql.includes('next_at<=?')) throw new Error('fixture-private read failure'); return original(sql,...args);});
+ try {await configureSync('r',true); expect(syncState().error).toMatch(/storage failed/); expect(syncState().error).not.toContain('private'); expect(recordPatrolLocation).not.toHaveBeenCalled();} finally {spy.mockRestore();}
+ expect(await store.localTrail('r','p')).toEqual([sample]); await retrySync(); expect(syncState().error).toBeNull(); expect(await store.pending('r','gps')).toEqual([]); expect(recordPatrolLocation).toHaveBeenCalledTimes(1);
+});

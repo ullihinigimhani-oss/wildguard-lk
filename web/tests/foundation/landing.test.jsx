@@ -1,8 +1,12 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import AppRoutes from "../../src/routes/AppRoutes";
 import { demoUser } from "../../src/constants/demo";
+import { getAnimalsWithLatestLocations } from "../../src/services/sensorApi";
+import { getAllRiskZones } from "../../src/services/riskZoneApi";
+vi.mock("../../src/services/sensorApi", () => ({ getAnimalsWithLatestLocations: vi.fn() }));
+vi.mock("../../src/services/riskZoneApi", () => ({ getAllRiskZones: vi.fn() }));
 
 const session = vi.hoisted(() => ({
   user: null,
@@ -18,6 +22,8 @@ vi.mock("../../src/services/api", () => ({
     .mockResolvedValue({ success: true, database: "connected" }),
 }));
 beforeEach(() => {
+  getAnimalsWithLatestLocations.mockClear().mockResolvedValue({ data: [] });
+  getAllRiskZones.mockClear().mockResolvedValue({ data: [] });
   session.user = null;
   session.isAuthenticated = false;
   window.history.replaceState(null, "", "/");
@@ -102,10 +108,14 @@ test("a demo session is not authorization for operations", () => {
   mount("/patrols");
   expect(screen.getByRole("heading", { name: "Welcome back" })).toBeVisible();
 });
-test("authenticated users keep the existing protected navigation", () => {
+test("authenticated users keep the existing protected navigation", async () => {
   session.user = demoUser;
   session.isAuthenticated = true;
-  mount("/map");
+  await act(async () => { mount("/map"); });
+  expect(getAnimalsWithLatestLocations).toHaveBeenCalledTimes(1);
+  expect(getAllRiskZones).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText('Loading animal locations...')).not.toBeInTheDocument();
+  expect(screen.queryByText('Failed to load data')).not.toBeInTheDocument();
   expect(
     screen
       .getAllByRole("heading", { name: "Field Map" })

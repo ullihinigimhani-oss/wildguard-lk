@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { MapContainer, TileLayer, Circle, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { createRiskZone, getAllRiskZones, deleteRiskZone, updateRiskZone } from "../../services/riskZoneApi";
-import { listIncidents, markIncidentAsDone, incidentStatuses } from "../../services/incidentApi";
+import { listReportingIncidents, markIncidentAsDone, incidentStatuses } from "../../services/incidentApi";
 import { listCommunityReports, markCommunityReportAsDone } from "../../services/communityReportApi";
 
 function MapClickHandler({ onLocationSelect }) {
@@ -59,7 +59,7 @@ export default function Reporting() {
     try {
       setIncidentsLoading(true);
       // Load all incidents and filter for verified incidents that are not marked as done
-      const response = await listIncidents({});
+      const response = await listReportingIncidents({});
       const verifiedIncidents = response.incidents.filter(
         inc => inc.status === 'VERIFIED' && (!inc.markAsDone || inc.markAsDone === false)
       );

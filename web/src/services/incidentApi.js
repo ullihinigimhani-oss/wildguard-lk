@@ -13,6 +13,13 @@ export const incidentStatuses = {
   REJECTED: "Rejected",
 };
 export async function listIncidents(filters, signal) {
+  return loadIncidents("/incidents", filters, signal);
+}
+// Preserve the existing reporting screen's endpoint separately from manager reads.
+export async function listReportingIncidents(filters, signal) {
+  return loadIncidents("/incidents/ranger", filters, signal);
+}
+async function loadIncidents(path, filters, signal) {
   const allowed = [
     "page",
     "patrolId",
@@ -29,7 +36,7 @@ export async function listIncidents(filters, signal) {
       .filter((key) => filters[key] !== "" && filters[key] !== undefined)
       .map((key) => [key, filters[key]]),
   );
-  const { data } = await api.get("/incidents/ranger", { params, signal });
+  const { data } = await api.get(path, { params, signal });
   if (
     !data?.success ||
     !Array.isArray(data.incidents) ||

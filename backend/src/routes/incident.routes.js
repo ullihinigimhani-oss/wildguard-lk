@@ -33,13 +33,17 @@ router.get(
 );
 router.get("/", allowRoles("PARK_MANAGER"), controller.listManager);
 router.get("/ranger", controller.listForRanger);
-router.patch("/:incidentId/status", controller.updateStatus);
+router.patch("/:incidentId/status", (req, res, next) => {
+  // Preserve the existing completion-flag operation. Review status is manager-only.
+  if (req.body?.markAsDone === undefined) return allowRoles("PARK_MANAGER")(req, res, next);
+  next();
+}, controller.updateStatus);
 router.get(
   "/:incidentId",
   allowRoles("RANGER", "PARK_MANAGER"),
   controller.details,
 );
-router.patch("/:incidentId", controller.edit);
+router.patch("/:incidentId", allowRoles("RANGER"), controller.edit);
 router.post("/:incidentId/withdraw", allowRoles("RANGER"), controller.withdraw);
 router.get("/verified/count", controller.getVerifiedIncidentsCount);
 module.exports = router;

@@ -90,10 +90,13 @@ export async function downloadReport(params, format) {
   const anchor = document.createElement("a");
   anchor.href = objectUrl;
   anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(objectUrl);
+  try {
+    document.body.appendChild(anchor);
+    anchor.click();
+  } finally {
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 // ── Error mapper ──────────────────────────────────────────────────────────

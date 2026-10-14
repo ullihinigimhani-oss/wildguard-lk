@@ -13,6 +13,8 @@ function findTests(directory) {
 
 module.exports = {
   testEnvironment: 'node',
+  resolver: '<rootDir>/tests/isolation/resolver.cjs',
+  setupFilesAfterEnv: ['<rootDir>/tests/isolation/setup.cjs'],
   testMatch: findTests(path.join(__dirname, 'tests')),
   clearMocks: true,
   collectCoverageFrom: ['src/**/*.js', '!src/server.js', '!src/config/**'],
