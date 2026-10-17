@@ -64,6 +64,9 @@ function delayFor(error, retries) {
   const date = Number.isFinite(seconds) ? seconds : (Date.parse(raw) - Date.now()) / 1000;
   const bodyDelay = Number(error.response?.data?.retryAfterSeconds || 0) * 1000;
   const headerDelay = date * 1000;
+// 300000: five-minute cap on the calculated exponential backoff.
+// 5000: initial backoff in milliseconds.
+// 6: exponent limit
   return Math.max(Math.min(300000, 5000 * 2 ** Math.min(retries, 6)),
     Number.isFinite(headerDelay) && headerDelay >= 0 ? headerDelay : 0,
     Number.isFinite(bodyDelay) && bodyDelay >= 0 ? bodyDelay : 0);
